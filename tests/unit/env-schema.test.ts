@@ -1,0 +1,43 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  parsePublicSupabaseEnv,
+  seedEnvSchema,
+  serverEnvSchema,
+} from "@/lib/env-schema";
+
+describe("environment schemas", () => {
+  it("prefere a chave publishable atual", () => {
+    expect(
+      parsePublicSupabaseEnv({
+        NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_current",
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: "legacy-anon-key",
+      }),
+    ).toEqual({
+      url: "https://example.supabase.co",
+      publishableKey: "sb_publishable_current",
+    });
+  });
+
+  it("aceita a chave anon como compatibilidade", () => {
+    expect(
+      parsePublicSupabaseEnv({
+        NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: "legacy-anon-key",
+      }).publishableKey,
+    ).toBe("legacy-anon-key");
+  });
+
+  it("rejeita conexão que não seja PostgreSQL", () => {
+    expect(() =>
+      serverEnvSchema.parse({ DATABASE_URL: "https://example.com" }),
+    ).toThrow();
+  });
+
+  it("aplica o nome padrão do administrador do seed", () => {
+    expect(seedEnvSchema.parse({}).SEED_ADMIN_DISPLAY_NAME).toBe(
+      "Administrador",
+    );
+  });
+});
