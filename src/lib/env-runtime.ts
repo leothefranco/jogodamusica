@@ -2,6 +2,7 @@ import {
   seedEnvSchema,
   serverEnvSchema,
   youtubeEnvSchema,
+  youtubePlaylistImportEnvSchema,
 } from "@/lib/env-schema";
 
 let cachedServerEnv: ReturnType<typeof serverEnvSchema.parse> | undefined;
@@ -24,5 +25,14 @@ export function getSeedEnv() {
 export function getYouTubeEnv() {
   return youtubeEnvSchema.parse({
     YOUTUBE_API_KEY: process.env.YOUTUBE_API_KEY,
+    YOUTUBE_PLAYLIST_IMPORT_MAX_ITEMS:
+      process.env.YOUTUBE_PLAYLIST_IMPORT_MAX_ITEMS,
+  });
+}
+
+export function getYouTubePlaylistImportEnv() {
+  return youtubePlaylistImportEnvSchema.parse({
+    YOUTUBE_PLAYLIST_IMPORT_MAX_ITEMS:
+      process.env.YOUTUBE_PLAYLIST_IMPORT_MAX_ITEMS,
   });
 }

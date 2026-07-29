@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  getSupportedBracketSizes,
   getThemePublishability,
   themeSongInputSchema,
   trackAssociationInputSchema,
@@ -11,6 +12,7 @@ import {
   parseIsoDurationSeconds,
   parseYouTubeVideoId,
 } from "@/domain/music/youtube";
+import { parseYouTubePlaylistId } from "@/domain/music/playlist";
 import { AppError } from "@/lib/errors";
 
 describe("identificação de vídeos do YouTube", () => {
@@ -30,6 +32,30 @@ describe("identificação de vídeos do YouTube", () => {
     "não é um vídeo",
   ])("rejeita %s", (input) => {
     expect(() => parseYouTubeVideoId(input)).toThrow(AppError);
+  });
+});
+
+describe("identificação de playlists do YouTube", () => {
+  it.each([
+    ["PL1234567890abcdef", "PL1234567890abcdef"],
+    [
+      "https://www.youtube.com/playlist?list=PL1234567890abcdef",
+      "PL1234567890abcdef",
+    ],
+    [
+      "https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PL1234567890abcdef",
+      "PL1234567890abcdef",
+    ],
+  ])("resolve %s", (input, expected) => {
+    expect(parseYouTubePlaylistId(input)).toBe(expected);
+  });
+
+  it.each([
+    "https://example.com/playlist?list=PL1234567890abcdef",
+    "https://www.youtube.com/playlist",
+    "lista inválida",
+  ])("rejeita %s", (input) => {
+    expect(() => parseYouTubePlaylistId(input)).toThrow(AppError);
   });
 });
 
@@ -131,5 +157,17 @@ describe("publicação de tema", () => {
         defaultBracketSize: "10",
       }).success,
     ).toBe(false);
+  });
+
+  it.each([
+    [3, []],
+    [4, [4]],
+    [7, [4]],
+    [8, [4, 8]],
+    [16, [4, 8, 16]],
+    [32, [4, 8, 16, 32]],
+    [200, [4, 8, 16, 32]],
+  ])("deriva modalidades para %i músicas ativas", (count, expected) => {
+    expect(getSupportedBracketSizes(count)).toEqual(expected);
   });
 });

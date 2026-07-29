@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { createYouTubeResolveHandler } from "@/app/api/admin/youtube/resolve/route";
 import { createYouTubeSearchHandler } from "@/app/api/admin/youtube/search/route";
+import { createPlaylistPreviewHandler } from "@/app/api/admin/youtube/playlists/preview/route";
+import { createPlaylistImportHandler } from "@/app/api/admin/youtube/playlists/import/route";
 
 describe("rotas administrativas do YouTube", () => {
   it("rejeita pesquisa de usuário sem perfil administrativo ativo", async () => {
@@ -120,6 +122,83 @@ describe("rotas administrativas do YouTube", () => {
           watchUrl: "https://provider.example/watch/dQw4w9WgXcQ",
         },
       ],
+    });
+  });
+
+  it("protege a prévia de playlist e aplica limite somente no cache miss", async () => {
+    let rateLimits = 0;
+    const handler = createPlaylistPreviewHandler({
+      enforceRateLimit: () => {
+        rateLimits += 1;
+      },
+      getAdminUser: async () => ({
+        userId: "10000000-0000-4000-8000-000000000010",
+        email: "admin@example.com",
+        displayName: "Admin",
+        role: "admin",
+      }),
+      previewPlaylistForTheme: async (input) => {
+        input.onCacheMiss?.();
+        return {
+          cacheHit: false,
+          preview: {
+            previewId: "20000000-0000-4000-8000-000000000020",
+            expiresAt: Date.now() + 60_000,
+            playlistId: "PL1234567890abcdef",
+            playlistTitle: "Playlist",
+            declaredItemCount: 0,
+            positionsScanned: 0,
+            uniqueVideoCount: 0,
+            duplicateCount: 0,
+            isTruncated: false,
+            items: [],
+          },
+        };
+      },
+    });
+
+    const response = await handler(
+      new Request("http://localhost/api/admin/youtube/playlists/preview", {
+        method: "POST",
+        body: JSON.stringify({
+          themeId: "30000000-0000-4000-8000-000000000030",
+          input: "PL1234567890abcdef",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(rateLimits).toBe(1);
+  });
+
+  it("valida os IDs selecionados antes de confirmar importação", async () => {
+    const handler = createPlaylistImportHandler({
+      enforceRateLimit: () => undefined,
+      getAdminUser: async () => ({
+        userId: "10000000-0000-4000-8000-000000000010",
+        email: "admin@example.com",
+        displayName: "Admin",
+        role: "admin",
+      }),
+      confirmPlaylistImport: async () => {
+        throw new Error("O serviço não deve ser chamado.");
+      },
+    });
+
+    const response = await handler(
+      new Request("http://localhost/api/admin/youtube/playlists/import", {
+        method: "POST",
+        body: JSON.stringify({
+          themeId: "30000000-0000-4000-8000-000000000030",
+          previewId: "20000000-0000-4000-8000-000000000020",
+          selectedProviderContentIds: ["inválido"],
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "VALIDATION_ERROR" },
     });
   });
 });

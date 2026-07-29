@@ -114,3 +114,9 @@ export function getThemePublishability(
     missingSongCount,
   };
 }
+
+export function getSupportedBracketSizes(
+  activeSongCount: number,
+): BracketSize[] {
+  return bracketSizes.filter((size) => activeSongCount >= size);
+}

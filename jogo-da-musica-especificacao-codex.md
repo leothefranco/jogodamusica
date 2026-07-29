@@ -905,7 +905,7 @@ Progresso verificado no repositório em 28 de julho de 2026:
 
 ### Fase 2.1 — Importação de playlist e catálogo flexível
 
-**Estado:** próxima fase.
+**Estado:** concluída; QA manual pendente.
 
 - Importar playlist pública ou não listada por URL/ID, com paginação completa.
 - Buscar detalhes dos vídeos em lote e filtrar conteúdo indisponível ou não incorporável.
@@ -916,6 +916,12 @@ Progresso verificado no repositório em 28 de julho de 2026:
 - Cobrir normalização, paginação, classificação, autorização, cota e importação parcial com testes.
 
 **Saída:** administrador popula um tema grande com uma playlist e entende quais quantidades de rodadas ele suporta.
+
+Decisões confirmadas: teto configurável padrão de 200 posições, prévia válida
+por 15 minutos, cinco prévias não cacheadas por administrador a cada dez
+minutos, página dedicada no tema, itens prontos pré-selecionados, revalidação
+confiável na confirmação, preservação de associações existentes e gravação
+atômica do lote.
 
 ### Fase 3 — Domínio do torneio
 

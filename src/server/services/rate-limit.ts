@@ -22,7 +22,7 @@ export function enforceRateLimit(
   if (current.count >= options.limit) {
     throw new AppError(
       "RATE_LIMITED",
-      "Muitas consultas em pouco tempo. Aguarde um minuto e tente novamente.",
+      "Muitas consultas em pouco tempo. Aguarde e tente novamente mais tarde.",
       429,
     );
   }

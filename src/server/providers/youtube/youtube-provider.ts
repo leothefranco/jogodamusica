@@ -4,10 +4,14 @@ import { z } from "zod";
 
 import type {
   EmbedData,
-  MusicProvider,
+  PlaylistMusicProvider,
+  ProviderPlaylistItem,
+  ProviderPlaylistPreview,
   ProviderSearchResult,
+  ResolvedPlaylistTrack,
   ResolvedProviderTrack,
 } from "@/domain/music/provider";
+import { parseYouTubePlaylistId } from "@/domain/music/playlist";
 import {
   parseIsoDurationSeconds,
   parseYouTubeVideoId,
@@ -39,6 +43,12 @@ const videoResponseSchema = z.object({
       }),
       contentDetails: z.object({
         duration: z.string(),
+        regionRestriction: z
+          .object({
+            allowed: z.array(z.string()).optional(),
+            blocked: z.array(z.string()).optional(),
+          })
+          .optional(),
       }),
       status: z.object({
         embeddable: z.boolean(),
@@ -46,6 +56,42 @@ const videoResponseSchema = z.object({
       }),
     }),
   ),
+});
+
+const playlistResponseSchema = z.object({
+  items: z.array(
+    z.object({
+      snippet: z.object({
+        title: z.string(),
+      }),
+      contentDetails: z.object({
+        itemCount: z.number().int().nonnegative(),
+      }),
+    }),
+  ),
+});
+
+const playlistItemsResponseSchema = z.object({
+  items: z.array(
+    z.object({
+      contentDetails: z
+        .object({
+          videoId: z.string().optional(),
+        })
+        .optional(),
+      snippet: z
+        .object({
+          position: z.number().int().nonnegative(),
+          resourceId: z
+            .object({
+              videoId: z.string().optional(),
+            })
+            .optional(),
+        })
+        .optional(),
+    }),
+  ),
+  nextPageToken: z.string().optional(),
 });
 
 const providerErrorSchema = z.object({
@@ -108,6 +154,7 @@ async function youtubeFetch<T>(
   path: string,
   params: URLSearchParams,
   schema: z.ZodType<T>,
+  fetcher: typeof fetch = fetch,
 ): Promise<T> {
   let YOUTUBE_API_KEY: string;
   try {
@@ -123,7 +170,7 @@ async function youtubeFetch<T>(
 
   let response: Response;
   try {
-    response = await fetch(`${apiBaseUrl}/${path}?${params.toString()}`, {
+    response = await fetcher(`${apiBaseUrl}/${path}?${params.toString()}`, {
       signal: AbortSignal.timeout(10_000),
       next: { revalidate: 300 },
     });
@@ -151,6 +198,25 @@ async function youtubeFetch<T>(
       );
     }
 
+    if (
+      reason === "playlistNotFound" ||
+      reason === "playlistItemsNotAccessible"
+    ) {
+      throw new AppError(
+        "YOUTUBE_PLAYLIST_NOT_FOUND",
+        "A playlist não foi encontrada ou não está acessível.",
+        404,
+      );
+    }
+
+    if (reason === "playlistForbidden") {
+      throw new AppError(
+        "YOUTUBE_PLAYLIST_FORBIDDEN",
+        "Esta playlist não está acessível com a configuração atual.",
+        403,
+      );
+    }
+
     throw new AppError(
       "YOUTUBE_REQUEST_FAILED",
       "Não foi possível consultar o YouTube agora.",
@@ -172,7 +238,9 @@ async function youtubeFetch<T>(
 
 async function getVideoDetails(
   videoIds: string[],
-): Promise<ResolvedProviderTrack[]> {
+  regionCode = "BR",
+  fetcher: typeof fetch = fetch,
+): Promise<ResolvedPlaylistTrack[]> {
   if (videoIds.length === 0) {
     return [];
   }
@@ -182,20 +250,36 @@ async function getVideoDetails(
     id: videoIds.join(","),
     maxResults: String(Math.min(videoIds.length, 50)),
   });
-  const payload = await youtubeFetch("videos", params, videoResponseSchema);
+  const payload = await youtubeFetch(
+    "videos",
+    params,
+    videoResponseSchema,
+    fetcher,
+  );
 
-  return payload.items.map((item) => ({
-    providerContentId: item.id,
-    sourceTitle: decodeEntities(item.snippet.title),
-    sourceChannel: decodeEntities(item.snippet.channelTitle),
-    thumbnailUrl: getThumbnailUrl(item.snippet.thumbnails),
-    durationSeconds: parseIsoDurationSeconds(item.contentDetails.duration),
-    isEmbeddable:
-      item.status.embeddable && item.status.privacyStatus !== "private",
-  }));
+  return payload.items.map((item) => {
+    const restriction = item.contentDetails.regionRestriction;
+    const isRegionAllowed =
+      (!restriction?.allowed || restriction.allowed.includes(regionCode)) &&
+      !restriction?.blocked?.includes(regionCode);
+
+    return {
+      providerContentId: item.id,
+      sourceTitle: decodeEntities(item.snippet.title),
+      sourceChannel: decodeEntities(item.snippet.channelTitle),
+      thumbnailUrl: getThumbnailUrl(item.snippet.thumbnails),
+      durationSeconds: parseIsoDurationSeconds(item.contentDetails.duration),
+      isEmbeddable:
+        item.status.embeddable &&
+        ["public", "unlisted"].includes(item.status.privacyStatus),
+      isRegionAllowed,
+    };
+  });
 }
 
-export class YouTubeProvider implements MusicProvider {
+export class YouTubeProvider implements PlaylistMusicProvider {
+  constructor(private readonly fetcher: typeof fetch = fetch) {}
+
   async search(query: string): Promise<ProviderSearchResult[]> {
     const normalizedQuery = query.trim().toLocaleLowerCase("pt-BR");
     const cached = getCached(searchCache, normalizedQuery);
@@ -215,9 +299,12 @@ export class YouTubeProvider implements MusicProvider {
       "search",
       params,
       searchResponseSchema,
+      this.fetcher,
     );
     const results = await getVideoDetails(
       searchPayload.items.map((item) => item.id.videoId),
+      "BR",
+      this.fetcher,
     );
 
     setCached(searchCache, normalizedQuery, results);
@@ -231,7 +318,7 @@ export class YouTubeProvider implements MusicProvider {
       return cached;
     }
 
-    const [track] = await getVideoDetails([videoId]);
+    const [track] = await getVideoDetails([videoId], "BR", this.fetcher);
     if (!track) {
       throw new AppError(
         "YOUTUBE_VIDEO_NOT_FOUND",
@@ -244,6 +331,149 @@ export class YouTubeProvider implements MusicProvider {
     return track;
   }
 
+  async resolveMany(
+    providerContentIds: string[],
+    regionCode: string,
+  ): Promise<ResolvedPlaylistTrack[]> {
+    const uniqueIds = [...new Set(providerContentIds.map(parseYouTubeVideoId))];
+    const results: ResolvedPlaylistTrack[] = [];
+    for (let index = 0; index < uniqueIds.length; index += 50) {
+      results.push(
+        ...(await getVideoDetails(
+          uniqueIds.slice(index, index + 50),
+          regionCode,
+          this.fetcher,
+        )),
+      );
+    }
+    return results;
+  }
+
+  async previewPlaylist(
+    input: string,
+    options: { maxItems: number; regionCode: string },
+  ): Promise<ProviderPlaylistPreview> {
+    const playlistId = parseYouTubePlaylistId(input);
+    const playlistParams = new URLSearchParams({
+      part: "snippet,contentDetails",
+      id: playlistId,
+      maxResults: "1",
+    });
+    const playlistPayload = await youtubeFetch(
+      "playlists",
+      playlistParams,
+      playlistResponseSchema,
+      this.fetcher,
+    );
+    const playlist = playlistPayload.items[0];
+    if (!playlist) {
+      throw new AppError(
+        "YOUTUBE_PLAYLIST_NOT_FOUND",
+        "A playlist não foi encontrada ou não está acessível.",
+        404,
+      );
+    }
+
+    const positions: Array<{
+      position: number;
+      providerContentId: string | null;
+    }> = [];
+    let nextPageToken: string | undefined;
+
+    do {
+      const params = new URLSearchParams({
+        part: "contentDetails,snippet",
+        playlistId,
+        maxResults: "50",
+      });
+      if (nextPageToken) params.set("pageToken", nextPageToken);
+      const page = await youtubeFetch(
+        "playlistItems",
+        params,
+        playlistItemsResponseSchema,
+        this.fetcher,
+      );
+
+      for (const item of page.items) {
+        if (positions.length >= options.maxItems) break;
+        positions.push({
+          position: item.snippet?.position ?? positions.length,
+          providerContentId:
+            item.contentDetails?.videoId ??
+            item.snippet?.resourceId?.videoId ??
+            null,
+        });
+      }
+
+      nextPageToken = page.nextPageToken;
+    } while (nextPageToken && positions.length < options.maxItems);
+
+    const seen = new Set<string>();
+    const duplicateIds = new Set<string>();
+    const invalidIds = new Set<string>();
+    const uniqueIds: string[] = [];
+    for (const item of positions) {
+      const id = item.providerContentId;
+      if (!id) continue;
+      try {
+        parseYouTubeVideoId(id);
+      } catch {
+        invalidIds.add(`${item.position}:${id}`);
+        continue;
+      }
+      if (seen.has(id)) {
+        duplicateIds.add(`${item.position}:${id}`);
+      } else {
+        seen.add(id);
+        uniqueIds.push(id);
+      }
+    }
+
+    const tracks = await this.resolveMany(uniqueIds, options.regionCode);
+    const tracksById = new Map(
+      tracks.map((track) => [track.providerContentId, track]),
+    );
+    const items: ProviderPlaylistItem[] = positions.map((item) => {
+      const id = item.providerContentId;
+      if (!id) {
+        return { ...item, status: "invalid", track: null };
+      }
+      if (invalidIds.has(`${item.position}:${id}`)) {
+        return { ...item, status: "invalid", track: null };
+      }
+      if (duplicateIds.has(`${item.position}:${id}`)) {
+        return {
+          ...item,
+          status: "duplicate",
+          track: tracksById.get(id) ?? null,
+        };
+      }
+      const track = tracksById.get(id);
+      if (!track) return { ...item, status: "unavailable", track: null };
+      if (!track.isEmbeddable) {
+        return { ...item, status: "not_embeddable", track };
+      }
+      if (!track.isRegionAllowed) {
+        return { ...item, status: "region_blocked", track };
+      }
+      return { ...item, status: "ready", track };
+    });
+
+    return {
+      playlistId,
+      playlistTitle: decodeEntities(playlist.snippet.title),
+      declaredItemCount: playlist.contentDetails.itemCount,
+      positionsScanned: positions.length,
+      uniqueVideoCount: uniqueIds.length,
+      duplicateCount: items.filter(({ status }) => status === "duplicate")
+        .length,
+      isTruncated:
+        playlist.contentDetails.itemCount > positions.length ||
+        Boolean(nextPageToken),
+      items,
+    };
+  }
+
   async getEmbedData(providerContentId: string): Promise<EmbedData> {
     const videoId = parseYouTubeVideoId(providerContentId);
 
@@ -254,6 +484,6 @@ export class YouTubeProvider implements MusicProvider {
   }
 }
 
-export function createYouTubeProvider(): MusicProvider {
+export function createYouTubeProvider(): PlaylistMusicProvider {
   return new YouTubeProvider();
 }

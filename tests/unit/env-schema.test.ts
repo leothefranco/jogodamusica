@@ -4,6 +4,8 @@ import {
   parsePublicSupabaseEnv,
   seedEnvSchema,
   serverEnvSchema,
+  youtubeEnvSchema,
+  youtubePlaylistImportEnvSchema,
 } from "@/lib/env-schema";
 
 describe("environment schemas", () => {
@@ -39,5 +41,19 @@ describe("environment schemas", () => {
     expect(seedEnvSchema.parse({}).SEED_ADMIN_DISPLAY_NAME).toBe(
       "Administrador",
     );
+  });
+
+  it("aplica o teto padrão de 200 posições por playlist", () => {
+    expect(
+      youtubeEnvSchema.parse({ YOUTUBE_API_KEY: "key" })
+        .YOUTUBE_PLAYLIST_IMPORT_MAX_ITEMS,
+    ).toBe(200);
+  });
+
+  it("lê o teto da playlist sem exigir a chave do YouTube", () => {
+    expect(
+      youtubePlaylistImportEnvSchema.parse({})
+        .YOUTUBE_PLAYLIST_IMPORT_MAX_ITEMS,
+    ).toBe(200);
   });
 });

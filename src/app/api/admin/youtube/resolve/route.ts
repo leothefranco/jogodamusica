@@ -3,7 +3,10 @@ import { z } from "zod";
 import type { MusicProvider } from "@/domain/music/provider";
 import { AppError, fieldErrorsFromZod } from "@/lib/errors";
 import { getAdminUser } from "@/server/auth/session";
-import { createAdminYouTubeHandler } from "@/server/http/admin-youtube-handler";
+import {
+  createAdminYouTubeHandler,
+  readJsonBody,
+} from "@/server/http/admin-youtube-handler";
 import { createYouTubeProvider } from "@/server/providers/youtube/youtube-provider";
 import { enforceRateLimit } from "@/server/services/rate-limit";
 
@@ -25,17 +28,10 @@ export function createYouTubeResolveHandler(
     dependencies,
     { rateLimitKey: "youtube-resolve", limit: 20 },
     async (request) => {
-      let payload: unknown;
-      try {
-        payload = await request.json();
-      } catch {
-        throw new AppError(
-          "VALIDATION_ERROR",
-          "Revise a URL ou o ID informado.",
-          400,
-          { input: ["Envie um corpo JSON válido."] },
-        );
-      }
+      const payload = await readJsonBody(
+        request,
+        "Revise a URL ou o ID informado.",
+      );
 
       const parsed = resolveInputSchema.safeParse(payload);
       if (!parsed.success) {

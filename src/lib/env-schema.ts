@@ -17,7 +17,16 @@ export const serverEnvSchema = z.object({
   DATABASE_URL: databaseUrlSchema,
 });
 
-export const youtubeEnvSchema = z.object({
+export const youtubePlaylistImportEnvSchema = z.object({
+  YOUTUBE_PLAYLIST_IMPORT_MAX_ITEMS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(1_000)
+    .default(200),
+});
+
+export const youtubeEnvSchema = youtubePlaylistImportEnvSchema.extend({
   YOUTUBE_API_KEY: z.string().trim().min(1),
 });
 
@@ -34,6 +43,9 @@ export const seedEnvSchema = z.object({
 export type PublicSupabaseEnv = z.infer<typeof publicSupabaseInputSchema>;
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
 export type YouTubeEnv = z.infer<typeof youtubeEnvSchema>;
+export type YouTubePlaylistImportEnv = z.infer<
+  typeof youtubePlaylistImportEnvSchema
+>;
 export type SeedEnv = z.infer<typeof seedEnvSchema>;
 
 export function parsePublicSupabaseEnv(input: {

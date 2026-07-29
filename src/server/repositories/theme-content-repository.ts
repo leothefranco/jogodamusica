@@ -10,6 +10,8 @@ import {
   themeSongs,
   type NewTheme,
 } from "@/db/schema";
+import type { ResolvedPlaylistTrack } from "@/domain/music/provider";
+import { AppError } from "@/lib/errors";
 import {
   bracketSizeSchema,
   type BracketSize,
@@ -370,6 +372,107 @@ export async function findThemeSongByProviderContentId(
     themeId,
     providerContentId,
   );
+}
+
+export async function listThemeProviderContentIds(
+  themeId: string,
+): Promise<string[]> {
+  const rows = await getDatabase()
+    .select({ providerContentId: songs.providerContentId })
+    .from(themeSongs)
+    .innerJoin(songs, eq(songs.id, themeSongs.songId))
+    .where(and(eq(themeSongs.themeId, themeId), eq(songs.provider, "youtube")));
+
+  return rows.map(({ providerContentId }) => providerContentId);
+}
+
+export async function importPlaylistTracks(
+  themeId: string,
+  tracks: ResolvedPlaylistTrack[],
+  options: {
+    providerContentIdsToAssociate: string[];
+    providerContentIdsToCountAsExisting: string[];
+  },
+): Promise<{ added: number; alreadyAssociated: number }> {
+  return getDatabase().transaction(async (transaction) => {
+    const locked = await transaction.execute(
+      sql`select ${themes.id} from ${themes} where ${themes.id} = ${themeId} for update`,
+    );
+    if (locked.length === 0) {
+      throw new AppError("THEME_NOT_FOUND", "Tema não encontrado.", 404);
+    }
+
+    let added = 0;
+    let alreadyAssociated = 0;
+    const idsToAssociate = new Set(options.providerContentIdsToAssociate);
+    const idsToCountAsExisting = new Set(
+      options.providerContentIdsToCountAsExisting,
+    );
+
+    for (const track of tracks) {
+      const [song] = await transaction
+        .insert(songs)
+        .values({
+          provider: "youtube",
+          providerContentId: track.providerContentId,
+          sourceTitle: track.sourceTitle,
+          sourceChannel: track.sourceChannel,
+          thumbnailUrl: track.thumbnailUrl,
+          durationSeconds: track.durationSeconds,
+          isEmbeddable: track.isEmbeddable,
+        })
+        .onConflictDoUpdate({
+          target: [songs.provider, songs.providerContentId],
+          set: {
+            sourceTitle: track.sourceTitle,
+            sourceChannel: track.sourceChannel,
+            thumbnailUrl: track.thumbnailUrl,
+            durationSeconds: track.durationSeconds,
+            isEmbeddable: track.isEmbeddable,
+            updatedAt: new Date(),
+          },
+        })
+        .returning({ id: songs.id });
+
+      if (!idsToAssociate.has(track.providerContentId)) {
+        if (!idsToCountAsExisting.has(track.providerContentId)) continue;
+        const existingAssociation = await transaction
+          .select({ songId: themeSongs.songId })
+          .from(themeSongs)
+          .where(
+            and(
+              eq(themeSongs.themeId, themeId),
+              eq(themeSongs.songId, song.id),
+            ),
+          )
+          .limit(1);
+        if (existingAssociation.length > 0) alreadyAssociated += 1;
+        continue;
+      }
+
+      const inserted = await transaction
+        .insert(themeSongs)
+        .values({
+          themeId,
+          songId: song.id,
+          title: track.sourceTitle,
+          artist: track.sourceChannel,
+          startTimeSeconds: 0,
+          previewDurationSeconds: track.durationSeconds,
+          isActive: true,
+          displayOrder: null,
+        })
+        .onConflictDoNothing({
+          target: [themeSongs.themeId, themeSongs.songId],
+        })
+        .returning({ songId: themeSongs.songId });
+
+      if (inserted.length > 0) added += 1;
+      else alreadyAssociated += 1;
+    }
+
+    return { added, alreadyAssociated };
+  });
 }
 
 export type LockedThemeContentRepository = {

@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   CircleAlert,
   ExternalLink,
+  ListMusic,
   Save,
   Trash2,
 } from "lucide-react";
@@ -21,6 +22,7 @@ import { ConfirmSubmitButton } from "@/components/admin/confirm-submit-button";
 import { adminInputClassName } from "@/components/admin/form-styles";
 import { ThemeForm } from "@/components/admin/theme-form";
 import { YouTubeSongManager } from "@/components/admin/youtube-song-manager";
+import { SupportedRounds } from "@/components/admin/supported-rounds";
 import { Button } from "@/components/ui/button";
 import { AppError } from "@/lib/errors";
 import { getThemeEditor } from "@/server/services/theme-content-service";
@@ -79,9 +81,19 @@ export default async function EditThemePage({
             {theme.name}
           </h1>
           <p className="mt-2 font-mono text-xs text-white/35">/{theme.slug}</p>
+          <div className="mt-4">
+            <SupportedRounds activeSongCount={theme.activeSongCount} />
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-3">
+          <Link
+            href={`/admin/temas/${theme.id}/importar-playlist`}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.025] px-5 text-sm font-semibold hover:bg-white/[0.06]"
+          >
+            <ListMusic aria-hidden="true" />
+            Importar playlist
+          </Link>
           <form
             action={setThemePublicationAction.bind(
               null,

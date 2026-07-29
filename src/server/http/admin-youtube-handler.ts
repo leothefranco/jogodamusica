@@ -16,7 +16,7 @@ type AdminYouTubeHandlerOptions = {
 
 export function createAdminYouTubeHandler(
   dependencies: AdminYouTubeHandlerDependencies,
-  options: AdminYouTubeHandlerOptions,
+  options: AdminYouTubeHandlerOptions | null,
   operation: (request: Request, admin: AdminUser) => Promise<Response>,
 ) {
   return async function handler(request: Request) {
@@ -30,14 +30,32 @@ export function createAdminYouTubeHandler(
         );
       }
 
-      dependencies.enforceRateLimit(`${options.rateLimitKey}:${admin.userId}`, {
-        limit: options.limit,
-        windowMs: options.windowMs ?? 60_000,
-      });
+      if (options) {
+        dependencies.enforceRateLimit(
+          `${options.rateLimitKey}:${admin.userId}`,
+          {
+            limit: options.limit,
+            windowMs: options.windowMs ?? 60_000,
+          },
+        );
+      }
 
       return await operation(request, admin);
     } catch (error) {
       return errorResponse(error);
     }
   };
+}
+
+export async function readJsonBody(
+  request: Request,
+  message: string,
+): Promise<unknown> {
+  try {
+    return await request.json();
+  } catch {
+    throw new AppError("VALIDATION_ERROR", message, 400, {
+      body: ["Envie um corpo JSON válido."],
+    });
+  }
 }

@@ -3,12 +3,12 @@
 Aplicação web para grupos compararem músicas em confrontos eliminatórios, usando
 um único aparelho, até eleger uma campeã.
 
-Este repositório concluiu a **Fase 2 — Administração de conteúdo**. A base
-Next.js, o modelo PostgreSQL/Drizzle, o acesso administrativo com Supabase SSR e
-o gerenciamento individual de temas e músicas do YouTube estão implementados. A
-próxima etapa planejada é a **Fase 2.1**, com importação de playlists e catálogo
-flexível. Torneio, experiência pública de jogo e PWA serão implementados nas
-fases seguintes da
+Este repositório concluiu a **Fase 2.1 — Importação de playlist e catálogo
+flexível**. A base Next.js, o modelo PostgreSQL/Drizzle, o acesso administrativo
+com Supabase SSR, o gerenciamento individual e a importação revisável de
+playlists do YouTube estão implementados. A próxima etapa planejada é a
+**Fase 3 — Domínio do torneio**. Experiência pública de jogo e PWA serão
+implementados nas fases seguintes da
 [especificação](./jogo-da-musica-especificacao-codex.md).
 
 ## Requisitos no Windows
@@ -87,6 +87,7 @@ administrativo informado sem criar ou armazenar senhas.
 
 ```env
 YOUTUBE_API_KEY=sua-chave-local
+YOUTUBE_PLAYLIST_IMPORT_MAX_ITEMS=200
 ```
 
 6. Reinicie `npm run dev` depois de alterar a variável.
@@ -104,9 +105,12 @@ diária estiver completamente esgotada.
 1. Acesse `/admin/login` e autentique-se com um perfil ativo.
 2. Em `/admin/temas`, crie um tema inicialmente inativo.
 3. Pesquise no YouTube ou cole uma URL/ID e visualize o vídeo antes de salvar.
-4. Revise título, artista, início e duração do trecho.
-5. Ative ou desative músicas individualmente.
-6. Publique o tema quando a quantidade de músicas ativas atingir o tamanho
+4. Para importar em lote, use **Importar playlist**, informe uma URL/ID e revise
+   a prévia antes de confirmar.
+5. Revise título, artista, início e duração do trecho.
+6. Ative ou desative músicas individualmente.
+7. Confira as modalidades de 2, 3, 4 ou 5 rodadas suportadas pelo catálogo.
+8. Publique o tema quando a quantidade de músicas ativas atingir o tamanho
    padrão do chaveamento.
 
 Temas com partidas relacionadas não podem ser excluídos. Em temas publicados,
@@ -142,6 +146,7 @@ não exige uma nova migração.
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY`        | Pública   | Compatibilidade com chave legada  |
 | `DATABASE_URL`                         | Servidor  | Transaction Pooler PostgreSQL     |
 | `YOUTUBE_API_KEY`                      | Servidor  | YouTube Data API, na Fase 2       |
+| `YOUTUBE_PLAYLIST_IMPORT_MAX_ITEMS`    | Servidor  | Teto de posições por importação   |
 | `SEED_ADMIN_USER_ID`                   | Servidor  | UUID do primeiro usuário Auth     |
 | `SEED_ADMIN_DISPLAY_NAME`              | Servidor  | Nome exibido do administrador     |
 
@@ -190,6 +195,11 @@ módulos exclusivos do servidor.
 - Título e artista exibidos pertencem à associação com o tema, permitindo
   personalizações independentes quando o mesmo vídeo é reutilizado.
 - Publicação exige músicas ativas suficientes para o tamanho padrão.
+- Prévia de playlist percorre páginas e valida vídeos em lotes, com teto padrão
+  de 200 posições, cache de 15 minutos e limite por administrador.
+- Confirmação de playlist revalida dados confiáveis e grava associações em uma
+  única transação, preservando ajustes existentes.
+- Modalidades suportadas são derivadas da quantidade de músicas ativas.
 
 ## Limitações atuais
 
@@ -197,8 +207,9 @@ Sem Supabase configurado, migração, seed, login e CRUD reais permanecem
 indisponíveis. Sem `YOUTUBE_API_KEY`, temas ainda podem ser editados, mas busca,
 resolução e cadastro de vídeos ficam bloqueados com mensagem de configuração.
 Ainda não há partidas, player do fluxo público, manifest ou service worker.
-Também ainda não há importação de playlists; por enquanto, cada vídeo é
-associado individualmente ao tema.
+Playlists privadas continuam fora do MVP porque exigem OAuth do Google. As
+prévias ficam em cache de memória; em outra instância ou após expiração, a
+confirmação revalida os vídeos no YouTube.
 
 ### Problemas comuns
 
