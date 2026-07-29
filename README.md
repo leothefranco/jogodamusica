@@ -3,12 +3,11 @@
 Aplicação web para grupos compararem músicas em confrontos eliminatórios, usando
 um único aparelho, até eleger uma campeã.
 
-Este repositório concluiu a **Fase 2.1 — Importação de playlist e catálogo
-flexível**. A base Next.js, o modelo PostgreSQL/Drizzle, o acesso administrativo
-com Supabase SSR, o gerenciamento individual e a importação revisável de
-playlists do YouTube estão implementados. A próxima etapa planejada é a
-**Fase 3 — Domínio do torneio**. Experiência pública de jogo e PWA serão
-implementados nas fases seguintes da
+Este repositório concluiu a **Fase 3 — Domínio do torneio**. A base Next.js, o
+modelo PostgreSQL/Drizzle, o acesso administrativo, o catálogo flexível e o
+domínio transacional de partidas estão implementados. A próxima etapa planejada
+é a **Fase 4 — Experiência de jogo**. Interface pública de jogo e PWA serão
+implementadas nas fases seguintes da
 [especificação](./jogo-da-musica-especificacao-codex.md).
 
 ## Requisitos no Windows
@@ -200,16 +199,22 @@ módulos exclusivos do servidor.
 - Confirmação de playlist revalida dados confiáveis e grava associações em uma
   única transação, preservando ajustes existentes.
 - Modalidades suportadas são derivadas da quantidade de músicas ativas.
+- A criação de partida bloqueia o tema, sorteia sem repetição apenas a quantidade
+  escolhida e persiste sessão, snapshots e todos os confrontos em uma transação.
+- O voto bloqueia a sessão, aceita somente uma participante do confronto pronto
+  e conclui o confronto, avança a vencedora ou encerra a partida atomicamente.
+- O domínio puro do torneio cria chaves de 4, 8, 16 e 32 músicas e converte entre
+  quantidades de rodadas e tamanhos de chave sem persistir `roundCount`.
 
 ## Limitações atuais
 
 Sem Supabase configurado, migração, seed, login e CRUD reais permanecem
 indisponíveis. Sem `YOUTUBE_API_KEY`, temas ainda podem ser editados, mas busca,
 resolução e cadastro de vídeos ficam bloqueados com mensagem de configuração.
-Ainda não há partidas, player do fluxo público, manifest ou service worker.
-Playlists privadas continuam fora do MVP porque exigem OAuth do Google. As
-prévias ficam em cache de memória; em outra instância ou após expiração, a
-confirmação revalida os vídeos no YouTube.
+Ainda não há rotas nem interface pública para iniciar e jogar partidas, player
+do fluxo público, manifest ou service worker. Playlists privadas continuam fora
+do MVP porque exigem OAuth do Google. As prévias ficam em cache de memória; em
+outra instância ou após expiração, a confirmação revalida os vídeos no YouTube.
 
 ### Problemas comuns
 

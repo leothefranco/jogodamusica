@@ -3,7 +3,7 @@
 **Documento de execução para Codex**  
 **Versão:** 1.1
 **Data:** 28 de julho de 2026
-**Status:** Fases 0, 1 e 2 concluídas; extensão 2.1 aprovada para desenvolvimento
+**Status:** Fases 0, 1, 2, 2.1 e 3 concluídas
 
 ---
 
@@ -925,7 +925,7 @@ atômica do lote.
 
 ### Fase 3 — Domínio do torneio
 
-**Estado:** pendente.
+**Estado:** concluída.
 
 - Funções puras de chaveamento.
 - Função pura para calcular opções de rodada a partir da quantidade de músicas ativas.
