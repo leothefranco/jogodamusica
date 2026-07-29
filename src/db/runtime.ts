@@ -20,10 +20,11 @@ export function getDatabase(): Database {
   const client =
     globalForDatabase.jogoDaMusicaSqlClient ??
     postgres(getServerEnv().DATABASE_URL, {
-      max: 1,
+      max: 5,
       prepare: false,
       idle_timeout: 20,
       connect_timeout: 10,
+      max_lifetime: 300,
     });
 
   const database = drizzle(client, { schema });

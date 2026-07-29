@@ -1,0 +1,283 @@
+import { describe, expect, it } from "vitest";
+
+import { createThemeContentService } from "@/server/services/theme-content-service";
+
+const resolvedTrack = {
+  providerContentId: "dQw4w9WgXcQ",
+  sourceTitle: "Fonte",
+  sourceChannel: "Canal",
+  thumbnailUrl: "https://example.com/thumb.jpg",
+  durationSeconds: 180,
+  isEmbeddable: true,
+};
+
+const associatedTrack = {
+  songId: "20000000-0000-4000-8000-000000000020",
+  ...resolvedTrack,
+  title: "Título",
+  artist: "Artista",
+  startTimeSeconds: 0,
+  previewDurationSeconds: 30,
+  isActive: true,
+  displayOrder: null,
+};
+
+type ServiceDependencies = Parameters<typeof createThemeContentService>[0];
+
+function createService(overrides: Partial<ServiceDependencies> = {}) {
+  const { withThemeContentLock: lockOverride, ...boundaryOverrides } =
+    overrides;
+  const boundaries: Omit<ServiceDependencies, "withThemeContentLock"> = {
+    deleteThemeRecord: async (themeId) => themeId,
+    findThemeSong: async () => associatedTrack,
+    findThemeSongByProviderContentId: async () => associatedTrack,
+    findThemeSummary: async () => ({
+      id: "10000000-0000-4000-8000-000000000010",
+      name: "Clássicos",
+      slug: "classicos",
+      description: null,
+      coverUrl: null,
+      isActive: true,
+      defaultBracketSize: 4,
+      activeSongCount: 4,
+      totalSongCount: 4,
+      updatedAt: new Date("2026-01-01T00:00:00Z"),
+    }),
+    insertTheme: async () => "10000000-0000-4000-8000-000000000010",
+    musicProvider: {
+      search: async () => [],
+      resolve: async () => resolvedTrack,
+      getEmbedData: async () => ({
+        embedUrl: "https://provider.example/embed/dQw4w9WgXcQ",
+        watchUrl: "https://provider.example/watch/dQw4w9WgXcQ",
+      }),
+    },
+    removeThemeSongRecord: async (_themeId, songId) => songId,
+    setThemeActiveRecord: async (themeId) => themeId,
+    themeHasSessions: async () => false,
+    updateThemeSongAssociation: async () => undefined,
+    updateThemeRecord: async (themeId) => themeId,
+    upsertSongAndAssociation: async () => undefined,
+    ...boundaryOverrides,
+  };
+  let mutationQueue = Promise.resolve();
+  const withThemeContentLock: ServiceDependencies["withThemeContentLock"] =
+    lockOverride ??
+    (async (themeId, operation) => {
+      const previousMutation = mutationQueue;
+      let releaseMutation: () => void = () => {};
+      mutationQueue = new Promise<void>((resolve) => {
+        releaseMutation = resolve;
+      });
+      await previousMutation;
+
+      try {
+        return await operation({
+          findThemeSong: (songId) => boundaries.findThemeSong(themeId, songId),
+          findThemeSongByProviderContentId: (providerContentId) =>
+            boundaries.findThemeSongByProviderContentId(
+              themeId,
+              providerContentId,
+            ),
+          findThemeSummary: () => boundaries.findThemeSummary(themeId),
+          removeThemeSongRecord: (songId) =>
+            boundaries.removeThemeSongRecord(themeId, songId),
+          setThemeActiveRecord: (isActive) =>
+            boundaries.setThemeActiveRecord(themeId, isActive),
+          updateThemeSongAssociation: (input) =>
+            boundaries.updateThemeSongAssociation({ themeId, ...input }),
+          updateThemeRecord: (values) =>
+            boundaries.updateThemeRecord(themeId, values),
+          upsertSongAndAssociation: (input) =>
+            boundaries.upsertSongAndAssociation({ themeId, ...input }),
+        });
+      } finally {
+        releaseMutation();
+      }
+    });
+
+  return createThemeContentService({
+    ...boundaries,
+    withThemeContentLock,
+  });
+}
+
+describe("serviço de conteúdo de temas", () => {
+  it("preserva a quantidade jogável ao reassociar uma música de tema publicado", async () => {
+    let associationWasSaved = false;
+    const service = createService({
+      upsertSongAndAssociation: async () => {
+        associationWasSaved = true;
+      },
+    });
+
+    await expect(
+      service.attachResolvedTrack("10000000-0000-4000-8000-000000000010", {
+        providerContentId: "dQw4w9WgXcQ",
+        title: "Título",
+        artist: "Artista",
+        startTimeSeconds: 0,
+        previewDurationSeconds: 30,
+        isActive: false,
+      }),
+    ).rejects.toMatchObject({ code: "THEME_NOT_PLAYABLE", status: 409 });
+    expect(associationWasSaved).toBe(false);
+  });
+
+  it("preserva a quantidade jogável ao desativar uma música de tema publicado", async () => {
+    let associationWasUpdated = false;
+    const service = createService({
+      updateThemeSongAssociation: async () => {
+        associationWasUpdated = true;
+      },
+    });
+
+    await expect(
+      service.updateThemeSong(
+        "10000000-0000-4000-8000-000000000010",
+        "20000000-0000-4000-8000-000000000020",
+        {
+          title: "Título",
+          artist: "Artista",
+          startTimeSeconds: 0,
+          previewDurationSeconds: 30,
+          displayOrder: null,
+          isActive: false,
+        },
+      ),
+    ).rejects.toMatchObject({ code: "THEME_NOT_PLAYABLE", status: 409 });
+    expect(associationWasUpdated).toBe(false);
+  });
+
+  it("preserva a quantidade jogável ao remover uma música de tema publicado", async () => {
+    let associationWasRemoved = false;
+    const service = createService({
+      removeThemeSongRecord: async () => {
+        associationWasRemoved = true;
+        return associatedTrack.songId;
+      },
+    });
+
+    await expect(
+      service.removeThemeSong(
+        "10000000-0000-4000-8000-000000000010",
+        associatedTrack.songId,
+      ),
+    ).rejects.toMatchObject({ code: "THEME_NOT_PLAYABLE", status: 409 });
+    expect(associationWasRemoved).toBe(false);
+  });
+
+  it("não publica tema sem músicas ativas suficientes", async () => {
+    let publicationWasSaved = false;
+    const service = createService({
+      findThemeSummary: async () => ({
+        id: "10000000-0000-4000-8000-000000000010",
+        name: "Clássicos",
+        slug: "classicos",
+        description: null,
+        coverUrl: null,
+        isActive: false,
+        defaultBracketSize: 8,
+        activeSongCount: 4,
+        totalSongCount: 4,
+        updatedAt: new Date("2026-01-01T00:00:00Z"),
+      }),
+      setThemeActiveRecord: async (themeId) => {
+        publicationWasSaved = true;
+        return themeId;
+      },
+    });
+
+    await expect(
+      service.setThemePublication("10000000-0000-4000-8000-000000000010", true),
+    ).rejects.toMatchObject({ code: "THEME_NOT_PLAYABLE", status: 409 });
+    expect(publicationWasSaved).toBe(false);
+  });
+
+  it("não exclui tema que possui histórico de partidas", async () => {
+    let themeWasDeleted = false;
+    const service = createService({
+      deleteThemeRecord: async (themeId) => {
+        themeWasDeleted = true;
+        return themeId;
+      },
+      themeHasSessions: async () => true,
+    });
+
+    await expect(
+      service.deleteTheme("10000000-0000-4000-8000-000000000010"),
+    ).rejects.toMatchObject({ code: "THEME_HAS_HISTORY", status: 409 });
+    expect(themeWasDeleted).toBe(false);
+  });
+
+  it("não aumenta a chave de tema publicado além das músicas ativas", async () => {
+    let themeWasUpdated = false;
+    const service = createService({
+      updateThemeRecord: async (themeId) => {
+        themeWasUpdated = true;
+        return themeId;
+      },
+    });
+
+    await expect(
+      service.updateTheme("10000000-0000-4000-8000-000000000010", {
+        name: "Clássicos",
+        slug: "classicos",
+        description: null,
+        coverUrl: null,
+        defaultBracketSize: 8,
+      }),
+    ).rejects.toMatchObject({ code: "THEME_NOT_PLAYABLE", status: 409 });
+    expect(themeWasUpdated).toBe(false);
+  });
+
+  it("serializa desativações concorrentes para preservar uma chave publicada", async () => {
+    let activeSongCount = 5;
+    const service = createService({
+      findThemeSummary: async () => ({
+        id: "10000000-0000-4000-8000-000000000010",
+        name: "Clássicos",
+        slug: "classicos",
+        description: null,
+        coverUrl: null,
+        isActive: true,
+        defaultBracketSize: 4,
+        activeSongCount,
+        totalSongCount: 5,
+        updatedAt: new Date("2026-01-01T00:00:00Z"),
+      }),
+      updateThemeSongAssociation: async () => {
+        activeSongCount -= 1;
+      },
+    });
+    const input = {
+      title: "Título",
+      artist: "Artista",
+      startTimeSeconds: 0,
+      previewDurationSeconds: 30,
+      displayOrder: null,
+      isActive: false,
+    };
+
+    const results = await Promise.allSettled([
+      service.updateThemeSong(
+        "10000000-0000-4000-8000-000000000010",
+        "20000000-0000-4000-8000-000000000020",
+        input,
+      ),
+      service.updateThemeSong(
+        "10000000-0000-4000-8000-000000000010",
+        "30000000-0000-4000-8000-000000000030",
+        input,
+      ),
+    ]);
+
+    expect(results.filter(({ status }) => status === "fulfilled")).toHaveLength(
+      1,
+    );
+    expect(results.filter(({ status }) => status === "rejected")).toHaveLength(
+      1,
+    );
+    expect(activeSongCount).toBe(4);
+  });
+});

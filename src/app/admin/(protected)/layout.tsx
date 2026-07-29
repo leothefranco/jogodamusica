@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AudioLines, LogOut } from "lucide-react";
+import { AudioLines, LayoutDashboard, Library, LogOut } from "lucide-react";
 
 import { logoutAction } from "@/app/admin/login/actions";
 import { Button } from "@/components/ui/button";
@@ -31,7 +31,24 @@ export default async function ProtectedAdminLayout({
             </span>
           </Link>
 
-          <div className="flex items-center gap-3">
+          <nav aria-label="Administração" className="flex items-center gap-1">
+            <Link
+              href="/admin"
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-xs font-bold text-white/50 outline-none hover:bg-white/[0.04] hover:text-white focus-visible:ring-2 focus-visible:ring-violet-300"
+            >
+              <LayoutDashboard className="size-4" aria-hidden="true" />
+              <span className="hidden md:inline">Visão geral</span>
+            </Link>
+            <Link
+              href="/admin/temas"
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-xs font-bold text-white/50 outline-none hover:bg-white/[0.04] hover:text-white focus-visible:ring-2 focus-visible:ring-violet-300"
+            >
+              <Library className="size-4" aria-hidden="true" />
+              <span className="hidden md:inline">Temas</span>
+            </Link>
+          </nav>
+
+          <div className="flex items-center gap-2 sm:gap-3">
             <div className="hidden text-right sm:block">
               <p className="text-xs font-semibold">{admin.displayName}</p>
               <p className="mt-0.5 text-[0.65rem] text-white/35">

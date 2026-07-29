@@ -17,6 +17,10 @@ export const serverEnvSchema = z.object({
   DATABASE_URL: databaseUrlSchema,
 });
 
+export const youtubeEnvSchema = z.object({
+  YOUTUBE_API_KEY: z.string().trim().min(1),
+});
+
 export const seedEnvSchema = z.object({
   SEED_ADMIN_USER_ID: z.string().uuid().optional(),
   SEED_ADMIN_DISPLAY_NAME: z
@@ -29,6 +33,7 @@ export const seedEnvSchema = z.object({
 
 export type PublicSupabaseEnv = z.infer<typeof publicSupabaseInputSchema>;
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
+export type YouTubeEnv = z.infer<typeof youtubeEnvSchema>;
 export type SeedEnv = z.infer<typeof seedEnvSchema>;
 
 export function parsePublicSupabaseEnv(input: {

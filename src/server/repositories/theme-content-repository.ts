@@ -1,0 +1,427 @@
+import "server-only";
+
+import { and, asc, count, desc, eq, sql } from "drizzle-orm";
+
+import { getDatabase } from "@/db";
+import {
+  gameSessions,
+  songs,
+  themes,
+  themeSongs,
+  type NewTheme,
+} from "@/db/schema";
+import {
+  bracketSizeSchema,
+  type BracketSize,
+} from "@/domain/music/content-validation";
+
+type ThemeContentDatabase = Pick<
+  ReturnType<typeof getDatabase>,
+  "delete" | "insert" | "select" | "update"
+>;
+
+export type ThemeSummary = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  coverUrl: string | null;
+  isActive: boolean;
+  defaultBracketSize: BracketSize;
+  activeSongCount: number;
+  totalSongCount: number;
+  updatedAt: Date;
+};
+
+export type ThemeSongEditorItem = {
+  songId: string;
+  providerContentId: string;
+  title: string;
+  artist: string;
+  sourceTitle: string;
+  sourceChannel: string;
+  thumbnailUrl: string;
+  durationSeconds: number;
+  isEmbeddable: boolean;
+  startTimeSeconds: number;
+  previewDurationSeconds: number;
+  isActive: boolean;
+  displayOrder: number | null;
+};
+
+export type SongAssociationUpsertInput = {
+  themeId: string;
+  providerContentId: string;
+  title: string;
+  artist: string;
+  sourceTitle: string;
+  sourceChannel: string;
+  thumbnailUrl: string;
+  durationSeconds: number;
+  isEmbeddable: boolean;
+  startTimeSeconds: number;
+  previewDurationSeconds: number;
+  isActive: boolean;
+};
+
+export type ThemeSongUpdateInput = {
+  themeId: string;
+  songId: string;
+  title: string;
+  artist: string;
+  startTimeSeconds: number;
+  previewDurationSeconds: number;
+  displayOrder: number | null;
+  isActive: boolean;
+};
+
+const themeSummarySelection = {
+  id: themes.id,
+  name: themes.name,
+  slug: themes.slug,
+  description: themes.description,
+  coverUrl: themes.coverUrl,
+  isActive: themes.isActive,
+  defaultBracketSize: themes.defaultBracketSize,
+  activeSongCount:
+    sql<number>`count(${themeSongs.songId}) filter (where ${themeSongs.isActive} = true)`.mapWith(
+      Number,
+    ),
+  totalSongCount: count(themeSongs.songId).mapWith(Number),
+  updatedAt: themes.updatedAt,
+};
+
+const themeSongEditorSelection = {
+  songId: songs.id,
+  providerContentId: songs.providerContentId,
+  title: themeSongs.title,
+  artist: themeSongs.artist,
+  sourceTitle: songs.sourceTitle,
+  sourceChannel: songs.sourceChannel,
+  thumbnailUrl: songs.thumbnailUrl,
+  durationSeconds: songs.durationSeconds,
+  isEmbeddable: songs.isEmbeddable,
+  startTimeSeconds: themeSongs.startTimeSeconds,
+  previewDurationSeconds: themeSongs.previewDurationSeconds,
+  isActive: themeSongs.isActive,
+  displayOrder: themeSongs.displayOrder,
+};
+
+function toThemeSummary(
+  row: Omit<ThemeSummary, "defaultBracketSize"> & {
+    defaultBracketSize: number;
+  },
+): ThemeSummary {
+  return {
+    ...row,
+    defaultBracketSize: bracketSizeSchema.parse(row.defaultBracketSize),
+  };
+}
+
+async function findThemeSummaryUsing(
+  database: ThemeContentDatabase,
+  themeId: string,
+): Promise<ThemeSummary | null> {
+  const [theme] = await database
+    .select(themeSummarySelection)
+    .from(themes)
+    .leftJoin(themeSongs, eq(themeSongs.themeId, themes.id))
+    .where(eq(themes.id, themeId))
+    .groupBy(themes.id)
+    .limit(1);
+
+  return theme ? toThemeSummary(theme) : null;
+}
+
+async function findThemeSongUsing(
+  database: ThemeContentDatabase,
+  themeId: string,
+  songId: string,
+): Promise<ThemeSongEditorItem | null> {
+  const [item] = await database
+    .select(themeSongEditorSelection)
+    .from(themeSongs)
+    .innerJoin(songs, eq(songs.id, themeSongs.songId))
+    .where(and(eq(themeSongs.themeId, themeId), eq(themeSongs.songId, songId)))
+    .limit(1);
+
+  return item ?? null;
+}
+
+async function findThemeSongByProviderContentIdUsing(
+  database: ThemeContentDatabase,
+  themeId: string,
+  providerContentId: string,
+): Promise<ThemeSongEditorItem | null> {
+  const [item] = await database
+    .select(themeSongEditorSelection)
+    .from(themeSongs)
+    .innerJoin(songs, eq(songs.id, themeSongs.songId))
+    .where(
+      and(
+        eq(themeSongs.themeId, themeId),
+        eq(songs.provider, "youtube"),
+        eq(songs.providerContentId, providerContentId),
+      ),
+    )
+    .limit(1);
+
+  return item ?? null;
+}
+
+async function updateThemeRecordUsing(
+  database: ThemeContentDatabase,
+  themeId: string,
+  values: Partial<NewTheme>,
+) {
+  const [theme] = await database
+    .update(themes)
+    .set({ ...values, updatedAt: new Date() })
+    .where(eq(themes.id, themeId))
+    .returning({ id: themes.id });
+
+  return theme?.id ?? null;
+}
+
+async function upsertSongAndAssociationUsing(
+  database: ThemeContentDatabase,
+  input: SongAssociationUpsertInput,
+) {
+  const [song] = await database
+    .insert(songs)
+    .values({
+      provider: "youtube",
+      providerContentId: input.providerContentId,
+      sourceTitle: input.sourceTitle,
+      sourceChannel: input.sourceChannel,
+      thumbnailUrl: input.thumbnailUrl,
+      durationSeconds: input.durationSeconds,
+      isEmbeddable: input.isEmbeddable,
+    })
+    .onConflictDoUpdate({
+      target: [songs.provider, songs.providerContentId],
+      set: {
+        sourceTitle: input.sourceTitle,
+        sourceChannel: input.sourceChannel,
+        thumbnailUrl: input.thumbnailUrl,
+        durationSeconds: input.durationSeconds,
+        isEmbeddable: input.isEmbeddable,
+        updatedAt: new Date(),
+      },
+    })
+    .returning({ id: songs.id });
+
+  await database
+    .insert(themeSongs)
+    .values({
+      themeId: input.themeId,
+      songId: song.id,
+      title: input.title,
+      artist: input.artist,
+      startTimeSeconds: input.startTimeSeconds,
+      previewDurationSeconds: input.previewDurationSeconds,
+      isActive: input.isActive,
+    })
+    .onConflictDoUpdate({
+      target: [themeSongs.themeId, themeSongs.songId],
+      set: {
+        title: input.title,
+        artist: input.artist,
+        startTimeSeconds: input.startTimeSeconds,
+        previewDurationSeconds: input.previewDurationSeconds,
+        isActive: input.isActive,
+        updatedAt: new Date(),
+      },
+    });
+}
+
+async function updateThemeSongAssociationUsing(
+  database: ThemeContentDatabase,
+  input: ThemeSongUpdateInput,
+) {
+  await database
+    .update(themeSongs)
+    .set({
+      title: input.title,
+      artist: input.artist,
+      startTimeSeconds: input.startTimeSeconds,
+      previewDurationSeconds: input.previewDurationSeconds,
+      displayOrder: input.displayOrder,
+      isActive: input.isActive,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(themeSongs.themeId, input.themeId),
+        eq(themeSongs.songId, input.songId),
+      ),
+    );
+}
+
+async function removeThemeSongRecordUsing(
+  database: ThemeContentDatabase,
+  themeId: string,
+  songId: string,
+) {
+  const [deleted] = await database
+    .delete(themeSongs)
+    .where(and(eq(themeSongs.themeId, themeId), eq(themeSongs.songId, songId)))
+    .returning({ songId: themeSongs.songId });
+
+  return deleted?.songId ?? null;
+}
+
+export async function listThemeSummaries(): Promise<ThemeSummary[]> {
+  const rows = await getDatabase()
+    .select(themeSummarySelection)
+    .from(themes)
+    .leftJoin(themeSongs, eq(themeSongs.themeId, themes.id))
+    .groupBy(themes.id)
+    .orderBy(desc(themes.updatedAt));
+
+  return rows.map(toThemeSummary);
+}
+
+export async function findThemeSummary(
+  themeId: string,
+): Promise<ThemeSummary | null> {
+  return findThemeSummaryUsing(getDatabase(), themeId);
+}
+
+export async function listThemeSongs(
+  themeId: string,
+): Promise<ThemeSongEditorItem[]> {
+  return getDatabase()
+    .select(themeSongEditorSelection)
+    .from(themeSongs)
+    .innerJoin(songs, eq(songs.id, themeSongs.songId))
+    .where(eq(themeSongs.themeId, themeId))
+    .orderBy(
+      sql`${themeSongs.displayOrder} asc nulls last`,
+      asc(themeSongs.title),
+    );
+}
+
+export async function insertTheme(values: NewTheme): Promise<string> {
+  const [theme] = await getDatabase()
+    .insert(themes)
+    .values(values)
+    .returning({ id: themes.id });
+
+  return theme.id;
+}
+
+export async function updateThemeRecord(
+  themeId: string,
+  values: Partial<NewTheme>,
+) {
+  return updateThemeRecordUsing(getDatabase(), themeId, values);
+}
+
+export async function setThemeActiveRecord(themeId: string, isActive: boolean) {
+  return updateThemeRecord(themeId, { isActive });
+}
+
+export async function themeHasSessions(themeId: string) {
+  const [result] = await getDatabase()
+    .select({ value: count() })
+    .from(gameSessions)
+    .where(eq(gameSessions.themeId, themeId));
+
+  return Number(result.value) > 0;
+}
+
+export async function deleteThemeRecord(themeId: string) {
+  const [deleted] = await getDatabase()
+    .delete(themes)
+    .where(eq(themes.id, themeId))
+    .returning({ id: themes.id });
+
+  return deleted?.id ?? null;
+}
+
+export async function upsertSongAndAssociation(
+  input: SongAssociationUpsertInput,
+) {
+  await getDatabase().transaction(async (transaction) => {
+    await upsertSongAndAssociationUsing(transaction, input);
+  });
+}
+
+export async function updateThemeSongAssociation(input: ThemeSongUpdateInput) {
+  await getDatabase().transaction(async (transaction) => {
+    await updateThemeSongAssociationUsing(transaction, input);
+  });
+}
+
+export async function findThemeSong(
+  themeId: string,
+  songId: string,
+): Promise<ThemeSongEditorItem | null> {
+  return findThemeSongUsing(getDatabase(), themeId, songId);
+}
+
+export async function findThemeSongByProviderContentId(
+  themeId: string,
+  providerContentId: string,
+): Promise<ThemeSongEditorItem | null> {
+  return findThemeSongByProviderContentIdUsing(
+    getDatabase(),
+    themeId,
+    providerContentId,
+  );
+}
+
+export type LockedThemeContentRepository = {
+  findThemeSong(songId: string): Promise<ThemeSongEditorItem | null>;
+  findThemeSongByProviderContentId(
+    providerContentId: string,
+  ): Promise<ThemeSongEditorItem | null>;
+  findThemeSummary(): Promise<ThemeSummary | null>;
+  removeThemeSongRecord(songId: string): Promise<string | null>;
+  setThemeActiveRecord(isActive: boolean): Promise<string | null>;
+  updateThemeSongAssociation(
+    input: Omit<ThemeSongUpdateInput, "themeId">,
+  ): Promise<void>;
+  updateThemeRecord(values: Partial<NewTheme>): Promise<string | null>;
+  upsertSongAndAssociation(
+    input: Omit<SongAssociationUpsertInput, "themeId">,
+  ): Promise<void>;
+};
+
+export async function withThemeContentLock<T>(
+  themeId: string,
+  operation: (repository: LockedThemeContentRepository) => Promise<T>,
+): Promise<T> {
+  return getDatabase().transaction(async (transaction) => {
+    await transaction.execute(
+      sql`select ${themes.id} from ${themes} where ${themes.id} = ${themeId} for update`,
+    );
+
+    return operation({
+      findThemeSong: (songId) =>
+        findThemeSongUsing(transaction, themeId, songId),
+      findThemeSongByProviderContentId: (providerContentId) =>
+        findThemeSongByProviderContentIdUsing(
+          transaction,
+          themeId,
+          providerContentId,
+        ),
+      findThemeSummary: () => findThemeSummaryUsing(transaction, themeId),
+      removeThemeSongRecord: (songId) =>
+        removeThemeSongRecordUsing(transaction, themeId, songId),
+      setThemeActiveRecord: (isActive) =>
+        updateThemeRecordUsing(transaction, themeId, { isActive }),
+      updateThemeSongAssociation: (input) =>
+        updateThemeSongAssociationUsing(transaction, { themeId, ...input }),
+      updateThemeRecord: (values) =>
+        updateThemeRecordUsing(transaction, themeId, values),
+      upsertSongAndAssociation: (input) =>
+        upsertSongAndAssociationUsing(transaction, { themeId, ...input }),
+    });
+  });
+}
+
+export async function removeThemeSongRecord(themeId: string, songId: string) {
+  return removeThemeSongRecordUsing(getDatabase(), themeId, songId);
+}

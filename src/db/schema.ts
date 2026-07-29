@@ -79,8 +79,6 @@ export const songs = pgTable(
     providerContentId: varchar("provider_content_id", {
       length: 64,
     }).notNull(),
-    title: varchar("title", { length: 200 }).notNull(),
-    artist: varchar("artist", { length: 200 }).notNull(),
     sourceTitle: text("source_title").notNull(),
     sourceChannel: text("source_channel").notNull(),
     thumbnailUrl: text("thumbnail_url").notNull(),
@@ -106,10 +104,10 @@ export const themeSongs = pgTable(
     songId: uuid("song_id")
       .notNull()
       .references(() => songs.id, { onDelete: "cascade" }),
+    title: varchar("title", { length: 200 }).notNull(),
+    artist: varchar("artist", { length: 200 }).notNull(),
     startTimeSeconds: integer("start_time_seconds").default(0).notNull(),
-    previewDurationSeconds: integer("preview_duration_seconds")
-      .default(30)
-      .notNull(),
+    previewDurationSeconds: integer("preview_duration_seconds").notNull(),
     isActive: boolean("is_active").default(true).notNull(),
     displayOrder: integer("display_order"),
     ...timestamps,
@@ -120,7 +118,7 @@ export const themeSongs = pgTable(
     check("theme_songs_start_time_check", sql`${table.startTimeSeconds} >= 0`),
     check(
       "theme_songs_preview_duration_check",
-      sql`${table.previewDurationSeconds} between 15 and 60`,
+      sql`${table.previewDurationSeconds} > 0`,
     ),
     check(
       "theme_songs_display_order_check",
@@ -190,7 +188,7 @@ export const sessionSongs = pgTable(
     ),
     check(
       "session_songs_preview_duration_check",
-      sql`${table.previewDurationSeconds} between 15 and 60`,
+      sql`${table.previewDurationSeconds} > 0`,
     ),
   ],
 );

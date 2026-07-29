@@ -1,4 +1,5 @@
 .next
+.agents
 coverage
 drizzle/meta
 node_modules

@@ -1,0 +1,43 @@
+import { AppError, errorResponse } from "@/lib/errors";
+import type { AdminUser } from "@/server/auth/authorization";
+import type { getAdminUser } from "@/server/auth/session";
+import type { enforceRateLimit } from "@/server/services/rate-limit";
+
+type AdminYouTubeHandlerDependencies = {
+  enforceRateLimit: typeof enforceRateLimit;
+  getAdminUser: typeof getAdminUser;
+};
+
+type AdminYouTubeHandlerOptions = {
+  limit: number;
+  rateLimitKey: string;
+  windowMs?: number;
+};
+
+export function createAdminYouTubeHandler(
+  dependencies: AdminYouTubeHandlerDependencies,
+  options: AdminYouTubeHandlerOptions,
+  operation: (request: Request, admin: AdminUser) => Promise<Response>,
+) {
+  return async function handler(request: Request) {
+    try {
+      const admin = await dependencies.getAdminUser();
+      if (!admin) {
+        throw new AppError(
+          "UNAUTHORIZED",
+          "Acesso administrativo necessário.",
+          401,
+        );
+      }
+
+      dependencies.enforceRateLimit(`${options.rateLimitKey}:${admin.userId}`, {
+        limit: options.limit,
+        windowMs: options.windowMs ?? 60_000,
+      });
+
+      return await operation(request, admin);
+    } catch (error) {
+      return errorResponse(error);
+    }
+  };
+}

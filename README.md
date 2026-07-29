@@ -3,10 +3,12 @@
 Aplicação web para grupos compararem músicas em confrontos eliminatórios, usando
 um único aparelho, até eleger uma campeã.
 
-Este repositório está na **Fase 1 — Banco e autenticação**. A base Next.js, o
-modelo PostgreSQL/Drizzle e o acesso administrativo com Supabase SSR estão
-implementados. A conexão real depende da configuração de um projeto Supabase.
-YouTube, regras do torneio e PWA serão implementados nas fases seguintes da
+Este repositório concluiu a **Fase 2 — Administração de conteúdo**. A base
+Next.js, o modelo PostgreSQL/Drizzle, o acesso administrativo com Supabase SSR e
+o gerenciamento individual de temas e músicas do YouTube estão implementados. A
+próxima etapa planejada é a **Fase 2.1**, com importação de playlists e catálogo
+flexível. Torneio, experiência pública de jogo e PWA serão implementados nas
+fases seguintes da
 [especificação](./jogo-da-musica-especificacao-codex.md).
 
 ## Requisitos no Windows
@@ -72,6 +74,46 @@ npm run db:seed
 O seed é idempotente: mantém um tema demonstrativo inativo e atualiza o perfil
 administrativo informado sem criar ou armazenar senhas.
 
+## Configurar YouTube Data API
+
+1. Crie ou selecione um projeto no
+   [Google Cloud Console](https://console.cloud.google.com/).
+2. Em **APIs e serviços > Biblioteca**, ative **YouTube Data API v3**.
+3. Em **APIs e serviços > Credenciais**, crie uma chave de API.
+4. Restrinja a chave à **YouTube Data API v3**. Para desenvolvimento local,
+   mantenha a restrição de aplicativo compatível com chamadas do servidor;
+   antes do deploy, restrinja-a aos ambientes de produção suportados.
+5. Salve a chave somente em `.env.local`:
+
+```env
+YOUTUBE_API_KEY=sua-chave-local
+```
+
+6. Reinicie `npm run dev` depois de alterar a variável.
+
+A pesquisa administrativa é limitada, usa região `BR`, consulta detalhes em
+lote e mantém cache curto no servidor. A busca consome cota do Google; a entrada
+por URL ou ID continua disponível para evitar pesquisas desnecessárias. A cota
+e os limites devem ser acompanhados no Google Cloud. A resolução direta evita a
+operação de pesquisa, mas ainda consulta a Data API para validar metadados,
+duração e permissão de incorporação; portanto, não funciona depois que a cota
+diária estiver completamente esgotada.
+
+## Fluxo administrativo
+
+1. Acesse `/admin/login` e autentique-se com um perfil ativo.
+2. Em `/admin/temas`, crie um tema inicialmente inativo.
+3. Pesquise no YouTube ou cole uma URL/ID e visualize o vídeo antes de salvar.
+4. Revise título, artista, início e duração do trecho.
+5. Ative ou desative músicas individualmente.
+6. Publique o tema quando a quantidade de músicas ativas atingir o tamanho
+   padrão do chaveamento.
+
+Temas com partidas relacionadas não podem ser excluídos. Em temas publicados,
+o painel também impede remover ou desativar músicas quando isso tornaria o
+chaveamento inválido. A Fase 2 utiliza o esquema criado na migração inicial e
+não exige uma nova migração.
+
 ## Comandos
 
 | Comando                | Finalidade                                     |
@@ -111,8 +153,8 @@ Somente variáveis prefixadas com `NEXT_PUBLIC_` podem chegar ao navegador.
 src/
 ├── app/          # Rotas e layouts do App Router
 ├── components/   # Componentes de jogo, admin, YouTube e shadcn/ui
-├── db/           # Esquema, conexão e seed (Fase 1)
-├── domain/       # Regras puras de negócio
+├── db/           # Esquema, conexão, migrações e seed
+├── domain/       # Regras puras de música e publicação
 ├── lib/          # Configuração e utilitários compartilhados
 ├── server/       # Auth, repositórios, serviços e provedores
 └── types/        # Tipos compartilhados
@@ -139,12 +181,24 @@ módulos exclusivos do servidor.
 - O Proxy faz somente a verificação preliminar; a autorização definitiva usa
   `getClaims()` e exige um registro ativo em `admin_profiles`.
 - O domínio aceita os papéis `admin` e `editor`; o seed inicial usa `admin`.
+- A integração musical depende da interface `MusicProvider`; somente
+  `YouTubeProvider` está implementado.
+- Busca e resolução do YouTube executam somente no servidor, com cache curto,
+  limite por administrador e erros estruturados sem stack trace.
+- Metadados de vídeos são resolvidos novamente no servidor ao salvar; campos
+  ocultos do navegador não são tratados como fonte confiável.
+- Título e artista exibidos pertencem à associação com o tema, permitindo
+  personalizações independentes quando o mesmo vídeo é reutilizado.
+- Publicação exige músicas ativas suficientes para o tamanho padrão.
 
 ## Limitações atuais
 
-Sem um projeto Supabase configurado, migração, seed e login reais permanecem
-pendentes. O painel ainda não possui CRUD de temas ou músicas. Também não há
-partidas, reprodução do YouTube, manifest ou service worker.
+Sem Supabase configurado, migração, seed, login e CRUD reais permanecem
+indisponíveis. Sem `YOUTUBE_API_KEY`, temas ainda podem ser editados, mas busca,
+resolução e cadastro de vídeos ficam bloqueados com mensagem de configuração.
+Ainda não há partidas, player do fluxo público, manifest ou service worker.
+Também ainda não há importação de playlists; por enquanto, cada vídeo é
+associado individualmente ao tema.
 
 ### Problemas comuns
 
@@ -156,6 +210,12 @@ partidas, reprodução do YouTube, manifest ou service worker.
   na URL e a opção IPv4 recomendada pelo painel.
 - **Alterou o esquema:** execute `npm run db:generate`, revise o SQL gerado e
   depois rode `npm run db:migrate`.
+- **YouTube não configurado:** confira `YOUTUBE_API_KEY`, a ativação da YouTube
+  Data API v3, as restrições da credencial e reinicie o servidor.
+- **Cota do YouTube excedida:** evite repetir pesquisas, acompanhe o consumo no
+  Google Cloud e tente novamente após a renovação da cota.
+- **Tema não publica:** confirme se a quantidade de músicas ativas é igual ou
+  superior ao tamanho padrão configurado.
 
 Em 26 de julho de 2026, `npm audit --omit=dev` também sinaliza avisos upstream
 em `postcss` e `sharp`, incluídos pelo Next.js 16.2.11. A correção automática

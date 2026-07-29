@@ -1,3 +1,3 @@
 import "server-only";
 
-export { getSeedEnv, getServerEnv } from "@/lib/env-runtime";
+export { getSeedEnv, getServerEnv, getYouTubeEnv } from "@/lib/env-runtime";

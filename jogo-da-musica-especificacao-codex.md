@@ -1,9 +1,9 @@
 # Jogo da Música — Especificação funcional e técnica para implementação
 
 **Documento de execução para Codex**  
-**Versão:** 1.0  
-**Data:** 26 de julho de 2026  
-**Status:** Aprovado para desenvolvimento do MVP
+**Versão:** 1.1
+**Data:** 28 de julho de 2026
+**Status:** Fases 0, 1 e 2 concluídas; extensão 2.1 aprovada para desenvolvimento
 
 ---
 
@@ -18,9 +18,13 @@ O projeto deve ser criado de forma incremental, seguindo as fases deste document
 - Produto inicial: PWA acessada pelo navegador e instalável na tela inicial.
 - Participação: todos votam em um único aparelho compartilhado.
 - Temas: lista fixa, criada e gerenciada por administradores.
+- Catálogo do tema: pode conter mais músicas ativas do que uma partida utilizará.
+- Formato da partida: o jogador escolhe entre 2 e 5 rodadas, equivalentes a chaves de 4, 8, 16 ou 32 músicas.
+- Seleção da partida: sorteio sem repetição entre as músicas ativas; excedentes ficam fora daquela sessão.
 - Provedor de mídia inicial: YouTube.
 - Reprodução: YouTube IFrame Player API; sem download, extração ou hospedagem de áudio.
 - Busca administrativa: YouTube Data API.
+- Importação administrativa: playlist pública ou não listada do YouTube, com revisão antes de associar os vídeos ao tema.
 - Front-end e backend: Next.js 16 com App Router e TypeScript.
 - Interface: React, Tailwind CSS 4 e shadcn/ui.
 - Banco: PostgreSQL hospedado no Supabase.
@@ -56,10 +60,11 @@ Criar uma experiência social rápida, clara e divertida para grupos compararem 
 ### 4.1 Área pública
 
 - Página inicial com identidade do produto e lista de temas ativos.
-- Página de detalhes do tema com descrição, quantidade de músicas e tamanhos de chave disponíveis.
+- Página de detalhes do tema com descrição, quantidade de músicas e quantidades de rodadas disponíveis.
 - Início de nova partida.
-- Chaveamentos suportados: 4, 8, 16 e 32 músicas.
+- Quantidades suportadas: 2, 3, 4 ou 5 rodadas, equivalentes respectivamente a 4, 8, 16 ou 32 músicas.
 - Seleção aleatória de músicas ativas quando o tema tiver mais músicas que o tamanho escolhido.
+- Músicas excedentes permanecem no tema e podem ser sorteadas em partidas futuras.
 - Embaralhamento aleatório das posições iniciais.
 - Tela de confronto com duas opções.
 - Reprodução controlada de um trecho de cada música.
@@ -79,25 +84,31 @@ Criar uma experiência social rápida, clara e divertida para grupos compararem 
 - Definir nome, slug, descrição, imagem e tamanho padrão do chaveamento.
 - Pesquisar vídeos no YouTube.
 - Cadastrar vídeo colando URL ou ID como alternativa à pesquisa.
+- Importar em lote os vídeos de uma playlist pública ou não listada do YouTube.
+- Exibir uma prévia da importação, permitindo desmarcar itens e informando duplicados, indisponíveis ou não incorporáveis.
 - Visualizar o vídeo antes de salvar.
 - Importar metadados básicos: título, canal, miniatura e duração.
 - Editar título e artista exibidos no jogo.
 - Definir o segundo inicial do trecho.
-- Definir a duração do trecho entre 15 e 60 segundos; padrão de 30 segundos.
+- Usar por padrão a música inteira, permitindo reduzir a duração do trecho.
 - Ativar ou desativar uma música dentro de um tema.
 - Reutilizar a mesma música em vários temas.
-- Validar se há músicas suficientes antes de publicar um tema.
+- Validar se há músicas suficientes para o tamanho padrão antes de publicar um tema, sem impor limite máximo ao catálogo.
 
 ## 5. Regras da partida
 
 ### 5.1 Preparação
 
 1. O jogador escolhe um tema ativo.
-2. O sistema apresenta somente tamanhos de chave compatíveis com a quantidade de músicas ativas.
-3. O tamanho padrão do tema aparece pré-selecionado quando for compatível.
-4. Ao iniciar, o servidor cria uma sessão e seleciona aleatoriamente a quantidade necessária de músicas.
-5. As músicas são embaralhadas e recebem sementes de 1 a N.
-6. A sessão guarda uma cópia dos dados exibidos, para que edições administrativas futuras não alterem uma partida em andamento.
+2. O sistema apresenta somente quantidades de rodadas compatíveis com a quantidade de músicas ativas.
+3. A interface deve mostrar a equivalência de forma explícita: `2 rodadas · 4 músicas`, `3 rodadas · 8 músicas`, `4 rodadas · 16 músicas` ou `5 rodadas · 32 músicas`.
+4. O tamanho padrão do tema aparece pré-selecionado quando for compatível.
+5. Ao iniciar, o servidor cria uma sessão e sorteia, sem repetição, exatamente a quantidade de músicas exigida pela escolha.
+6. Se o tema tiver músicas ativas excedentes, elas ficam fora somente daquela sessão e continuam elegíveis para partidas futuras.
+7. As músicas selecionadas são embaralhadas e recebem sementes de 1 a N.
+8. A sessão guarda uma cópia dos dados exibidos, para que edições administrativas futuras não alterem uma partida em andamento.
+
+`roundCount` é um valor derivado de `bracketSize` por `log2(bracketSize)`. O contrato persistido e a API usam apenas `bracketSize`, evitando estados contraditórios.
 
 ### 5.2 Confronto
 
@@ -299,7 +310,8 @@ jogo-da-musica/
 │   │   │   ├── games/[sessionId]/matches/[matchId]/vote/route.ts
 │   │   │   └── admin/youtube/
 │   │   │       ├── search/route.ts
-│   │   │       └── resolve/route.ts
+│   │   │       ├── resolve/route.ts
+│   │   │       └── playlists/preview/route.ts
 │   │   ├── layout.tsx
 │   │   ├── manifest.ts
 │   │   └── globals.css
@@ -380,8 +392,6 @@ Usar UUIDs gerados no banco e datas com fuso em `timestamptz`.
 | `id` | uuid | PK |
 | `provider` | enum | inicialmente `youtube` |
 | `provider_content_id` | varchar(64) | ID do vídeo |
-| `title` | varchar(200) | nome exibido |
-| `artist` | varchar(200) | artista exibido |
 | `source_title` | text | título original do YouTube |
 | `source_channel` | text | canal original |
 | `thumbnail_url` | text | miniatura |
@@ -398,8 +408,10 @@ Restrição única em `(provider, provider_content_id)`.
 |---|---|---|
 | `theme_id` | uuid | FK |
 | `song_id` | uuid | FK |
+| `title` | varchar(200) | nome exibido neste tema |
+| `artist` | varchar(200) | artista exibido neste tema |
 | `start_time_seconds` | integer | mínimo 0 |
-| `preview_duration_seconds` | integer | entre 15 e 60; padrão 30 |
+| `preview_duration_seconds` | integer | positivo; padrão igual à duração total da música |
 | `is_active` | boolean | padrão `true` |
 | `display_order` | integer | opcional |
 | `created_at` | timestamptz | obrigatório |
@@ -544,6 +556,8 @@ Retorna sessão, confronto atual, progresso e chaveamento.
 - Associação e configuração de músicas.
 - Pesquisa do YouTube.
 - Resolução de URL ou ID.
+- `POST /api/admin/youtube/playlists/preview`: recebe URL ou ID de playlist, percorre todas as páginas e retorna itens normalizados com seu estado de elegibilidade.
+- A confirmação da prévia reutiliza o serviço de associação de músicas do tema em uma operação em lote idempotente.
 - Todas as rotas devem validar sessão e perfil administrativo ativo.
 
 ### 12.3 Formato de erro
@@ -586,9 +600,25 @@ Nunca retornar stack trace ao cliente.
 - Tratar códigos de erro da API.
 - Não ocultar o player, extrair áudio, bloquear anúncios ou modificar a experiência exigida pelo YouTube.
 
-### 13.3 Quota
+### 13.3 Importação de playlist
+
+- Aceitar URL ou ID de playlist pública ou não listada.
+- Usar `playlistItems.list` no servidor, seguindo `nextPageToken` até o final da playlist.
+- Consultar `videos.list` em lotes para validar duração, metadados atuais e `status.embeddable`.
+- A prévia deve classificar cada item como `pronto`, `já associado`, `duplicado na playlist`, `indisponível`, `não incorporável`, `bloqueado na região` ou `inválido`.
+- O administrador pode desmarcar itens antes de confirmar.
+- A confirmação associa somente os itens elegíveis selecionados e retorna contagens de adicionados, já existentes e ignorados.
+- Repetir a mesma importação não pode criar músicas ou associações duplicadas.
+- Falhas de um vídeo não devem cancelar os demais itens válidos; o resultado precisa informar cada item ignorado.
+- O título e o artista continuam editáveis individualmente depois da importação.
+- Playlists privadas exigem autorização OAuth do proprietário e ficam fora do MVP; a chave de API atual cobre apenas dados acessíveis publicamente.
+- Não baixar, extrair nem armazenar áudio durante a importação.
+
+### 13.4 Quota
 
 O projeto deve evitar dependência de pesquisa em tempo de jogo. Registrar no README que a cota da API pode mudar e deve ser acompanhada no Google Cloud. A pesquisa administrativa deve ser econômica e possuir fallback por URL.
+
+A importação deve usar paginação e consultas em lote, sem executar uma pesquisa por vídeo. Aplicar limite por administrador, cache curto da prévia e um teto configurável de itens por importação para proteger cota, tempo de execução e memória. Se o teto for atingido, interromper com resultado parcial explícito, nunca silenciosamente.
 
 ## 14. Autenticação e segurança
 
@@ -758,6 +788,10 @@ Adicionar `tsx` como dependência de desenvolvimento caso seja usado pelo seed.
 - validação dos tempos de trecho;
 - validação de URL e ID do YouTube;
 - cálculo dos tamanhos disponíveis por tema.
+- conversão entre 2–5 rodadas e chaves de 4–32 músicas;
+- sorteio sem repetição quando o tema possui músicas excedentes;
+- normalização de URL/ID e paginação de playlist;
+- classificação de vídeos duplicados, indisponíveis e não incorporáveis.
 
 ### 19.2 Integração
 
@@ -765,7 +799,10 @@ Adicionar `tsx` como dependência de desenvolvimento caso seja usado pelo seed.
 - voto atualiza confronto seguinte na mesma transação;
 - usuário não administrador não acessa rotas administrativas;
 - tema inativo não inicia partida;
-- tema sem músicas suficientes é rejeitado.
+- tema sem músicas suficientes é rejeitado;
+- tema com músicas excedentes cria sessão somente com a quantidade escolhida;
+- importação percorre mais de uma página, consulta detalhes em lote e é idempotente;
+- falha em um vídeo da playlist não impede a associação dos demais itens válidos.
 
 ### 19.3 E2E
 
@@ -773,12 +810,20 @@ Cenário mínimo:
 
 1. acessar a página inicial;
 2. selecionar um tema seed com quatro músicas;
-3. iniciar partida;
+3. selecionar `2 rodadas · 4 músicas` e iniciar a partida;
 4. iniciar os dois trechos em cada confronto;
 5. votar;
 6. concluir semifinal e final;
 7. verificar campeã e chaveamento;
 8. reiniciar com o mesmo tema.
+
+Cenário adicional:
+
+1. preparar um tema com mais de oito músicas ativas;
+2. selecionar `3 rodadas · 8 músicas`;
+3. verificar que a sessão contém exatamente oito músicas distintas;
+4. concluir a partida e iniciar outra;
+5. verificar que todas as músicas do tema continuam disponíveis para sorteios futuros.
 
 Nos testes automatizados, simular o player por adaptador ou flag de teste; não depender da reprodução real do YouTube em CI.
 
@@ -789,7 +834,12 @@ O MVP será considerado pronto quando:
 - o projeto instalar e executar seguindo somente o README;
 - `npm run lint`, `npm run typecheck`, `npm test` e `npm run build` passarem;
 - um administrador conseguir criar um tema e adicionar músicas do YouTube;
+- um administrador conseguir pré-visualizar e importar em lote uma playlist pública ou não listada;
+- vídeos inválidos da playlist serem informados sem impedir a importação dos válidos;
 - um tema não puder ser publicado sem músicas suficientes;
+- um tema poder manter mais músicas ativas do que a quantidade usada em uma partida;
+- o jogador escolher entre as quantidades de rodadas compatíveis com o tema;
+- cada sessão sortear exatamente 4, 8, 16 ou 32 músicas distintas conforme a escolha;
 - um jogador iniciar e concluir chaveamentos de 4, 8, 16 e 32 músicas;
 - a partida sobreviver a uma atualização de página;
 - cada confronto exigir que os dois trechos sejam iniciados antes do voto;
@@ -803,7 +853,22 @@ O MVP será considerado pronto quando:
 
 ## 21. Fases de implementação para o Codex
 
+Progresso verificado no repositório em 28 de julho de 2026:
+
+| Fase | Estado | Evidência principal |
+|---|---|---|
+| 0 — Fundação | Concluída | Next.js, TypeScript, Tailwind, scripts, layout público, lint, testes e build configurados |
+| 1 — Banco e autenticação | Concluída | Esquema Drizzle, migrações, seed, Supabase SSR e proteção administrativa |
+| 2 — Administração de conteúdo | Concluída | CRUD de temas, busca/resolução do YouTube, músicas, trechos e regras de publicação |
+| 2.1 — Playlist e catálogo flexível | Próxima | Nova demanda; ainda sem implementação |
+| 3 — Domínio do torneio | Pendente | Estruturas no banco existem; serviços e regras do chaveamento ainda não |
+| 4 — Experiência de jogo | Pendente | A página atual é institucional e não inicia partidas |
+| 5 — PWA, acessibilidade e robustez | Pendente | Cabeçalhos de segurança iniciados; manifest e service worker ausentes |
+| 6 — Qualidade e deploy | Pendente | Testes unitários/integração existem; E2E, CI e deploy ainda pendentes |
+
 ### Fase 0 — Fundação
+
+**Estado:** concluída.
 
 - Criar projeto.
 - Configurar dependências, formatação, lint e testes.
@@ -814,6 +879,8 @@ O MVP será considerado pronto quando:
 **Saída:** projeto executa, testa e compila.
 
 ### Fase 1 — Banco e autenticação
+
+**Estado:** concluída.
 
 - Modelar esquema Drizzle.
 - Gerar migração inicial.
@@ -826,6 +893,8 @@ O MVP será considerado pronto quando:
 
 ### Fase 2 — Administração de conteúdo
 
+**Estado:** concluída para cadastro individual.
+
 - CRUD de temas.
 - Busca e resolução de vídeos do YouTube.
 - Cadastro e associação de músicas.
@@ -834,9 +903,27 @@ O MVP será considerado pronto quando:
 
 **Saída:** administrador prepara um tema jogável.
 
+### Fase 2.1 — Importação de playlist e catálogo flexível
+
+**Estado:** próxima fase.
+
+- Importar playlist pública ou não listada por URL/ID, com paginação completa.
+- Buscar detalhes dos vídeos em lote e filtrar conteúdo indisponível ou não incorporável.
+- Exibir prévia revisável antes da confirmação.
+- Associar itens elegíveis em lote com resultado parcial e idempotência.
+- Manter catálogo do tema sem limite vinculado ao tamanho padrão da chave.
+- Exibir no painel quantas modalidades o catálogo suporta: 2, 3, 4 e/ou 5 rodadas.
+- Cobrir normalização, paginação, classificação, autorização, cota e importação parcial com testes.
+
+**Saída:** administrador popula um tema grande com uma playlist e entende quais quantidades de rodadas ele suporta.
+
 ### Fase 3 — Domínio do torneio
 
+**Estado:** pendente.
+
 - Funções puras de chaveamento.
+- Função pura para calcular opções de rodada a partir da quantidade de músicas ativas.
+- Sorteio sem repetição de exatamente 4, 8, 16 ou 32 músicas, preservando as excedentes fora da sessão.
 - Criação transacional de sessão.
 - Registro de voto e avanço.
 - Testes unitários e de integração.
@@ -845,8 +932,11 @@ O MVP será considerado pronto quando:
 
 ### Fase 4 — Experiência de jogo
 
+**Estado:** pendente.
+
 - Lista pública de temas.
-- Início da partida.
+- Seletor de quantidade de rodadas com a equivalência em músicas e somente opções compatíveis.
+- Início da partida com a opção escolhida.
 - Componente do YouTube.
 - Tela de confronto.
 - Votação, progresso, retomada e resultado.
@@ -854,6 +944,8 @@ O MVP será considerado pronto quando:
 **Saída:** fluxo completo utilizável.
 
 ### Fase 5 — PWA, acessibilidade e robustez
+
+**Estado:** pendente.
 
 - Manifest e ícones.
 - Service worker seguro.
@@ -865,6 +957,8 @@ O MVP será considerado pronto quando:
 **Saída:** experiência pronta para teste externo.
 
 ### Fase 6 — Qualidade e deploy
+
+**Estado:** pendente.
 
 - Playwright.
 - GitHub Actions.
@@ -931,6 +1025,8 @@ O MVP será considerado pronto quando:
 | Vídeo removido ou bloqueado | Validar no cadastro, permitir desativação e tratar erro no player |
 | Restrições de autoplay | Exigir gesto explícito nos botões `Ouvir` |
 | Cota de pesquisa do YouTube | Buscar só no admin, usar cache e fallback por URL |
+| Playlist muito grande ou com itens inválidos | Paginar, consultar em lotes, limitar a importação e apresentar resultado parcial por item |
+| Playlist privada | Não prometer suporte no MVP; informar que exige OAuth do proprietário |
 | Alteração de metadados | Guardar snapshot em cada sessão |
 | Duplo clique ou repetição de requisição | Transação, validação de status e restrições únicas |
 | Segredo exposto | Validação de ambiente e módulos server-only |
@@ -942,12 +1038,15 @@ O MVP será considerado pronto quando:
 
 Estas decisões foram adotadas para evitar bloqueio do MVP e podem ser alteradas depois:
 
-- trecho padrão de 30 segundos;
-- intervalo permitido de 15 a 60 segundos;
+- trecho padrão com a duração total da música;
+- duração configurável até o fim do vídeo;
 - voto liberado após iniciar ambas as músicas;
 - ausência de desfazer após confirmação;
-- escolha de chave entre 4, 8, 16 e 32;
-- seleção aleatória quando houver músicas excedentes;
+- escolha de 2, 3, 4 ou 5 rodadas, equivalentes a chaves de 4, 8, 16 e 32;
+- catálogo do tema pode superar o tamanho padrão e não possui máximo definido pelo chaveamento;
+- seleção aleatória sem repetição quando houver músicas excedentes;
+- importação de playlist pública ou não listada com revisão e resultado parcial;
+- playlist privada fora do MVP por exigir OAuth;
 - login administrativo por e-mail e senha;
 - tema visual escuro;
 - histórico de partidas armazenado sem dados pessoais.
@@ -967,7 +1066,7 @@ Estas decisões foram adotadas para evitar bloqueio do MVP e podem ser alteradas
 
 ## 28. Referências técnicas verificadas
 
-Verificadas em 26 de julho de 2026:
+Verificadas em 28 de julho de 2026:
 
 - Next.js — instalação e requisitos: https://nextjs.org/docs/app/getting-started/installation
 - Next.js — PWA: https://nextjs.org/docs/app/guides/progressive-web-apps
@@ -978,10 +1077,15 @@ Verificadas em 26 de julho de 2026:
 - shadcn/ui — Next.js: https://ui.shadcn.com/docs/installation/next
 - YouTube — IFrame Player API: https://developers.google.com/youtube/iframe_api_reference
 - YouTube — Data API e quota: https://developers.google.com/youtube/v3/getting-started
+- YouTube — `playlistItems.list`: https://developers.google.com/youtube/v3/docs/playlistItems/list
+- YouTube — `videos.list`: https://developers.google.com/youtube/v3/docs/videos/list
+- YouTube — autenticação OAuth: https://developers.google.com/youtube/v3/guides/authentication
 - Vercel — Next.js: https://vercel.com/docs/frameworks/full-stack/nextjs
+
+Análise específica da nova demanda: [`docs/pesquisa-importacao-playlist-youtube.md`](./docs/pesquisa-importacao-playlist-youtube.md).
 
 ---
 
-## Comando inicial para uma nova sessão do Codex
+## Comando inicial para a próxima sessão do Codex
 
-> Leia integralmente `jogo-da-musica-especificacao-codex.md`. Implemente apenas a Fase 0. Antes de editar, apresente um plano curto e liste os arquivos que pretende criar. Use npm, Node.js 24 LTS, Next.js 16, TypeScript estrito, App Router e a estrutura definida no documento. Ao terminar, execute lint, typecheck, testes e build, corrija todos os erros, atualize o README e apresente um resumo das alterações e dos comandos executados. Não avance para a Fase 1 sem nova instrução.
+> Leia integralmente `jogo-da-musica-especificacao-codex.md` e `docs/pesquisa-importacao-playlist-youtube.md`. Implemente apenas a Fase 2.1, começando por testes das regras de normalização, paginação, classificação e idempotência. Antes de editar código Next.js, leia os guias relevantes em `node_modules/next/dist/docs/`. Preserve o cadastro individual existente e não implemente OAuth para playlists privadas. Ao terminar, execute formatação, lint, typecheck, testes e build, atualize o README e apresente um resumo. Não avance para a Fase 3 sem nova instrução.
