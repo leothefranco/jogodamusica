@@ -11,12 +11,15 @@ import {
   themes,
   themeSongs,
 } from "@/db/schema";
+import type { MatchCoordinate, MatchSongSlot } from "@/domain/bracket";
 import { bracketSizeSchema } from "@/domain/music/content-validation";
 import { AppError } from "@/lib/errors";
 import type {
   GameCreationRepository,
+  GameState,
   GameVoteRepository,
-  MatchSongSlot,
+  NewGameMatch,
+  NewGameSession,
   PersistedGameMatch,
   PersistedGameSession,
   SessionSongSnapshot,
@@ -24,6 +27,7 @@ import type {
 
 type Database = ReturnType<typeof getDatabase>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
+type ReadDatabase = Pick<Database, "select">;
 
 const sessionSelection = {
   id: gameSessions.id,
@@ -48,11 +52,28 @@ const matchSelection = {
   completedAt: gameMatches.completedAt,
 };
 
+const sessionSongSelection = {
+  sessionId: sessionSongs.sessionId,
+  songId: sessionSongs.songId,
+  seed: sessionSongs.seed,
+  title: sessionSongs.title,
+  artist: sessionSongs.artist,
+  thumbnailUrl: sessionSongs.thumbnailUrl,
+  provider: sessionSongs.provider,
+  providerContentId: sessionSongs.providerContentId,
+  startTimeSeconds: sessionSongs.startTimeSeconds,
+  previewDurationSeconds: sessionSongs.previewDurationSeconds,
+};
+
 async function insertSessionUsing(
   transaction: Transaction,
-  session: PersistedGameSession,
+  session: NewGameSession,
 ) {
-  await transaction.insert(gameSessions).values(session);
+  const [created] = await transaction
+    .insert(gameSessions)
+    .values(session)
+    .returning({ id: gameSessions.id });
+  return created.id;
 }
 
 async function insertSessionSongsUsing(
@@ -64,13 +85,13 @@ async function insertSessionSongsUsing(
 
 async function insertMatchesUsing(
   transaction: Transaction,
-  matches: PersistedGameMatch[],
+  matches: NewGameMatch[],
 ) {
   await transaction.insert(gameMatches).values(matches);
 }
 
 async function getSessionUsing(
-  transaction: Transaction,
+  transaction: ReadDatabase,
   sessionId: string,
 ): Promise<PersistedGameSession | null> {
   const [session] = await transaction
@@ -122,6 +143,41 @@ async function getMatchAtUsing(
     .limit(1);
 
   return match ?? null;
+}
+
+export async function getGameStateRecord(
+  sessionId: string,
+): Promise<GameState | null> {
+  const database = getDatabase();
+  const [session, snapshots, matches] = await Promise.all([
+    getSessionUsing(database, sessionId),
+    database
+      .select(sessionSongSelection)
+      .from(sessionSongs)
+      .where(eq(sessionSongs.sessionId, sessionId))
+      .orderBy(asc(sessionSongs.seed)),
+    database
+      .select(matchSelection)
+      .from(gameMatches)
+      .where(eq(gameMatches.sessionId, sessionId))
+      .orderBy(asc(gameMatches.roundNumber), asc(gameMatches.position)),
+  ]);
+
+  if (!session) return null;
+
+  return {
+    session,
+    songs: snapshots,
+    matches,
+    currentMatch: matches.find(({ status }) => status === "ready") ?? null,
+    progress: {
+      completedMatches: matches.filter(({ status }) => status === "completed")
+        .length,
+      totalMatches: matches.length,
+      currentRound: session.currentRound,
+      roundCount: Math.log2(session.bracketSize),
+    },
+  };
 }
 
 export async function withGameCreationTransaction<T>(
@@ -190,7 +246,7 @@ export async function withGameVoteTransaction<T>(
     return operation({
       getSession: () => getSessionUsing(transaction, sessionId),
       getMatch: (matchId) => getMatchUsing(transaction, sessionId, matchId),
-      getMatchAt: (roundNumber, position) =>
+      getMatchAt: ({ roundNumber, position }: MatchCoordinate) =>
         getMatchAtUsing(transaction, sessionId, roundNumber, position),
       async completeMatch(matchId, winnerSongId, completedAt) {
         const completed = await transaction

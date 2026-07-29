@@ -3,6 +3,11 @@ import { AppError } from "@/lib/errors";
 
 export type RoundCount = 2 | 3 | 4 | 5;
 export type MatchStatus = "pending" | "ready" | "completed";
+export type MatchSongSlot = "songAId" | "songBId";
+export type MatchCoordinate = {
+  roundNumber: number;
+  position: number;
+};
 
 export type BracketMatch = {
   id: string;
@@ -21,9 +26,17 @@ export type Bracket = {
   matches: BracketMatch[];
 };
 
-type MatchIdFactory = (roundNumber: number, position: number) => string;
+export type WinnerAdvancement = {
+  championSongId: string | null;
+  nextMatch: {
+    coordinate: MatchCoordinate;
+    slot: MatchSongSlot;
+  } | null;
+};
 
-const defaultMatchId: MatchIdFactory = (roundNumber, position) =>
+type MatchIdFactory = (coordinate: MatchCoordinate) => string;
+
+const defaultMatchId: MatchIdFactory = ({ roundNumber, position }) =>
   `round-${roundNumber}-match-${position}`;
 
 export function roundCountFromBracketSize(
@@ -63,7 +76,7 @@ export function createBracket(
       const firstSongIndex = (position - 1) * 2;
       const isFirstRound = roundNumber === 1;
       matches.push({
-        id: createMatchId(roundNumber, position),
+        id: createMatchId({ roundNumber, position }),
         roundNumber,
         position,
         songAId: isFirstRound ? songIds[firstSongIndex] : null,
@@ -82,19 +95,11 @@ export function createBracket(
   };
 }
 
-export function advanceWinner(
-  bracket: Bracket,
-  matchId: string,
+export function planWinnerAdvancement(
+  match: BracketMatch,
+  bracketSize: BracketSize,
   winnerSongId: string,
-): Bracket {
-  const match = bracket.matches.find(({ id }) => id === matchId);
-  if (!match) {
-    throw new AppError(
-      "MATCH_NOT_FOUND",
-      "Confronto não encontrado nesta chave.",
-      404,
-    );
-  }
+): WinnerAdvancement {
   if (match.status === "completed") {
     throw new AppError(
       "MATCH_ALREADY_COMPLETED",
@@ -116,6 +121,41 @@ export function advanceWinner(
     );
   }
 
+  if (match.roundNumber === roundCountFromBracketSize(bracketSize)) {
+    return { championSongId: winnerSongId, nextMatch: null };
+  }
+
+  return {
+    championSongId: null,
+    nextMatch: {
+      coordinate: {
+        roundNumber: match.roundNumber + 1,
+        position: Math.ceil(match.position / 2),
+      },
+      slot: match.position % 2 === 1 ? "songAId" : "songBId",
+    },
+  };
+}
+
+export function advanceWinner(
+  bracket: Bracket,
+  matchId: string,
+  winnerSongId: string,
+): Bracket {
+  const match = bracket.matches.find(({ id }) => id === matchId);
+  if (!match) {
+    throw new AppError(
+      "MATCH_NOT_FOUND",
+      "Confronto não encontrado nesta chave.",
+      404,
+    );
+  }
+  const advancement = planWinnerAdvancement(
+    match,
+    bracket.bracketSize,
+    winnerSongId,
+  );
+
   const matches = bracket.matches.map((item) =>
     item.id === matchId
       ? {
@@ -125,27 +165,23 @@ export function advanceWinner(
         }
       : { ...item },
   );
-  const isFinal =
-    match.roundNumber === roundCountFromBracketSize(bracket.bracketSize);
-
-  if (isFinal) {
+  if (advancement.championSongId) {
     return {
       ...bracket,
       status: "completed",
-      championSongId: winnerSongId,
+      championSongId: advancement.championSongId,
       matches,
     };
   }
 
-  const nextRoundNumber = match.roundNumber + 1;
-  const nextPosition = Math.ceil(match.position / 2);
+  const { coordinate, slot } = advancement.nextMatch!;
   const nextMatchIndex = matches.findIndex(
     ({ roundNumber, position }) =>
-      roundNumber === nextRoundNumber && position === nextPosition,
+      roundNumber === coordinate.roundNumber &&
+      position === coordinate.position,
   );
   const nextMatch = matches[nextMatchIndex];
-  const winnerSlot = match.position % 2 === 1 ? "songAId" : "songBId";
-  const advancedMatch = { ...nextMatch, [winnerSlot]: winnerSongId };
+  const advancedMatch = { ...nextMatch, [slot]: winnerSongId };
 
   matches[nextMatchIndex] = {
     ...advancedMatch,

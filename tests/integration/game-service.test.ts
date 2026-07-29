@@ -33,7 +33,7 @@ function gameHarness(
   const sessions: PersistedGameSession[] = [];
   const snapshots: SessionSongSnapshot[] = [];
   const matches: PersistedGameMatch[] = [];
-  let idSequence = 0;
+  let matchIdSequence = 0;
   let creationTransactions = 0;
   let voteTransactions = 0;
 
@@ -46,13 +46,22 @@ function gameHarness(
       };
     },
     async insertSession(session) {
-      sessions.push(session);
+      sessions.push({ id: sessionId, ...session });
+      return sessionId;
     },
     async insertSessionSongs(items) {
       snapshots.push(...items);
     },
     async insertMatches(items) {
-      matches.push(...items);
+      matches.push(
+        ...items.map((match) => {
+          matchIdSequence += 1;
+          return {
+            id: `40000000-0000-4000-8000-${String(matchIdSequence).padStart(12, "0")}`,
+            ...match,
+          };
+        }),
+      );
     },
   };
   const voteRepository: GameVoteRepository = {
@@ -62,7 +71,7 @@ function gameHarness(
     async getMatch(matchId) {
       return matches.find(({ id }) => id === matchId) ?? null;
     },
-    async getMatchAt(roundNumber, position) {
+    async getMatchAt({ roundNumber, position }) {
       return (
         matches.find(
           (match) =>
@@ -97,11 +106,25 @@ function gameHarness(
     },
   };
   const dependencies: GameServiceDependencies = {
-    createId: () => {
-      idSequence += 1;
-      return idSequence === 1
-        ? sessionId
-        : `40000000-0000-4000-8000-${String(idSequence).padStart(12, "0")}`;
+    async getGameState(requestedSessionId) {
+      const session = sessions.find(({ id }) => id === requestedSessionId);
+      return session
+        ? {
+            session,
+            songs: snapshots,
+            matches,
+            currentMatch:
+              matches.find(({ status }) => status === "ready") ?? null,
+            progress: {
+              completedMatches: matches.filter(
+                ({ status }) => status === "completed",
+              ).length,
+              totalMatches: matches.length,
+              currentRound: session.currentRound,
+              roundCount: Math.log2(session.bracketSize),
+            },
+          }
+        : null;
     },
     now: () => new Date("2026-07-29T12:00:00Z"),
     random: () => 0,
@@ -141,6 +164,19 @@ describe("criação transacional de partida", () => {
     );
     expect(harness.snapshots.map(({ seed }) => seed)).toEqual([1, 2, 3, 4]);
     expect(harness.matches).toHaveLength(3);
+    await expect(harness.service.getState(sessionId)).resolves.toMatchObject({
+      currentMatch: {
+        roundNumber: 1,
+        position: 1,
+        status: "ready",
+      },
+      progress: {
+        completedMatches: 0,
+        totalMatches: 3,
+        currentRound: 1,
+        roundCount: 2,
+      },
+    });
     expect(harness.transactionCounts().creationTransactions).toBe(1);
   });
 

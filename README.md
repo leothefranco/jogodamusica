@@ -211,10 +211,12 @@ módulos exclusivos do servidor.
 Sem Supabase configurado, migração, seed, login e CRUD reais permanecem
 indisponíveis. Sem `YOUTUBE_API_KEY`, temas ainda podem ser editados, mas busca,
 resolução e cadastro de vídeos ficam bloqueados com mensagem de configuração.
-Ainda não há rotas nem interface pública para iniciar e jogar partidas, player
-do fluxo público, manifest ou service worker. Playlists privadas continuam fora
-do MVP porque exigem OAuth do Google. As prévias ficam em cache de memória; em
-outra instância ou após expiração, a confirmação revalida os vídeos no YouTube.
+Ainda não há interface pública para iniciar e jogar partidas, player do fluxo
+público, manifest ou service worker. Os contratos HTTP de criação, consulta e
+voto já existem para sustentar essa interface na Fase 4. Playlists privadas
+continuam fora do MVP porque exigem OAuth do Google. As prévias ficam em cache
+de memória; em outra instância ou após expiração, a confirmação revalida os
+vídeos no YouTube.
 
 ### Problemas comuns
 

@@ -1,16 +1,18 @@
 import "server-only";
 
-import { randomUUID } from "node:crypto";
-
 import {
   createBracket,
+  planWinnerAdvancement,
   roundCountFromBracketSize,
   selectSongsForSession,
   type BracketMatch,
+  type MatchCoordinate,
+  type MatchSongSlot,
 } from "@/domain/bracket";
 import type { BracketSize } from "@/domain/music/content-validation";
 import { AppError } from "@/lib/errors";
 import {
+  getGameStateRecord,
   withGameCreationTransaction,
   withGameVoteTransaction,
 } from "@/server/repositories/game-repository";
@@ -43,6 +45,8 @@ export type PersistedGameSession = {
   completedAt: Date | null;
 };
 
+export type NewGameSession = Omit<PersistedGameSession, "id">;
+
 export type SessionSongSnapshot = ActiveThemeSong & {
   sessionId: string;
   seed: number;
@@ -53,22 +57,31 @@ export type PersistedGameMatch = BracketMatch & {
   completedAt: Date | null;
 };
 
-export type GameCreationRepository = {
-  getThemeWithActiveSongs(): Promise<GameTheme | null>;
-  insertSession(session: PersistedGameSession): Promise<void>;
-  insertSessionSongs(songs: SessionSongSnapshot[]): Promise<void>;
-  insertMatches(matches: PersistedGameMatch[]): Promise<void>;
+export type NewGameMatch = Omit<PersistedGameMatch, "id">;
+export type GameState = {
+  session: PersistedGameSession;
+  songs: SessionSongSnapshot[];
+  matches: PersistedGameMatch[];
+  currentMatch: PersistedGameMatch | null;
+  progress: {
+    completedMatches: number;
+    totalMatches: number;
+    currentRound: number;
+    roundCount: number;
+  };
 };
 
-export type MatchSongSlot = "songAId" | "songBId";
+export type GameCreationRepository = {
+  getThemeWithActiveSongs(): Promise<GameTheme | null>;
+  insertSession(session: NewGameSession): Promise<string>;
+  insertSessionSongs(songs: SessionSongSnapshot[]): Promise<void>;
+  insertMatches(matches: NewGameMatch[]): Promise<void>;
+};
 
 export type GameVoteRepository = {
   getSession(): Promise<PersistedGameSession | null>;
   getMatch(matchId: string): Promise<PersistedGameMatch | null>;
-  getMatchAt(
-    roundNumber: number,
-    position: number,
-  ): Promise<PersistedGameMatch | null>;
+  getMatchAt(coordinate: MatchCoordinate): Promise<PersistedGameMatch | null>;
   completeMatch(
     matchId: string,
     winnerSongId: string,
@@ -85,7 +98,7 @@ export type GameVoteRepository = {
 };
 
 export type GameServiceDependencies = {
-  createId: () => string;
+  getGameState(sessionId: string): Promise<GameState | null>;
   now: () => Date;
   random: () => number;
   withGameCreationTransaction<T>(
@@ -111,6 +124,18 @@ export type VoteInput = {
 
 export function createGameService(dependencies: GameServiceDependencies) {
   return {
+    async getState(sessionId: string): Promise<GameState> {
+      const state = await dependencies.getGameState(sessionId);
+      if (!state) {
+        throw new AppError(
+          "GAME_SESSION_NOT_FOUND",
+          "Partida não encontrada.",
+          404,
+        );
+      }
+      return state;
+    },
+
     async createSession(input: CreateGameInput) {
       return dependencies.withGameCreationTransaction(
         input.themeId,
@@ -132,16 +157,13 @@ export function createGameService(dependencies: GameServiceDependencies) {
             input.bracketSize,
             dependencies.random,
           );
-          const id = dependencies.createId();
           const startedAt = dependencies.now();
           const bracket = createBracket(
             selectedSongs.map(({ songId }) => songId),
             input.bracketSize,
-            () => dependencies.createId(),
           );
 
-          await repository.insertSession({
-            id,
+          const sessionId = await repository.insertSession({
             themeId: theme.id,
             bracketSize: input.bracketSize,
             status: "active",
@@ -153,24 +175,29 @@ export function createGameService(dependencies: GameServiceDependencies) {
           await repository.insertSessionSongs(
             selectedSongs.map((song, index) => ({
               ...song,
-              sessionId: id,
+              sessionId,
               seed: index + 1,
             })),
           );
           await repository.insertMatches(
             bracket.matches.map((match) => ({
-              ...match,
-              sessionId: id,
+              sessionId,
+              roundNumber: match.roundNumber,
+              position: match.position,
+              songAId: match.songAId,
+              songBId: match.songBId,
+              winnerSongId: match.winnerSongId,
+              status: match.status,
               completedAt: null,
             })),
           );
 
-          return { sessionId: id };
+          return { sessionId };
         },
       );
     },
 
-    async vote(input: VoteInput): Promise<void> {
+    async vote(input: VoteInput): Promise<GameState> {
       await dependencies.withGameVoteTransaction(
         input.sessionId,
         async (repository) => {
@@ -198,26 +225,11 @@ export function createGameService(dependencies: GameServiceDependencies) {
               404,
             );
           }
-          if (match.status === "completed") {
-            throw new AppError(
-              "MATCH_ALREADY_COMPLETED",
-              "Este confronto já foi concluído.",
-              409,
-            );
-          }
-          if (match.status !== "ready") {
-            throw new AppError(
-              "MATCH_NOT_READY",
-              "Este confronto ainda não está pronto para votação.",
-              409,
-            );
-          }
-          if (![match.songAId, match.songBId].includes(input.winnerSongId)) {
-            throw new AppError(
-              "INVALID_MATCH_WINNER",
-              "A música vencedora não pertence a este confronto.",
-            );
-          }
+          const advancement = planWinnerAdvancement(
+            match,
+            session.bracketSize,
+            input.winnerSongId,
+          );
 
           const completedAt = dependencies.now();
           await repository.completeMatch(
@@ -226,19 +238,18 @@ export function createGameService(dependencies: GameServiceDependencies) {
             completedAt,
           );
 
-          const finalRound = roundCountFromBracketSize(session.bracketSize);
-          if (match.roundNumber === finalRound) {
+          if (advancement.championSongId) {
+            const finalRound = roundCountFromBracketSize(session.bracketSize);
             await repository.setCurrentRound(finalRound);
-            await repository.completeSession(input.winnerSongId, completedAt);
+            await repository.completeSession(
+              advancement.championSongId,
+              completedAt,
+            );
             return;
           }
 
-          const nextRoundNumber = match.roundNumber + 1;
-          const nextPosition = Math.ceil(match.position / 2);
-          const nextMatch = await repository.getMatchAt(
-            nextRoundNumber,
-            nextPosition,
-          );
+          const { coordinate, slot } = advancement.nextMatch!;
+          const nextMatch = await repository.getMatchAt(coordinate);
           if (!nextMatch) {
             throw new AppError(
               "INVALID_BRACKET_STATE",
@@ -246,8 +257,6 @@ export function createGameService(dependencies: GameServiceDependencies) {
               500,
             );
           }
-          const slot: MatchSongSlot =
-            match.position % 2 === 1 ? "songAId" : "songBId";
           await repository.placeSongInMatch(
             nextMatch.id,
             slot,
@@ -257,16 +266,26 @@ export function createGameService(dependencies: GameServiceDependencies) {
           if (
             !(await repository.hasIncompleteMatchesInRound(match.roundNumber))
           ) {
-            await repository.setCurrentRound(nextRoundNumber);
+            await repository.setCurrentRound(coordinate.roundNumber);
           }
         },
       );
+
+      const state = await dependencies.getGameState(input.sessionId);
+      if (!state) {
+        throw new AppError(
+          "GAME_SESSION_NOT_FOUND",
+          "Partida não encontrada.",
+          404,
+        );
+      }
+      return state;
     },
   };
 }
 
 export const defaultGameServiceDependencies = {
-  createId: randomUUID,
+  getGameState: getGameStateRecord,
   now: () => new Date(),
   random: Math.random,
 };
@@ -278,4 +297,5 @@ const gameService = createGameService({
 });
 
 export const createGameSession = gameService.createSession;
+export const getGameState = gameService.getState;
 export const voteForMatch = gameService.vote;
