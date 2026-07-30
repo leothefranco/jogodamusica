@@ -4,7 +4,7 @@ const isDevelopment = process.env.NODE_ENV === "development";
 
 const contentSecurityPolicy = `
   default-src 'self';
-  script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ""};
+  script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ""} https://www.youtube.com https://s.ytimg.com;
   style-src 'self' 'unsafe-inline';
   img-src 'self' blob: data: https://i.ytimg.com https://*.supabase.co;
   font-src 'self';

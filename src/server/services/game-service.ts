@@ -5,28 +5,32 @@ import {
   planWinnerAdvancement,
   roundCountFromBracketSize,
   selectSongsForSession,
-  type BracketMatch,
   type MatchCoordinate,
   type MatchSongSlot,
 } from "@/domain/bracket";
+import type {
+  GameSong,
+  GameState,
+  PersistedGameMatch,
+  PersistedGameSession,
+  SessionSongSnapshot,
+} from "@/domain/game/state";
 import type { BracketSize } from "@/domain/music/content-validation";
 import { AppError } from "@/lib/errors";
 import {
+  abandonGameSessionRecord,
   getGameStateRecord,
   withGameCreationTransaction,
   withGameVoteTransaction,
 } from "@/server/repositories/game-repository";
 
-export type ActiveThemeSong = {
-  songId: string;
-  title: string;
-  artist: string;
-  thumbnailUrl: string;
-  provider: "youtube";
-  providerContentId: string;
-  startTimeSeconds: number;
-  previewDurationSeconds: number;
-};
+export type {
+  PersistedGameMatch,
+  PersistedGameSession,
+  SessionSongSnapshot,
+} from "@/domain/game/state";
+
+export type ActiveThemeSong = GameSong;
 
 export type GameTheme = {
   id: string;
@@ -34,42 +38,9 @@ export type GameTheme = {
   songs: ActiveThemeSong[];
 };
 
-export type PersistedGameSession = {
-  id: string;
-  themeId: string;
-  bracketSize: BracketSize;
-  status: "active" | "completed" | "abandoned";
-  currentRound: number;
-  championSongId: string | null;
-  startedAt: Date;
-  completedAt: Date | null;
-};
-
 export type NewGameSession = Omit<PersistedGameSession, "id">;
 
-export type SessionSongSnapshot = ActiveThemeSong & {
-  sessionId: string;
-  seed: number;
-};
-
-export type PersistedGameMatch = BracketMatch & {
-  sessionId: string;
-  completedAt: Date | null;
-};
-
 export type NewGameMatch = Omit<PersistedGameMatch, "id">;
-export type GameState = {
-  session: PersistedGameSession;
-  songs: SessionSongSnapshot[];
-  matches: PersistedGameMatch[];
-  currentMatch: PersistedGameMatch | null;
-  progress: {
-    completedMatches: number;
-    totalMatches: number;
-    currentRound: number;
-    roundCount: number;
-  };
-};
 
 export type GameCreationRepository = {
   getThemeWithActiveSongs(): Promise<GameTheme | null>;
@@ -299,3 +270,34 @@ const gameService = createGameService({
 export const createGameSession = gameService.createSession;
 export const getGameState = gameService.getState;
 export const voteForMatch = gameService.vote;
+
+export async function abandonGameSession(sessionId: string): Promise<void> {
+  const result = await abandonGameSessionRecord(sessionId, new Date());
+  if (result === "not-found") {
+    throw new AppError(
+      "GAME_SESSION_NOT_FOUND",
+      "Partida não encontrada.",
+      404,
+    );
+  }
+  if (result === "not-active") {
+    throw new AppError(
+      "GAME_SESSION_NOT_ACTIVE",
+      "Esta partida já foi encerrada.",
+      409,
+    );
+  }
+}
+
+export async function reportGamePlaybackError(input: {
+  sessionId: string;
+  matchId: string;
+  errorCode: 2 | 5 | 100 | 101 | 150;
+}): Promise<void> {
+  await gameService.getState(input.sessionId);
+  console.error("[game-player-error]", {
+    sessionId: input.sessionId,
+    matchId: input.matchId,
+    errorCode: input.errorCode,
+  });
+}

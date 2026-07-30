@@ -16,14 +16,16 @@ import { bracketSizeSchema } from "@/domain/music/content-validation";
 import { AppError } from "@/lib/errors";
 import type {
   GameCreationRepository,
-  GameState,
   GameVoteRepository,
   NewGameMatch,
   NewGameSession,
+} from "@/server/services/game-service";
+import type {
+  GameState,
   PersistedGameMatch,
   PersistedGameSession,
   SessionSongSnapshot,
-} from "@/server/services/game-service";
+} from "@/domain/game/state";
 
 type Database = ReturnType<typeof getDatabase>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -149,8 +151,15 @@ export async function getGameStateRecord(
   sessionId: string,
 ): Promise<GameState | null> {
   const database = getDatabase();
-  const [session, snapshots, matches] = await Promise.all([
+  const [session, theme, snapshots, matches] = await Promise.all([
     getSessionUsing(database, sessionId),
+    database
+      .select({ name: themes.name, slug: themes.slug })
+      .from(gameSessions)
+      .innerJoin(themes, eq(themes.id, gameSessions.themeId))
+      .where(eq(gameSessions.id, sessionId))
+      .limit(1)
+      .then(([record]) => record ?? null),
     database
       .select(sessionSongSelection)
       .from(sessionSongs)
@@ -163,9 +172,10 @@ export async function getGameStateRecord(
       .orderBy(asc(gameMatches.roundNumber), asc(gameMatches.position)),
   ]);
 
-  if (!session) return null;
+  if (!session || !theme) return null;
 
   return {
+    theme,
     session,
     songs: snapshots,
     matches,
@@ -356,5 +366,32 @@ export async function withGameVoteTransaction<T>(
           );
       },
     });
+  });
+}
+
+export async function abandonGameSessionRecord(
+  sessionId: string,
+  abandonedAt: Date,
+): Promise<"abandoned" | "not-active" | "not-found"> {
+  return getDatabase().transaction(async (transaction) => {
+    await transaction.execute(
+      sql`select ${gameSessions.id} from ${gameSessions} where ${gameSessions.id} = ${sessionId} for update`,
+    );
+    const [session] = await transaction
+      .select({ status: gameSessions.status })
+      .from(gameSessions)
+      .where(eq(gameSessions.id, sessionId))
+      .limit(1);
+    if (!session) return "not-found";
+    if (session.status !== "active") return "not-active";
+
+    await transaction
+      .update(gameSessions)
+      .set({
+        status: "abandoned",
+        updatedAt: abandonedAt,
+      })
+      .where(eq(gameSessions.id, sessionId));
+    return "abandoned";
   });
 }

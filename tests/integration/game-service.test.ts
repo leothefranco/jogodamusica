@@ -110,6 +110,10 @@ function gameHarness(
       const session = sessions.find(({ id }) => id === requestedSessionId);
       return session
         ? {
+            theme: {
+              name: "Tema de teste",
+              slug: "tema-de-teste",
+            },
             session,
             songs: snapshots,
             matches,

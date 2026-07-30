@@ -3,11 +3,12 @@
 Aplicação web para grupos compararem músicas em confrontos eliminatórios, usando
 um único aparelho, até eleger uma campeã.
 
-Este repositório concluiu a **Fase 3 — Domínio do torneio**. A base Next.js, o
-modelo PostgreSQL/Drizzle, o acesso administrativo, o catálogo flexível e o
-domínio transacional de partidas estão implementados. A próxima etapa planejada
-é a **Fase 4 — Experiência de jogo**. Interface pública de jogo e PWA serão
-implementadas nas fases seguintes da
+Este repositório concluiu a **Fase 4 — Experiência de jogo**. A base Next.js, o
+modelo PostgreSQL/Drizzle, o acesso administrativo, o catálogo flexível, o
+domínio transacional e o fluxo público completo de partidas estão
+implementados. A próxima etapa planejada é a **Fase 5 — PWA, acessibilidade e
+robustez**. Manifest, service worker e o acabamento de robustez serão
+implementados nas fases seguintes da
 [especificação](./jogo-da-musica-especificacao-codex.md).
 
 ## Requisitos no Windows
@@ -117,6 +118,22 @@ o painel também impede remover ou desativar músicas quando isso tornaria o
 chaveamento inválido. A Fase 2 utiliza o esquema criado na migração inicial e
 não exige uma nova migração.
 
+## Fluxo público
+
+1. Acesse `/` para ver os temas publicados.
+2. Abra um tema e escolha uma das modalidades compatíveis; a interface mostra
+   a equivalência entre 2–5 rodadas e 4–32 músicas.
+3. Inicie a partida. O servidor sorteia as músicas e a URL `/jogo/<id>` permite
+   retomar o estado após recarregar a página.
+4. Em cada confronto, inicie as duas músicas no player visível do YouTube. O
+   voto só é liberado depois dessas duas ações e sempre pede confirmação.
+5. Ao final, `/resultado/<id>` mostra a campeã e todos os confrontos.
+
+O player usa a YouTube IFrame Player API diretamente no navegador, começa
+somente após gesto explícito e pausa ao fim do trecho configurado. Erros da API
+são registrados no servidor apenas com IDs técnicos da partida/confronto e o
+código do YouTube, sem dados pessoais.
+
 ## Comandos
 
 | Comando                | Finalidade                                     |
@@ -205,18 +222,23 @@ módulos exclusivos do servidor.
   e conclui o confronto, avança a vencedora ou encerra a partida atomicamente.
 - O domínio puro do torneio cria chaves de 4, 8, 16 e 32 músicas e converte entre
   quantidades de rodadas e tamanhos de chave sem persistir `roundCount`.
+- A área pública usa Server Components para catálogo, detalhes e resultado; a
+  interação da partida fica isolada em Client Components.
+- O catálogo público conta somente associações ativas com vídeos incorporáveis
+  e deriva as modalidades compatíveis sem duplicar a regra nos componentes.
+- A partida mantém um único player YouTube visível, persiste votos pelos Route
+  Handlers e registra abandono de sessão de forma transacional.
 
 ## Limitações atuais
 
 Sem Supabase configurado, migração, seed, login e CRUD reais permanecem
 indisponíveis. Sem `YOUTUBE_API_KEY`, temas ainda podem ser editados, mas busca,
 resolução e cadastro de vídeos ficam bloqueados com mensagem de configuração.
-Ainda não há interface pública para iniciar e jogar partidas, player do fluxo
-público, manifest ou service worker. Os contratos HTTP de criação, consulta e
-voto já existem para sustentar essa interface na Fase 4. Playlists privadas
-continuam fora do MVP porque exigem OAuth do Google. As prévias ficam em cache
-de memória; em outra instância ou após expiração, a confirmação revalida os
-vídeos no YouTube.
+Ainda não há manifest, service worker ou suporte offline; esses itens pertencem
+à Fase 5. A reprodução exige internet e disponibilidade do vídeo no YouTube.
+Playlists privadas continuam fora do MVP porque exigem OAuth do Google. As
+prévias ficam em cache de memória; em outra instância ou após expiração, a
+confirmação revalida os vídeos no YouTube.
 
 ### Problemas comuns
 

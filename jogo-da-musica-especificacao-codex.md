@@ -938,7 +938,7 @@ atômica do lote.
 
 ### Fase 4 — Experiência de jogo
 
-**Estado:** pendente.
+**Estado:** concluída.
 
 - Lista pública de temas.
 - Seletor de quantidade de rodadas com a equivalência em músicas e somente opções compatíveis.
