@@ -31,14 +31,14 @@ export default async function ThemePage({ params }: ThemePageProps) {
           href="/"
           className="inline-flex min-h-11 items-center gap-2 rounded-lg text-sm text-white/60 outline-none hover:text-white focus-visible:ring-2 focus-visible:ring-violet-300"
         >
-          <ArrowLeft className="size-4" />
+          <ArrowLeft className="size-4" aria-hidden="true" />
           Voltar aos temas
         </Link>
 
         <section className="mt-8 grid gap-8 lg:grid-cols-[1fr_24rem] lg:items-start">
           <div>
             <span className="inline-flex items-center gap-2 rounded-full border border-violet-300/20 bg-violet-300/8 px-3 py-2 text-xs font-semibold text-violet-200">
-              <Music2 className="size-4" />
+              <Music2 className="size-4" aria-hidden="true" />
               {theme.activeSongCount} músicas disponíveis
             </span>
             <h1 className="mt-5 text-4xl font-black tracking-tight text-balance sm:text-6xl">

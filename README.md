@@ -3,12 +3,11 @@
 Aplicação web para grupos compararem músicas em confrontos eliminatórios, usando
 um único aparelho, até eleger uma campeã.
 
-Este repositório concluiu a **Fase 4 — Experiência de jogo**. A base Next.js, o
-modelo PostgreSQL/Drizzle, o acesso administrativo, o catálogo flexível, o
-domínio transacional e o fluxo público completo de partidas estão
-implementados. A próxima etapa planejada é a **Fase 5 — PWA, acessibilidade e
-robustez**. Manifest, service worker e o acabamento de robustez serão
-implementados nas fases seguintes da
+Este repositório concluiu a **Fase 5 — PWA, acessibilidade e robustez**. A base
+Next.js, o modelo PostgreSQL/Drizzle, o acesso administrativo, o catálogo
+flexível, o fluxo público de partidas e a experiência instalável estão
+implementados. A próxima etapa planejada é a **Fase 6 — Qualidade e deploy**,
+com Playwright, integração contínua e publicação, conforme a
 [especificação](./jogo-da-musica-especificacao-codex.md).
 
 ## Requisitos no Windows
@@ -228,14 +227,34 @@ módulos exclusivos do servidor.
   e deriva as modalidades compatíveis sem duplicar a regra nos componentes.
 - A partida mantém um único player YouTube visível, persiste votos pelos Route
   Handlers e registra abandono de sessão de forma transacional.
+- A PWA usa o manifesto nativo do App Router, ícones de 192 e 512 pixels e
+  oferece instalação quando o navegador expõe essa capacidade.
+- O service worker armazena somente o fallback offline e assets estáticos da
+  mesma origem. Navegações, `/api`, `/admin`, respostas autenticadas e recursos
+  do YouTube não são persistidos no cache.
+- A interface inclui estados globais de carregamento, erro, conteúdo ausente e
+  falta de conexão, além de foco visível, atalho para o conteúdo, regiões
+  dinâmicas anunciáveis e respeito a `prefers-reduced-motion`.
+- A política de segurança restringe origens de scripts, frames, conexões,
+  workers e manifesto, bloqueia incorporação por terceiros e habilita HSTS.
+
+### Validação da Fase 5
+
+- Build de produção e rotas `/manifest.webmanifest`, `/sw.js` e `/offline`
+  verificados localmente em navegador Chromium.
+- Página inicial, escolha de tema e fallback offline verificados em 360 px, sem
+  rolagem horizontal e com alvos interativos de pelo menos 44 px.
+- Registro, instalação e retomada devem ser repetidos em Chrome/Edge desktop e
+  Android durante o teste externo. Safari iOS não estava disponível no ambiente
+  Windows desta fase e permanece na matriz manual.
 
 ## Limitações atuais
 
 Sem Supabase configurado, migração, seed, login e CRUD reais permanecem
 indisponíveis. Sem `YOUTUBE_API_KEY`, temas ainda podem ser editados, mas busca,
 resolução e cadastro de vídeos ficam bloqueados com mensagem de configuração.
-Ainda não há manifest, service worker ou suporte offline; esses itens pertencem
-à Fase 5. A reprodução exige internet e disponibilidade do vídeo no YouTube.
+O fallback offline explica a indisponibilidade, mas não permite jogar sem
+conexão: catálogo, estado da partida e reprodução do YouTube exigem internet.
 Playlists privadas continuam fora do MVP porque exigem OAuth do Google. As
 prévias ficam em cache de memória; em outra instância ou após expiração, a
 confirmação revalida os vídeos no YouTube.

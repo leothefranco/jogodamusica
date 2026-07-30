@@ -54,7 +54,11 @@ function SongCard({
         onClick={onListen}
         className="mt-5 min-h-11 w-full rounded-xl"
       >
-        {heard ? <RotateCcw /> : <Headphones />}
+        {heard ? (
+          <RotateCcw aria-hidden="true" />
+        ) : (
+          <Headphones aria-hidden="true" />
+        )}
         {heard ? `Ouvir música ${label} novamente` : `Ouvir música ${label}`}
       </Button>
       <Button
@@ -63,7 +67,11 @@ function SongCard({
         disabled={!canVote || voting}
         className="mt-3 min-h-12 w-full rounded-xl bg-violet-300 font-bold text-[#160d25] hover:bg-violet-200"
       >
-        {voting ? <LoaderCircle className="animate-spin" /> : <Check />}
+        {voting ? (
+          <LoaderCircle className="animate-spin" aria-hidden="true" />
+        ) : (
+          <Check aria-hidden="true" />
+        )}
         Votar na música {label}
       </Button>
     </article>
@@ -80,6 +88,7 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
   );
   const [message, setMessage] = useState<string | null>(null);
   const [isVoting, setIsVoting] = useState(false);
+  const [isAbandoning, setIsAbandoning] = useState(false);
 
   const currentMatch = state.currentMatch;
   const songsById = useMemo(
@@ -118,6 +127,12 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
 
   const markPlaybackAsStarted = useCallback((songId: string) => {
     setGate((current) => markSongStarted(current, songId));
+  }, []);
+
+  const reportPlayerLoadError = useCallback(() => {
+    setMessage(
+      "Não foi possível carregar o player do YouTube. Verifique sua conexão e tente novamente.",
+    );
   }, []);
 
   function listen(song: GameSong) {
@@ -171,19 +186,36 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
   }
 
   async function abandon() {
-    await fetch(`/api/games/${state.session.id}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "abandon" }),
-    });
-    router.push(`/tema/${state.theme.slug}`);
+    setIsAbandoning(true);
+    setMessage(null);
+    try {
+      const response = await fetch(`/api/games/${state.session.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "abandon" }),
+      });
+      if (!response.ok) {
+        throw new Error("Não foi possível abandonar a partida.");
+      }
+      router.push(`/tema/${state.theme.slug}`);
+    } catch (caught) {
+      setMessage(
+        caught instanceof Error
+          ? caught.message
+          : "Não foi possível abandonar a partida.",
+      );
+      setIsAbandoning(false);
+    }
   }
 
   if (!currentMatch || !songA || !songB) {
     return (
       <main className="grid min-h-screen place-items-center bg-[#08080f] px-5 text-white">
-        <div className="text-center">
-          <LoaderCircle className="mx-auto size-8 animate-spin text-violet-300" />
+        <div role="status" className="text-center">
+          <LoaderCircle
+            className="mx-auto size-8 animate-spin text-violet-300"
+            aria-hidden="true"
+          />
           <p className="mt-4 text-white/60">
             Preparando o próximo confronto...
           </p>
@@ -248,9 +280,14 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
             track={activeTrack}
             requestToken={requestToken}
             onError={reportPlayerError}
+            onLoadError={reportPlayerLoadError}
             onStarted={markPlaybackAsStarted}
           />
-          <p className="mt-3 min-h-6 text-center text-sm text-white/50">
+          <p
+            role={message ? "alert" : "status"}
+            aria-live="polite"
+            className="mt-3 min-h-6 text-center text-sm text-white/55"
+          >
             {message ??
               (canVote
                 ? "As duas músicas foram iniciadas. Escolha quem avança."
@@ -265,7 +302,14 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
               {state.progress.completedMatches} / {state.progress.totalMatches}
             </span>
           </div>
-          <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/8">
+          <div
+            role="progressbar"
+            aria-label="Progresso do chaveamento"
+            aria-valuemin={0}
+            aria-valuemax={state.progress.totalMatches}
+            aria-valuenow={state.progress.completedMatches}
+            className="mt-2 h-2 overflow-hidden rounded-full bg-white/8"
+          >
             <div
               className="h-full rounded-full bg-gradient-to-r from-violet-400 to-fuchsia-400 transition-[width]"
               style={{ width: `${progress}%` }}
@@ -277,9 +321,12 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
           <button
             type="button"
             onClick={() => void abandon()}
+            disabled={isAbandoning}
             className="min-h-11 rounded-lg px-4 text-sm text-white/45 outline-none hover:text-white focus-visible:ring-2 focus-visible:ring-violet-300"
           >
-            Abandonar partida e voltar ao tema
+            {isAbandoning
+              ? "Abandonando partida..."
+              : "Abandonar partida e voltar ao tema"}
           </button>
         </div>
       </div>

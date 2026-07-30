@@ -31,7 +31,7 @@ export default async function ResultPage({
       <div className="relative mx-auto max-w-5xl">
         <section className="text-center">
           <span className="mx-auto grid size-16 place-items-center rounded-2xl border border-amber-200/25 bg-amber-200/10 text-amber-200">
-            <Trophy className="size-8" />
+            <Trophy className="size-8" aria-hidden="true" />
           </span>
           <p className="mt-5 text-xs font-bold tracking-[0.2em] text-violet-300 uppercase">
             Campeã de {state.theme.name}
@@ -84,7 +84,13 @@ export default async function ResultPage({
                         {song ? `${song.title} — ${song.artist}` : "—"}
                       </span>
                       {song?.songId === match.winnerSongId ? (
-                        <Crown className="size-4 shrink-0" />
+                        <>
+                          <span className="sr-only">Vencedora</span>
+                          <Crown
+                            className="size-4 shrink-0"
+                            aria-hidden="true"
+                          />
+                        </>
                       ) : null}
                     </p>
                   ))}
@@ -102,7 +108,7 @@ export default async function ResultPage({
               "min-h-12 rounded-xl bg-violet-300 px-5 font-bold text-[#160d25] hover:bg-violet-200",
             )}
           >
-            <RotateCcw />
+            <RotateCcw aria-hidden="true" />
             Jogar novamente
           </Link>
           <Link
@@ -112,7 +118,7 @@ export default async function ResultPage({
               "min-h-12 rounded-xl px-5",
             )}
           >
-            <ArrowLeft />
+            <ArrowLeft aria-hidden="true" />
             Voltar ao início
           </Link>
         </div>

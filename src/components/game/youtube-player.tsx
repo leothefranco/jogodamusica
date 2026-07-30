@@ -10,9 +10,15 @@ function loadYouTubeApi() {
   if (window.YT?.Player) return Promise.resolve(window.YT);
   if (youtubeApiPromise) return youtubeApiPromise;
 
-  youtubeApiPromise = new Promise((resolve) => {
+  youtubeApiPromise = new Promise((resolve, reject) => {
     const previousReady = window.onYouTubeIframeAPIReady;
+    const timeout = window.setTimeout(() => {
+      youtubeApiPromise = null;
+      reject(new Error("Tempo esgotado ao carregar o player do YouTube."));
+    }, 15_000);
+
     window.onYouTubeIframeAPIReady = () => {
+      window.clearTimeout(timeout);
       previousReady?.();
       resolve(window.YT!);
     };
@@ -21,6 +27,12 @@ function loadYouTubeApi() {
       const script = document.createElement("script");
       script.id = "youtube-iframe-api";
       script.src = "https://www.youtube.com/iframe_api";
+      script.onerror = () => {
+        window.clearTimeout(timeout);
+        youtubeApiPromise = null;
+        script.remove();
+        reject(new Error("Falha ao carregar o player do YouTube."));
+      };
       document.head.append(script);
     }
   });
@@ -32,6 +44,7 @@ type YouTubePlayerProps = {
   track: GameSong | null;
   requestToken: number;
   onError(errorCode: number): void;
+  onLoadError(): void;
   onStarted(songId: string): void;
 };
 
@@ -39,6 +52,7 @@ export function YouTubePlayer({
   track,
   requestToken,
   onError,
+  onLoadError,
   onStarted,
 }: YouTubePlayerProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -56,7 +70,13 @@ export function YouTubePlayer({
 
     async function playRequestedTrack() {
       if (!track || !playerHostRef.current) return;
-      const youtube = await loadYouTubeApi();
+      let youtube: YouTubeNamespace;
+      try {
+        youtube = await loadYouTubeApi();
+      } catch {
+        onLoadError();
+        return;
+      }
       if (cancelled || !playerHostRef.current) return;
 
       if (!playerRef.current) {
@@ -110,7 +130,7 @@ export function YouTubePlayer({
       cancelled = true;
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [onError, onStarted, requestToken, track]);
+  }, [onError, onLoadError, onStarted, requestToken, track]);
 
   useEffect(
     () => () => {
@@ -124,6 +144,7 @@ export function YouTubePlayer({
   return (
     <div
       ref={wrapperRef}
+      aria-label="Player do YouTube"
       className="relative overflow-hidden rounded-2xl border border-white/10 bg-black"
     >
       <div ref={playerHostRef} className="aspect-video min-h-[200px] w-full" />

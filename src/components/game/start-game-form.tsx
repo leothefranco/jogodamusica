@@ -98,7 +98,7 @@ export function StartGameForm({
         className="mt-6 min-h-12 w-full rounded-xl bg-violet-300 font-bold text-[#160d25] hover:bg-violet-200"
       >
         {isStarting ? (
-          <LoaderCircle className="animate-spin" />
+          <LoaderCircle className="animate-spin" aria-hidden="true" />
         ) : (
           <Play aria-hidden="true" />
         )}

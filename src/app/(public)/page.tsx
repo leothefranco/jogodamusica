@@ -93,10 +93,10 @@ export default async function HomePage() {
               )}
             >
               Escolher um tema
-              <Crown data-icon="inline-end" />
+              <Crown data-icon="inline-end" aria-hidden="true" />
             </a>
             <span className="flex items-center gap-2 text-xs text-white/45">
-              <Check className="size-4 text-emerald-300" />
+              <Check className="size-4 text-emerald-300" aria-hidden="true" />
               Sem cadastro para jogar
             </span>
           </div>

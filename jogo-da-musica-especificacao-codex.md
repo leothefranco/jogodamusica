@@ -863,7 +863,7 @@ Progresso verificado no repositório em 28 de julho de 2026:
 | 2.1 — Playlist e catálogo flexível | Próxima | Nova demanda; ainda sem implementação |
 | 3 — Domínio do torneio | Pendente | Estruturas no banco existem; serviços e regras do chaveamento ainda não |
 | 4 — Experiência de jogo | Pendente | A página atual é institucional e não inicia partidas |
-| 5 — PWA, acessibilidade e robustez | Pendente | Cabeçalhos de segurança iniciados; manifest e service worker ausentes |
+| 5 — PWA, acessibilidade e robustez | Concluída; validação externa pendente | Manifest, ícones, service worker seguro, estados globais, acessibilidade e cabeçalhos concluídos |
 | 6 — Qualidade e deploy | Pendente | Testes unitários/integração existem; E2E, CI e deploy ainda pendentes |
 
 ### Fase 0 — Fundação
@@ -951,7 +951,7 @@ atômica do lote.
 
 ### Fase 5 — PWA, acessibilidade e robustez
 
-**Estado:** pendente.
+**Estado:** concluída; validação externa pendente.
 
 - Manifest e ícones.
 - Service worker seguro.
