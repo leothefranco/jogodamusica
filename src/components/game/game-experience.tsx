@@ -15,11 +15,7 @@ import {
 } from "@/components/game/decision-overlays";
 import { useGameDecisions } from "@/components/game/use-game-decisions";
 import { Button } from "@/components/ui/button";
-import {
-  createPlaybackGate,
-  getRoundLabel,
-  markSongStarted,
-} from "@/domain/game/experience";
+import { getRoundLabel } from "@/domain/game/experience";
 import type { GameSong, GameState } from "@/domain/game/state";
 
 function SongCard({
@@ -33,8 +29,8 @@ function SongCard({
   onPlayerError,
   onPlayerLoadError,
   onPlayingChange,
-  onStarted,
   canVote,
+  playbackDisabled,
   voting,
 }: {
   label: "A" | "B";
@@ -47,8 +43,8 @@ function SongCard({
   onPlayerError(errorCode: number): void;
   onPlayerLoadError(): void;
   onPlayingChange(playing: boolean): void;
-  onStarted(songId: string): void;
   canVote: boolean;
+  playbackDisabled: boolean;
   voting: boolean;
 }) {
   return (
@@ -72,7 +68,6 @@ function SongCard({
           onError={onPlayerError}
           onLoadError={onPlayerLoadError}
           onPlayingChange={onPlayingChange}
-          onStarted={onStarted}
         />
         <p
           role={playerError ? "alert" : "status"}
@@ -92,6 +87,7 @@ function SongCard({
                 : `Reproduzir música ${label}`
             }
             aria-pressed={isPlaying}
+            disabled={playbackDisabled}
             className="min-h-11 min-w-0 flex-1 rounded-xl bg-black/85 px-3 backdrop-blur-sm"
           >
             {isPlaying ? (
@@ -133,9 +129,6 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
   const [playerErrors, setPlayerErrors] = useState<
     Partial<Record<"A" | "B", { matchId: string; message: string }>>
   >({});
-  const [gate, setGate] = useState(() =>
-    createPlaybackGate(initialState.currentMatch?.id ?? ""),
-  );
   const [message, setMessage] = useState<string | null>(null);
   const [isAbandoning, setIsAbandoning] = useState(false);
 
@@ -150,8 +143,7 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
   const songB = currentMatch?.songBId
     ? songsById.get(currentMatch.songBId)
     : null;
-  const canVote =
-    Boolean(currentMatch) && gate.matchId === currentMatch?.id && gate.canVote;
+  const canVote = Boolean(currentMatch);
 
   const pausePlayback = useCallback(() => {
     playerARef.current?.pause();
@@ -160,7 +152,6 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
   }, []);
   const applyDecisionState = useCallback((payload: GameState) => {
     setState(payload);
-    setGate(createPlaybackGate(payload.currentMatch?.id ?? ""));
   }, []);
   const decisions = useGameDecisions({
     sessionId: state.session.id,
@@ -192,7 +183,7 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
     (label: "A" | "B", errorCode: number) => {
       registerPlayerFailure(
         label,
-        "Este vídeo não pôde ser reproduzido. Tente novamente para liberar o voto.",
+        "Este vídeo não pôde ser reproduzido. Tente novamente.",
       );
       void fetch(`/api/games/${state.session.id}/player-errors`, {
         method: "POST",
@@ -206,15 +197,11 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
     [currentMatch?.id, registerPlayerFailure, state.session.id],
   );
 
-  const markPlaybackAsStarted = useCallback((songId: string) => {
-    setGate((current) => markSongStarted(current, songId));
-  }, []);
-
   const reportPlayerLoadError = useCallback(
     (label: "A" | "B") => {
       registerPlayerFailure(
         label,
-        "Não foi possível carregar este player. Tente novamente para liberar o voto.",
+        "Não foi possível carregar este player. Tente novamente.",
       );
     },
     [registerPlayerFailure],
@@ -357,8 +344,10 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
               onPlayerError={(errorCode) => reportPlayerError(label, errorCode)}
               onPlayerLoadError={() => reportPlayerLoadError(label)}
               onPlayingChange={(playing) => playingChanged(label, playing)}
-              onStarted={markPlaybackAsStarted}
               canVote={canVote}
+              playbackDisabled={
+                decisions.pendingDecision !== null || decisions.isDeciding
+              }
               voting={decisions.isDeciding}
             />
           ))}
@@ -375,9 +364,7 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
           >
             {decisions.message ??
               message ??
-              (canVote
-                ? "As duas músicas foram iniciadas. Escolha quem avança."
-                : "Inicie as duas músicas para liberar o voto.")}
+              "Escolha quem avança ou declare empate."}
           </p>
         </section>
 

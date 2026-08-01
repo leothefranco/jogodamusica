@@ -1,5 +1,6 @@
 "use client";
 
+import { Dialog } from "@base-ui/react/dialog";
 import { LoaderCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -30,40 +31,42 @@ export function DecisionConfirmation({
   const title = isTiebreak ? "Confirmar desempate" : "Confirmar voto";
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="decision-dialog-title"
-      className="fixed inset-0 z-50 grid place-items-center bg-black/75 p-5 backdrop-blur-sm"
+    <Dialog.Root
+      open={decision !== null}
+      onOpenChange={(open) => {
+        if (!open && !busy) onCancel();
+      }}
+      disablePointerDismissal
     >
-      <div className="w-full max-w-sm rounded-2xl border border-white/12 bg-[#15101f] p-5 shadow-2xl">
-        <h2 id="decision-dialog-title" className="text-xl font-black">
-          {title}
-        </h2>
-        <p className="mt-2 text-sm leading-6 text-white/65">
-          {isTiebreak
-            ? "O servidor sorteará uma vencedora definitiva entre as duas músicas."
-            : `Confirmar voto em “${decision.song.title}”, de ${decision.song.artist}?`}{" "}
-          Esta decisão não poderá ser desfeita.
-        </p>
-        <div className="mt-5 grid grid-cols-2 gap-3">
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={onCancel}
-            disabled={busy}
-          >
-            Cancelar
-          </Button>
-          <Button type="button" onClick={onConfirm} disabled={busy} autoFocus>
-            {busy && (
-              <LoaderCircle className="animate-spin" aria-hidden="true" />
-            )}
-            {isTiebreak ? "Sortear vencedora" : "Confirmar voto"}
-          </Button>
-        </div>
-      </div>
-    </div>
+      <Dialog.Portal>
+        <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm" />
+        <Dialog.Viewport className="fixed inset-0 z-50 grid place-items-center p-5">
+          <Dialog.Popup className="w-full max-w-sm rounded-2xl border border-white/12 bg-[#15101f] p-5 text-white shadow-2xl">
+            <Dialog.Title className="text-xl font-black">{title}</Dialog.Title>
+            <Dialog.Description className="mt-2 text-sm leading-6 text-white/65">
+              {isTiebreak
+                ? "O servidor sorteará uma vencedora definitiva entre as duas músicas."
+                : `Confirmar voto em “${decision.song.title}”, de ${decision.song.artist}?`}{" "}
+              Esta decisão não poderá ser desfeita.
+            </Dialog.Description>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <Dialog.Close
+                render={<Button variant="secondary" />}
+                disabled={busy}
+              >
+                Cancelar
+              </Dialog.Close>
+              <Button type="button" onClick={onConfirm} disabled={busy}>
+                {busy && (
+                  <LoaderCircle className="animate-spin" aria-hidden="true" />
+                )}
+                {isTiebreak ? "Sortear vencedora" : "Confirmar voto"}
+              </Button>
+            </div>
+          </Dialog.Popup>
+        </Dialog.Viewport>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 

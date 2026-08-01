@@ -133,6 +133,13 @@ test("mostra dois players associados às músicas sem controles nativos", async 
   await expect(
     page.getByRole("button", { name: "Reproduzir música B" }),
   ).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: "Votar na música A" }),
+  ).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: "Votar na música B" }),
+  ).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Desempatar" })).toBeEnabled();
   await expect
     .poll(() => page.evaluate(() => window.__youtubeTest.playerVars))
     .toEqual([
@@ -242,7 +249,7 @@ test("reinicia no começo do trecho depois que a prévia termina", async ({
     );
 });
 
-test("mantém o voto bloqueado quando um dos players falha", async ({
+test("mantém o voto disponível quando um dos players falha", async ({
   page,
 }) => {
   await page.route("**/player-errors", (route) =>
@@ -254,17 +261,18 @@ test("mantém o voto bloqueado quando um dos players falha", async ({
     .toBe(2);
 
   await page.evaluate(() => window.__youtubeTest.emitError(0, 101));
-  await page.getByRole("button", { name: "Reproduzir música B" }).click();
 
   await expect(
     page.getByRole("button", { name: "Votar na música A" }),
-  ).toBeDisabled();
+  ).toBeEnabled();
   await expect(
     page.getByRole("article").first().getByRole("alert"),
   ).toContainText("Tente novamente");
 });
 
-test("confirma o voto em um diálogo da aplicação", async ({ page }) => {
+test("pausa os players e cancela o modal acessível sem retomar o áudio", async ({
+  page,
+}) => {
   let browserDialogOpened = false;
   page.on("dialog", async (dialog) => {
     browserDialogOpened = true;
@@ -272,14 +280,111 @@ test("confirma o voto em um diálogo da aplicação", async ({ page }) => {
   });
   await page.goto("/e2e-test/dois-players");
   await page.getByRole("button", { name: "Reproduzir música A" }).click();
-  await page.getByRole("button", { name: "Reproduzir música B" }).click();
+  await page.evaluate(() => window.__youtubeTest.setCurrentTime(0, 17));
+
+  const voteA = page.getByRole("button", { name: "Votar na música A" });
+  await voteA.click();
+
+  const confirmation = page.getByRole("dialog", { name: "Confirmar voto" });
+  await expect(confirmation).toBeVisible();
+  await expect(confirmation).toContainText("Canção A");
+  await expect(confirmation).toContainText("Artista A");
+  await expect(
+    confirmation.getByRole("button", { name: "Cancelar" }),
+  ).toBeFocused();
+  await expect
+    .poll(() => page.evaluate(() => window.__youtubeTest.calls))
+    .toEqual(
+      expect.arrayContaining([
+        { player: 0, method: "pause" },
+        { player: 1, method: "pause" },
+      ]),
+    );
+
+  await page.keyboard.press("Tab");
+  await expect(
+    confirmation.getByRole("button", { name: "Confirmar voto" }),
+  ).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(
+    confirmation.getByRole("button", { name: "Cancelar" }),
+  ).toBeFocused();
+  await confirmation.getByRole("button", { name: "Cancelar" }).click();
+
+  await expect(confirmation).toBeHidden();
+  await expect(voteA).toBeFocused();
+  await expect(
+    page.getByRole("button", { name: "Reproduzir música A" }),
+  ).toBeVisible();
+  const callsAfterCancel = await page.evaluate(
+    () => window.__youtubeTest.calls.length,
+  );
+  await page.waitForTimeout(100);
+  expect(await page.evaluate(() => window.__youtubeTest.calls.length)).toBe(
+    callsAfterCancel,
+  );
+
+  await voteA.click();
+  await expect(confirmation).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(confirmation).toBeHidden();
+  await expect(voteA).toBeFocused();
+
+  await page.getByRole("button", { name: "Reproduzir música A" }).click();
+  await expect
+    .poll(() => page.evaluate(() => window.__youtubeTest.calls))
+    .toEqual(
+      expect.arrayContaining([
+        { player: 0, method: "seek", value: 17 },
+        { player: 0, method: "play" },
+      ]),
+    );
+  expect(browserDialogOpened).toBe(false);
+});
+
+test("bloqueia confirmações repetidas enquanto a decisão está em andamento", async ({
+  page,
+}) => {
+  let requestCount = 0;
+  let releaseDecision!: () => void;
+  const decisionPending = new Promise<void>((resolve) => {
+    releaseDecision = resolve;
+  });
+
+  await page.route("**/decision", async (route) => {
+    requestCount += 1;
+    await decisionPending;
+    await route.fulfill({
+      status: 409,
+      contentType: "application/json",
+      body: JSON.stringify({
+        error: { message: "Decisão de teste não registrada." },
+      }),
+    });
+  });
+  await page.goto("/e2e-test/dois-players");
 
   await page.getByRole("button", { name: "Votar na música A" }).click();
+  const confirmation = page.getByRole("dialog", { name: "Confirmar voto" });
+  const confirmVote = confirmation.getByRole("button", {
+    name: "Confirmar voto",
+  });
+  await confirmVote.click();
 
+  await expect(confirmVote).toBeDisabled();
   await expect(
-    page.getByRole("dialog", { name: "Confirmar voto" }),
-  ).toBeVisible();
-  expect(browserDialogOpened).toBe(false);
+    confirmation.getByRole("button", { name: "Cancelar" }),
+  ).toBeDisabled();
+  await expect.poll(() => requestCount).toBe(1);
+
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(100);
+  expect(requestCount).toBe(1);
+
+  releaseDecision();
+  await expect(confirmVote).toBeEnabled();
+  expect(requestCount).toBe(1);
 });
 
 test("confirma o desempate na aplicação e revela a vencedora sorteada pelo servidor", async ({
@@ -330,8 +435,6 @@ test("confirma o desempate na aplicação e revela a vencedora sorteada pelo ser
     }),
   );
   await page.goto("/e2e-test/dois-players");
-  await page.getByRole("button", { name: "Reproduzir música A" }).click();
-  await page.getByRole("button", { name: "Reproduzir música B" }).click();
 
   await page.getByRole("button", { name: "Desempatar" }).click();
   const confirmation = page.getByRole("dialog", {
