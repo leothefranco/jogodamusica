@@ -3,7 +3,6 @@ import { AppError } from "@/lib/errors";
 
 export type RoundCount = 2 | 3 | 4 | 5;
 export type MatchStatus = "pending" | "ready" | "completed";
-export type MatchSongSlot = "songAId" | "songBId";
 export type MatchCoordinate = {
   roundNumber: number;
   position: number;
@@ -26,12 +25,9 @@ export type Bracket = {
   matches: BracketMatch[];
 };
 
-export type WinnerAdvancement = {
-  championSongId: string | null;
-  nextMatch: {
-    coordinate: MatchCoordinate;
-    slot: MatchSongSlot;
-  } | null;
+export type RoundMatchPair = {
+  songAId: string;
+  songBId: string;
 };
 
 type MatchIdFactory = (coordinate: MatchCoordinate) => string;
@@ -95,11 +91,11 @@ export function createBracket(
   };
 }
 
-export function planWinnerAdvancement(
+export function resolveMatchWinner(
   match: BracketMatch,
   bracketSize: BracketSize,
   winnerSongId: string,
-): WinnerAdvancement {
+): string | null {
   if (match.status === "completed") {
     throw new AppError(
       "MATCH_ALREADY_COMPLETED",
@@ -122,74 +118,10 @@ export function planWinnerAdvancement(
   }
 
   if (match.roundNumber === roundCountFromBracketSize(bracketSize)) {
-    return { championSongId: winnerSongId, nextMatch: null };
+    return winnerSongId;
   }
 
-  return {
-    championSongId: null,
-    nextMatch: {
-      coordinate: {
-        roundNumber: match.roundNumber + 1,
-        position: Math.ceil(match.position / 2),
-      },
-      slot: match.position % 2 === 1 ? "songAId" : "songBId",
-    },
-  };
-}
-
-export function advanceWinner(
-  bracket: Bracket,
-  matchId: string,
-  winnerSongId: string,
-): Bracket {
-  const match = bracket.matches.find(({ id }) => id === matchId);
-  if (!match) {
-    throw new AppError(
-      "MATCH_NOT_FOUND",
-      "Confronto não encontrado nesta chave.",
-      404,
-    );
-  }
-  const advancement = planWinnerAdvancement(
-    match,
-    bracket.bracketSize,
-    winnerSongId,
-  );
-
-  const matches = bracket.matches.map((item) =>
-    item.id === matchId
-      ? {
-          ...item,
-          winnerSongId,
-          status: "completed" as const,
-        }
-      : { ...item },
-  );
-  if (advancement.championSongId) {
-    return {
-      ...bracket,
-      status: "completed",
-      championSongId: advancement.championSongId,
-      matches,
-    };
-  }
-
-  const { coordinate, slot } = advancement.nextMatch!;
-  const nextMatchIndex = matches.findIndex(
-    ({ roundNumber, position }) =>
-      roundNumber === coordinate.roundNumber &&
-      position === coordinate.position,
-  );
-  const nextMatch = matches[nextMatchIndex];
-  const advancedMatch = { ...nextMatch, [slot]: winnerSongId };
-
-  matches[nextMatchIndex] = {
-    ...advancedMatch,
-    status:
-      advancedMatch.songAId && advancedMatch.songBId ? "ready" : "pending",
-  };
-
-  return { ...bracket, matches };
+  return null;
 }
 
 export function selectSongsForSession<T>(
@@ -205,7 +137,38 @@ export function selectSongsForSession<T>(
     );
   }
 
-  const shuffled = [...songs];
+  return shuffleItems(songs, random).slice(0, bracketSize);
+}
+
+export function shuffleRoundWinners(
+  winners: readonly string[],
+  random: () => number = Math.random,
+): string[] {
+  return shuffleItems(winners, random);
+}
+
+export function pairRoundWinners(
+  winnerSongIds: readonly string[],
+): RoundMatchPair[] {
+  if (
+    winnerSongIds.length % 2 !== 0 ||
+    new Set(winnerSongIds).size !== winnerSongIds.length
+  ) {
+    throw new AppError(
+      "INVALID_ROUND_WINNERS",
+      "As vencedoras da rodada não formam pares únicos.",
+      500,
+    );
+  }
+
+  return Array.from({ length: winnerSongIds.length / 2 }, (_, index) => ({
+    songAId: winnerSongIds[index * 2],
+    songBId: winnerSongIds[index * 2 + 1],
+  }));
+}
+
+function shuffleItems<T>(items: readonly T[], random: () => number): T[] {
+  const shuffled = [...items];
   for (let index = shuffled.length - 1; index > 0; index -= 1) {
     const randomIndex = Math.floor(random() * (index + 1));
     [shuffled[index], shuffled[randomIndex]] = [
@@ -214,5 +177,5 @@ export function selectSongsForSession<T>(
     ];
   }
 
-  return shuffled.slice(0, bracketSize);
+  return shuffled;
 }

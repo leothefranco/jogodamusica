@@ -13,7 +13,7 @@ import {
 const themeId = "10000000-0000-4000-8000-000000000010";
 const sessionId = "20000000-0000-4000-8000-000000000020";
 
-const activeSongs = Array.from({ length: 6 }, (_, index) => ({
+const activeSongs = Array.from({ length: 10 }, (_, index) => ({
   songId: `30000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
   title: `Música ${index + 1}`,
   artist: `Artista ${index + 1}`,
@@ -71,30 +71,36 @@ function gameHarness(
     async getMatch(matchId) {
       return matches.find(({ id }) => id === matchId) ?? null;
     },
-    async getMatchAt({ roundNumber, position }) {
-      return (
-        matches.find(
-          (match) =>
-            match.roundNumber === roundNumber && match.position === position,
-        ) ?? null
-      );
-    },
     async completeMatch(matchId, winnerSongId, completedAt) {
       const match = matches.find(({ id }) => id === matchId)!;
       match.status = "completed";
       match.winnerSongId = winnerSongId;
       match.completedAt = completedAt;
     },
-    async placeSongInMatch(matchId, slot, songId) {
-      const match = matches.find(({ id }) => id === matchId)!;
-      match[slot] = songId;
-      if (match.songAId && match.songBId) match.status = "ready";
-    },
     async hasIncompleteMatchesInRound(roundNumber) {
       return matches.some(
         (match) =>
           match.roundNumber === roundNumber && match.status !== "completed",
       );
+    },
+    async getWinnerSongIdsInRound(roundNumber) {
+      return matches
+        .filter(
+          (match) =>
+            match.roundNumber === roundNumber && match.status === "completed",
+        )
+        .sort((left, right) => left.position - right.position)
+        .map(({ winnerSongId }) => winnerSongId!);
+    },
+    async populateRound(roundNumber, pairs) {
+      const roundMatches = matches
+        .filter((match) => match.roundNumber === roundNumber)
+        .sort((left, right) => left.position - right.position);
+      roundMatches.forEach((match, index) => {
+        match.songAId = pairs[index].songAId;
+        match.songBId = pairs[index].songBId;
+        match.status = "ready";
+      });
     },
     async setCurrentRound(roundNumber) {
       sessions[0].currentRound = roundNumber;
@@ -207,31 +213,65 @@ describe("criação transacional de partida", () => {
 });
 
 describe("voto transacional", () => {
-  it("conclui o confronto e alimenta a posição correta do seguinte", async () => {
+  it("sorteia e persiste todos os pares somente ao concluir a rodada", async () => {
     const harness = gameHarness();
-    await harness.service.createSession({ themeId, bracketSize: 4 });
-    const firstMatch = harness.matches.find(
-      ({ roundNumber, position }) => roundNumber === 1 && position === 1,
-    )!;
+    await harness.service.createSession({ themeId, bracketSize: 8 });
+    const firstRound = harness.matches.filter(
+      ({ roundNumber }) => roundNumber === 1,
+    );
+    const secondRound = harness.matches.filter(
+      ({ roundNumber }) => roundNumber === 2,
+    );
+    const winnerSongIds = firstRound.map(({ songAId }) => songAId!);
 
+    for (const match of firstRound.slice(0, -1)) {
+      await harness.service.vote({
+        sessionId,
+        matchId: match.id,
+        winnerSongId: match.songAId!,
+      });
+    }
+
+    expect(secondRound).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          songAId: null,
+          songBId: null,
+          status: "pending",
+        }),
+      ]),
+    );
+    expect(secondRound.every(({ status }) => status === "pending")).toBe(true);
+
+    const lastMatch = firstRound.at(-1)!;
     await harness.service.vote({
       sessionId,
-      matchId: firstMatch.id,
-      winnerSongId: firstMatch.songBId!,
+      matchId: lastMatch.id,
+      winnerSongId: lastMatch.songAId!,
     });
 
-    expect(firstMatch).toMatchObject({
-      status: "completed",
-      winnerSongId: firstMatch.songBId,
-    });
     expect(
-      harness.matches.find(({ roundNumber }) => roundNumber === 2),
-    ).toMatchObject({
-      songAId: firstMatch.songBId,
-      songBId: null,
-      status: "pending",
+      secondRound.flatMap(({ songAId, songBId }) => [songAId, songBId]),
+    ).toEqual([
+      winnerSongIds[1],
+      winnerSongIds[2],
+      winnerSongIds[3],
+      winnerSongIds[0],
+    ]);
+    expect(secondRound.every(({ status }) => status === "ready")).toBe(true);
+    const persistedPairs = secondRound.map(({ songAId, songBId }) => [
+      songAId,
+      songBId,
+    ]);
+    await expect(harness.service.getState(sessionId)).resolves.toMatchObject({
+      currentMatch: { id: secondRound[0].id },
+      progress: { currentRound: 2 },
     });
-    expect(harness.transactionCounts().voteTransactions).toBe(1);
+    await harness.service.getState(sessionId);
+    expect(
+      secondRound.map(({ songAId, songBId }) => [songAId, songBId]),
+    ).toEqual(persistedPairs);
+    expect(harness.transactionCounts().voteTransactions).toBe(4);
   });
 
   it("rejeita voto repetido sem avançar novamente", async () => {

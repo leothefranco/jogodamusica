@@ -2,11 +2,12 @@ import "server-only";
 
 import {
   createBracket,
-  planWinnerAdvancement,
+  pairRoundWinners,
+  resolveMatchWinner,
   roundCountFromBracketSize,
   selectSongsForSession,
-  type MatchCoordinate,
-  type MatchSongSlot,
+  shuffleRoundWinners,
+  type RoundMatchPair,
 } from "@/domain/bracket";
 import type {
   GameSong,
@@ -52,18 +53,18 @@ export type GameCreationRepository = {
 export type GameVoteRepository = {
   getSession(): Promise<PersistedGameSession | null>;
   getMatch(matchId: string): Promise<PersistedGameMatch | null>;
-  getMatchAt(coordinate: MatchCoordinate): Promise<PersistedGameMatch | null>;
   completeMatch(
     matchId: string,
     winnerSongId: string,
     completedAt: Date,
   ): Promise<void>;
-  placeSongInMatch(
-    matchId: string,
-    slot: MatchSongSlot,
-    songId: string,
-  ): Promise<void>;
   hasIncompleteMatchesInRound(roundNumber: number): Promise<boolean>;
+  getWinnerSongIdsInRound(roundNumber: number): Promise<string[]>;
+  populateRound(
+    roundNumber: number,
+    pairs: RoundMatchPair[],
+    populatedAt: Date,
+  ): Promise<void>;
   setCurrentRound(roundNumber: number): Promise<void>;
   completeSession(championSongId: string, completedAt: Date): Promise<void>;
 };
@@ -196,7 +197,7 @@ export function createGameService(dependencies: GameServiceDependencies) {
               404,
             );
           }
-          const advancement = planWinnerAdvancement(
+          const championSongId = resolveMatchWinner(
             match,
             session.bracketSize,
             input.winnerSongId,
@@ -209,36 +210,29 @@ export function createGameService(dependencies: GameServiceDependencies) {
             completedAt,
           );
 
-          if (advancement.championSongId) {
+          if (championSongId) {
             const finalRound = roundCountFromBracketSize(session.bracketSize);
             await repository.setCurrentRound(finalRound);
-            await repository.completeSession(
-              advancement.championSongId,
-              completedAt,
-            );
+            await repository.completeSession(championSongId, completedAt);
             return;
           }
 
-          const { coordinate, slot } = advancement.nextMatch!;
-          const nextMatch = await repository.getMatchAt(coordinate);
-          if (!nextMatch) {
-            throw new AppError(
-              "INVALID_BRACKET_STATE",
-              "O próximo confronto da chave não foi encontrado.",
-              500,
-            );
+          if (await repository.hasIncompleteMatchesInRound(match.roundNumber)) {
+            return;
           }
-          await repository.placeSongInMatch(
-            nextMatch.id,
-            slot,
-            input.winnerSongId,
-          );
 
-          if (
-            !(await repository.hasIncompleteMatchesInRound(match.roundNumber))
-          ) {
-            await repository.setCurrentRound(coordinate.roundNumber);
-          }
+          const nextRoundNumber = match.roundNumber + 1;
+          const winnerSongIds = await repository.getWinnerSongIdsInRound(
+            match.roundNumber,
+          );
+          await repository.populateRound(
+            nextRoundNumber,
+            pairRoundWinners(
+              shuffleRoundWinners(winnerSongIds, dependencies.random),
+            ),
+            completedAt,
+          );
+          await repository.setCurrentRound(nextRoundNumber);
         },
       );
 
