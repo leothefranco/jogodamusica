@@ -22,7 +22,7 @@ import { ConfirmSubmitButton } from "@/components/admin/confirm-submit-button";
 import { adminInputClassName } from "@/components/admin/form-styles";
 import { ThemeForm } from "@/components/admin/theme-form";
 import { YouTubeSongManager } from "@/components/admin/youtube-song-manager";
-import { SupportedRounds } from "@/components/admin/supported-rounds";
+import { SupportedGameModes } from "@/components/admin/supported-game-modes";
 import { Button } from "@/components/ui/button";
 import { AppError } from "@/lib/errors";
 import { getThemeEditor } from "@/server/services/theme-content-service";
@@ -81,7 +81,7 @@ export default async function EditThemePage({
           </h1>
           <p className="mt-2 font-mono text-xs text-white/35">/{theme.slug}</p>
           <div className="mt-4">
-            <SupportedRounds activeSongCount={theme.activeSongCount} />
+            <SupportedGameModes activeSongCount={theme.activeSongCount} />
           </div>
         </div>
 

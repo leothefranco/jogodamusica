@@ -1,6 +1,6 @@
 import { getSupportedBracketSizes } from "@/domain/music/content-validation";
 
-export function SupportedRounds({
+export function SupportedGameModes({
   activeSongCount,
 }: {
   activeSongCount: number;
@@ -19,7 +19,7 @@ export function SupportedRounds({
             key={size}
             className="rounded-full border border-violet-300/16 bg-violet-400/7 px-2.5 py-1 text-xs font-semibold text-violet-100"
           >
-            {Math.log2(size)} rodadas · {size} músicas
+            {size} músicas · equivalente a {Math.log2(size)} rodadas
           </span>
         ))
       )}

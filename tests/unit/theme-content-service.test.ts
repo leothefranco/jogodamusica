@@ -9,6 +9,7 @@ const resolvedTrack = {
   thumbnailUrl: "https://example.com/thumb.jpg",
   durationSeconds: 180,
   isEmbeddable: true,
+  isRegionAllowed: true,
 };
 
 const associatedTrack = {
@@ -120,6 +121,35 @@ describe("serviço de conteúdo de temas", () => {
         isActive: false,
       }),
     ).rejects.toMatchObject({ code: "THEME_NOT_PLAYABLE", status: 409 });
+    expect(associationWasSaved).toBe(false);
+  });
+
+  it("rejeita música individual bloqueada no Brasil antes de associá-la", async () => {
+    let associationWasSaved = false;
+    const service = createService({
+      musicProvider: {
+        search: async () => [],
+        resolve: async () => ({ ...resolvedTrack, isRegionAllowed: false }),
+        getEmbedData: async () => ({
+          embedUrl: "https://provider.example/embed/dQw4w9WgXcQ",
+          watchUrl: "https://provider.example/watch/dQw4w9WgXcQ",
+        }),
+      },
+      upsertSongAndAssociation: async () => {
+        associationWasSaved = true;
+      },
+    });
+
+    await expect(
+      service.attachResolvedTrack("10000000-0000-4000-8000-000000000010", {
+        providerContentId: "dQw4w9WgXcQ",
+        title: "Título",
+        artist: "Artista",
+        startTimeSeconds: 0,
+        previewDurationSeconds: 30,
+        isActive: true,
+      }),
+    ).rejects.toMatchObject({ code: "VIDEO_REGION_BLOCKED", status: 400 });
     expect(associationWasSaved).toBe(false);
   });
 

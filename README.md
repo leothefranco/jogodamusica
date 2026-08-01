@@ -128,7 +128,9 @@ banco pela migração mais recente.
 4. Em cada confronto, compare os dois cards empilhados. Cada música mantém seu
    próprio player do YouTube e um único controle de reproduzir/pausar; iniciar
    uma pausa a outra sem perder a posição. O voto é liberado depois que as duas
-   músicas forem iniciadas (ou se um player falhar) e sempre pede confirmação.
+   músicas forem iniciadas e sempre pede confirmação em um diálogo da aplicação.
+   Em caso de empate, o servidor sorteia a vencedora e uma roleta revela o
+   resultado já registrado.
 5. Ao final, `/resultado/<id>` mostra a campeã e todos os confrontos.
 
 Os players usam a YouTube IFrame Player API diretamente no navegador, começam

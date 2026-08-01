@@ -27,6 +27,7 @@ import {
   updateThemeRecord,
   upsertSongAndAssociation,
   withThemeContentLock,
+  type ThemeSongEditorItem,
   type ThemeSummary,
 } from "@/server/repositories/theme-content-repository";
 
@@ -65,11 +66,19 @@ function postgresCode(error: unknown) {
   return null;
 }
 
-function assertPublishedThemeCanLoseActiveSong(
+function assertPublishedThemeCanLosePlayableSong(
   theme: ThemeSummary,
+  song: ThemeSongEditorItem | null,
+  willLosePlayableSong: boolean,
   message: string,
 ) {
-  if (!theme.isActive) return;
+  if (
+    !willLosePlayableSong ||
+    !song?.isActive ||
+    !song.isEmbeddable ||
+    !theme.isActive
+  )
+    return;
 
   const publishability = getThemePublishability(theme.activeSongCount - 1);
   if (!publishability.canPublish) {
@@ -193,6 +202,13 @@ export function createThemeContentService(
           400,
         );
       }
+      if (!resolvedTrack.isRegionAllowed) {
+        throw new AppError(
+          "VIDEO_REGION_BLOCKED",
+          "Este vídeo não está disponível no Brasil e não pode ser usado no jogo.",
+          400,
+        );
+      }
 
       validatePreviewWindow({
         durationSeconds: resolvedTrack.durationSeconds,
@@ -208,16 +224,12 @@ export function createThemeContentService(
           throw new AppError("THEME_NOT_FOUND", "Tema não encontrado.", 404);
         }
 
-        if (
-          currentAssociation?.isActive &&
-          currentAssociation.isEmbeddable &&
-          !input.isActive
-        ) {
-          assertPublishedThemeCanLoseActiveSong(
-            theme,
-            "Desative o tema antes de reduzir suas músicas ativas abaixo de quatro.",
-          );
-        }
+        assertPublishedThemeCanLosePlayableSong(
+          theme,
+          currentAssociation,
+          !input.isActive,
+          "Desative o tema antes de reduzir suas músicas ativas abaixo de quatro.",
+        );
 
         await repository.upsertSongAndAssociation({
           ...resolvedTrack,
@@ -253,12 +265,12 @@ export function createThemeContentService(
           previewDurationSeconds: input.previewDurationSeconds,
         });
 
-        if (current.isActive && current.isEmbeddable && !input.isActive) {
-          assertPublishedThemeCanLoseActiveSong(
-            theme,
-            "Desative o tema antes de reduzir suas músicas ativas abaixo de quatro.",
-          );
-        }
+        assertPublishedThemeCanLosePlayableSong(
+          theme,
+          current,
+          !input.isActive,
+          "Desative o tema antes de reduzir suas músicas ativas abaixo de quatro.",
+        );
 
         await repository.updateThemeSongAssociation({ songId, ...input });
       });
@@ -277,12 +289,12 @@ export function createThemeContentService(
           );
         }
 
-        if (current.isActive && current.isEmbeddable) {
-          assertPublishedThemeCanLoseActiveSong(
-            theme,
-            "Desative o tema antes de remover uma música necessária para o chaveamento.",
-          );
-        }
+        assertPublishedThemeCanLosePlayableSong(
+          theme,
+          current,
+          true,
+          "Desative o tema antes de remover uma música necessária para o chaveamento.",
+        );
 
         await repository.removeThemeSongRecord(songId);
       });

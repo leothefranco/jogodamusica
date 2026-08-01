@@ -9,11 +9,11 @@ export type ProviderSearchResult = {
   isEmbeddable: boolean;
 };
 
-export type ResolvedProviderTrack = ProviderSearchResult;
-
-export type ResolvedPlaylistTrack = ResolvedProviderTrack & {
+export type ResolvedProviderTrack = ProviderSearchResult & {
   isRegionAllowed: boolean;
 };
+
+export type ResolvedPlaylistTrack = ResolvedProviderTrack;
 
 export type ProviderPlaylistItem = {
   position: number;

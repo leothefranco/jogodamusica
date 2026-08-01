@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, LoaderCircle, Pause, Play } from "lucide-react";
+import { Check, Dices, LoaderCircle, Pause, Play } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -9,6 +9,11 @@ import {
   YouTubePlayer,
   type YouTubePlayerHandle,
 } from "@/components/game/youtube-player";
+import {
+  DecisionConfirmation,
+  TiebreakReveal,
+} from "@/components/game/decision-overlays";
+import { useGameDecisions } from "@/components/game/use-game-decisions";
 import { Button } from "@/components/ui/button";
 import {
   createPlaybackGate,
@@ -132,7 +137,6 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
     createPlaybackGate(initialState.currentMatch?.id ?? ""),
   );
   const [message, setMessage] = useState<string | null>(null);
-  const [isVoting, setIsVoting] = useState(false);
   const [isAbandoning, setIsAbandoning] = useState(false);
 
   const currentMatch = state.currentMatch;
@@ -146,6 +150,26 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
   const songB = currentMatch?.songBId
     ? songsById.get(currentMatch.songBId)
     : null;
+  const canVote =
+    Boolean(currentMatch) && gate.matchId === currentMatch?.id && gate.canVote;
+
+  const pausePlayback = useCallback(() => {
+    playerARef.current?.pause();
+    playerBRef.current?.pause();
+    setActivePlayer(null);
+  }, []);
+  const applyDecisionState = useCallback((payload: GameState) => {
+    setState(payload);
+    setGate(createPlaybackGate(payload.currentMatch?.id ?? ""));
+  }, []);
+  const decisions = useGameDecisions({
+    sessionId: state.session.id,
+    currentMatch,
+    songs: state.songs,
+    canDecide: canVote,
+    pausePlayback,
+    applyState: applyDecisionState,
+  });
 
   useEffect(() => {
     if (state.session.status === "completed") {
@@ -154,23 +178,21 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
   }, [router, state.session.id, state.session.status]);
 
   const registerPlayerFailure = useCallback(
-    (label: "A" | "B", songId: string, failureMessage: string) => {
+    (label: "A" | "B", failureMessage: string) => {
       if (!currentMatch) return;
       setPlayerErrors((current) => ({
         ...current,
         [label]: { matchId: currentMatch.id, message: failureMessage },
       }));
-      setGate((current) => markSongStarted(current, songId));
     },
     [currentMatch],
   );
 
   const reportPlayerError = useCallback(
-    (label: "A" | "B", songId: string, errorCode: number) => {
+    (label: "A" | "B", errorCode: number) => {
       registerPlayerFailure(
         label,
-        songId,
-        "Este vídeo não pôde ser reproduzido. Você ainda pode votar.",
+        "Este vídeo não pôde ser reproduzido. Tente novamente para liberar o voto.",
       );
       void fetch(`/api/games/${state.session.id}/player-errors`, {
         method: "POST",
@@ -189,11 +211,10 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
   }, []);
 
   const reportPlayerLoadError = useCallback(
-    (label: "A" | "B", songId: string) => {
+    (label: "A" | "B") => {
       registerPlayerFailure(
         label,
-        songId,
-        "Não foi possível carregar este player. Você ainda pode votar.",
+        "Não foi possível carregar este player. Tente novamente para liberar o voto.",
       );
     },
     [registerPlayerFailure],
@@ -204,6 +225,7 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
   function togglePlayback(label: "A" | "B") {
     if (!currentMatch) return;
     setMessage(null);
+    decisions.clearMessage();
 
     if (
       activePlayer?.matchId === currentMatch.id &&
@@ -229,52 +251,6 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
         ? null
         : current;
     });
-  }
-
-  async function vote(song: GameSong) {
-    if (!currentMatch || gate.matchId !== currentMatch.id || !gate.canVote)
-      return;
-    if (
-      !window.confirm(
-        `Confirmar voto em “${song.title}”, de ${song.artist}? O voto não poderá ser desfeito.`,
-      )
-    )
-      return;
-
-    setIsVoting(true);
-    setMessage(null);
-    playerARef.current?.pause();
-    playerBRef.current?.pause();
-    setActivePlayer(null);
-    try {
-      const response = await fetch(
-        `/api/games/${state.session.id}/matches/${currentMatch.id}/decision`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ type: "vote", winnerSongId: song.songId }),
-        },
-      );
-      const payload = (await response.json()) as GameState & {
-        error?: { message?: string };
-      };
-      if (!response.ok) {
-        throw new Error(
-          payload.error?.message ?? "Não foi possível registrar o voto.",
-        );
-      }
-      setState(payload);
-      setGate(createPlaybackGate(payload.currentMatch?.id ?? ""));
-      setMessage(null);
-    } catch (caught) {
-      setMessage(
-        caught instanceof Error
-          ? caught.message
-          : "Não foi possível registrar o voto.",
-      );
-    } finally {
-      setIsVoting(false);
-    }
   }
 
   async function abandon() {
@@ -316,7 +292,6 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
     );
   }
 
-  const canVote = gate.matchId === currentMatch.id && gate.canVote;
   const roundLabel = getRoundLabel({
     bracketSize: state.session.bracketSize,
     roundNumber: currentMatch.roundNumber,
@@ -348,6 +323,17 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
           <p className="shrink-0 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/65">
             {roundLabel}
           </p>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={decisions.requestTiebreak}
+            disabled={!canVote || decisions.isDeciding}
+            aria-label="Desempatar"
+            className="min-h-11 rounded-xl px-3"
+          >
+            <Dices aria-hidden="true" />
+            Empate
+          </Button>
         </header>
 
         <div className="game-matchup grid gap-2">
@@ -361,23 +347,19 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
                 activePlayer.label === label
               }
               onTogglePlayback={() => togglePlayback(label)}
-              onVote={() => void vote(song)}
+              onVote={() => decisions.requestVote(song)}
               playerError={
                 playerErrors[label]?.matchId === currentMatch.id
                   ? playerErrors[label].message
                   : null
               }
               playerRef={playerRef}
-              onPlayerError={(errorCode) =>
-                reportPlayerError(label, song.songId, errorCode)
-              }
-              onPlayerLoadError={() =>
-                reportPlayerLoadError(label, song.songId)
-              }
+              onPlayerError={(errorCode) => reportPlayerError(label, errorCode)}
+              onPlayerLoadError={() => reportPlayerLoadError(label)}
               onPlayingChange={(playing) => playingChanged(label, playing)}
               onStarted={markPlaybackAsStarted}
               canVote={canVote}
-              voting={isVoting}
+              voting={decisions.isDeciding}
             />
           ))}
         </div>
@@ -391,7 +373,8 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
             aria-live="polite"
             className="min-h-5 truncate text-center text-xs text-white/55"
           >
-            {message ??
+            {decisions.message ??
+              message ??
               (canVote
                 ? "As duas músicas foram iniciadas. Escolha quem avança."
                 : "Inicie as duas músicas para liberar o voto.")}
@@ -433,6 +416,13 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
           </button>
         </div>
       </div>
+      <DecisionConfirmation
+        decision={decisions.pendingDecision}
+        busy={decisions.isDeciding}
+        onCancel={decisions.cancelDecision}
+        onConfirm={() => void decisions.confirmDecision()}
+      />
+      <TiebreakReveal reveal={decisions.tiebreakReveal} />
     </main>
   );
 }

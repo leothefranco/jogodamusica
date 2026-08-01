@@ -2,7 +2,7 @@ import Link from "next/link";
 import { CheckCircle2, CircleOff, Disc3, Pencil, Plus } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
-import { SupportedRounds } from "@/components/admin/supported-rounds";
+import { SupportedGameModes } from "@/components/admin/supported-game-modes";
 import { getThemePublishability } from "@/domain/music/content-validation";
 import { cn } from "@/lib/utils";
 import { getAdminThemes } from "@/server/services/theme-content-service";
@@ -138,7 +138,7 @@ export default async function AdminThemesPage({
                   </div>
                 </div>
                 <div className="mt-4">
-                  <SupportedRounds activeSongCount={theme.activeSongCount} />
+                  <SupportedGameModes activeSongCount={theme.activeSongCount} />
                 </div>
               </article>
             );
