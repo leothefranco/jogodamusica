@@ -5,10 +5,6 @@ import { connection } from "next/server";
 
 import { getDatabase } from "@/db";
 import { songs, themes, themeSongs } from "@/db/schema";
-import {
-  bracketSizeSchema,
-  type BracketSize,
-} from "@/domain/music/content-validation";
 
 export type PlayableThemeRecord = {
   id: string;
@@ -16,7 +12,6 @@ export type PlayableThemeRecord = {
   slug: string;
   description: string | null;
   coverUrl: string | null;
-  defaultBracketSize: BracketSize;
   activeSongCount: number;
 };
 
@@ -26,20 +21,8 @@ const selection = {
   slug: themes.slug,
   description: themes.description,
   coverUrl: themes.coverUrl,
-  defaultBracketSize: themes.defaultBracketSize,
   activeSongCount: count(themeSongs.songId).mapWith(Number),
 };
-
-function toPlayableTheme(
-  row: Omit<PlayableThemeRecord, "defaultBracketSize"> & {
-    defaultBracketSize: number;
-  },
-): PlayableThemeRecord {
-  return {
-    ...row,
-    defaultBracketSize: bracketSizeSchema.parse(row.defaultBracketSize),
-  };
-}
 
 function playableThemeQuery() {
   return getDatabase()
@@ -59,8 +42,7 @@ function playableThemeQuery() {
 
 export async function listPlayableThemes(): Promise<PlayableThemeRecord[]> {
   await connection();
-  const rows = await playableThemeQuery().orderBy(asc(themes.name));
-  return rows.map(toPlayableTheme);
+  return playableThemeQuery().orderBy(asc(themes.name));
 }
 
 export async function findPlayableThemeBySlug(
@@ -71,5 +53,5 @@ export async function findPlayableThemeBySlug(
     .having(eq(themes.slug, slug))
     .limit(1);
 
-  return row ? toPlayableTheme(row) : null;
+  return row ?? null;
 }

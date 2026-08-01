@@ -29,7 +29,6 @@ async function main() {
               set: {
                 name: demoThemeSeed.name,
                 description: demoThemeSeed.description,
-                defaultBracketSize: demoThemeSeed.defaultBracketSize,
                 isActive: false,
                 updatedAt: new Date(),
               },

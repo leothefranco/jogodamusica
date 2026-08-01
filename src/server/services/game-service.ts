@@ -2,11 +2,13 @@ import "server-only";
 
 import {
   createBracket,
-  planWinnerAdvancement,
+  pairRoundWinners,
+  resolveMatchDecision,
   roundCountFromBracketSize,
   selectSongsForSession,
-  type MatchCoordinate,
-  type MatchSongSlot,
+  shuffleRoundWinners,
+  type RoundMatchPair,
+  type MatchDecision,
 } from "@/domain/bracket";
 import type {
   GameSong,
@@ -21,7 +23,7 @@ import {
   abandonGameSessionRecord,
   getGameStateRecord,
   withGameCreationTransaction,
-  withGameVoteTransaction,
+  withGameDecisionTransaction,
 } from "@/server/repositories/game-repository";
 
 export type {
@@ -49,21 +51,21 @@ export type GameCreationRepository = {
   insertMatches(matches: NewGameMatch[]): Promise<void>;
 };
 
-export type GameVoteRepository = {
+export type GameDecisionRepository = {
   getSession(): Promise<PersistedGameSession | null>;
   getMatch(matchId: string): Promise<PersistedGameMatch | null>;
-  getMatchAt(coordinate: MatchCoordinate): Promise<PersistedGameMatch | null>;
   completeMatch(
     matchId: string,
     winnerSongId: string,
     completedAt: Date,
   ): Promise<void>;
-  placeSongInMatch(
-    matchId: string,
-    slot: MatchSongSlot,
-    songId: string,
-  ): Promise<void>;
   hasIncompleteMatchesInRound(roundNumber: number): Promise<boolean>;
+  getWinnerSongIdsInRound(roundNumber: number): Promise<string[]>;
+  populateRound(
+    roundNumber: number,
+    pairs: RoundMatchPair[],
+    populatedAt: Date,
+  ): Promise<void>;
   setCurrentRound(roundNumber: number): Promise<void>;
   completeSession(championSongId: string, completedAt: Date): Promise<void>;
 };
@@ -76,9 +78,9 @@ export type GameServiceDependencies = {
     themeId: string,
     operation: (repository: GameCreationRepository) => Promise<T>,
   ): Promise<T>;
-  withGameVoteTransaction<T>(
+  withGameDecisionTransaction<T>(
     sessionId: string,
-    operation: (repository: GameVoteRepository) => Promise<T>,
+    operation: (repository: GameDecisionRepository) => Promise<T>,
   ): Promise<T>;
 };
 
@@ -87,10 +89,10 @@ export type CreateGameInput = {
   bracketSize: BracketSize;
 };
 
-export type VoteInput = {
+export type DecideMatchInput = {
   sessionId: string;
   matchId: string;
-  winnerSongId: string;
+  decision: MatchDecision;
 };
 
 export function createGameService(dependencies: GameServiceDependencies) {
@@ -168,8 +170,8 @@ export function createGameService(dependencies: GameServiceDependencies) {
       );
     },
 
-    async vote(input: VoteInput): Promise<GameState> {
-      await dependencies.withGameVoteTransaction(
+    async decide(input: DecideMatchInput): Promise<GameState> {
+      await dependencies.withGameDecisionTransaction(
         input.sessionId,
         async (repository) => {
           const session = await repository.getSession();
@@ -196,49 +198,39 @@ export function createGameService(dependencies: GameServiceDependencies) {
               404,
             );
           }
-          const advancement = planWinnerAdvancement(
+          const { winnerSongId, championSongId } = resolveMatchDecision(
             match,
             session.bracketSize,
-            input.winnerSongId,
+            input.decision,
+            dependencies.random,
           );
 
           const completedAt = dependencies.now();
-          await repository.completeMatch(
-            match.id,
-            input.winnerSongId,
-            completedAt,
-          );
+          await repository.completeMatch(match.id, winnerSongId, completedAt);
 
-          if (advancement.championSongId) {
+          if (championSongId) {
             const finalRound = roundCountFromBracketSize(session.bracketSize);
             await repository.setCurrentRound(finalRound);
-            await repository.completeSession(
-              advancement.championSongId,
-              completedAt,
-            );
+            await repository.completeSession(championSongId, completedAt);
             return;
           }
 
-          const { coordinate, slot } = advancement.nextMatch!;
-          const nextMatch = await repository.getMatchAt(coordinate);
-          if (!nextMatch) {
-            throw new AppError(
-              "INVALID_BRACKET_STATE",
-              "O próximo confronto da chave não foi encontrado.",
-              500,
-            );
+          if (await repository.hasIncompleteMatchesInRound(match.roundNumber)) {
+            return;
           }
-          await repository.placeSongInMatch(
-            nextMatch.id,
-            slot,
-            input.winnerSongId,
-          );
 
-          if (
-            !(await repository.hasIncompleteMatchesInRound(match.roundNumber))
-          ) {
-            await repository.setCurrentRound(coordinate.roundNumber);
-          }
+          const nextRoundNumber = match.roundNumber + 1;
+          const winnerSongIds = await repository.getWinnerSongIdsInRound(
+            match.roundNumber,
+          );
+          await repository.populateRound(
+            nextRoundNumber,
+            pairRoundWinners(
+              shuffleRoundWinners(winnerSongIds, dependencies.random),
+            ),
+            completedAt,
+          );
+          await repository.setCurrentRound(nextRoundNumber);
         },
       );
 
@@ -264,12 +256,12 @@ export const defaultGameServiceDependencies = {
 const gameService = createGameService({
   ...defaultGameServiceDependencies,
   withGameCreationTransaction,
-  withGameVoteTransaction,
+  withGameDecisionTransaction,
 });
 
 export const createGameSession = gameService.createSession;
 export const getGameState = gameService.getState;
-export const voteForMatch = gameService.vote;
+export const decideMatch = gameService.decide;
 
 export async function abandonGameSession(sessionId: string): Promise<void> {
   const result = await abandonGameSessionRecord(sessionId, new Date());

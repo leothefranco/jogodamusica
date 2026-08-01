@@ -7,9 +7,15 @@ export const createGameInputSchema = z.object({
   bracketSize: bracketSizeSchema,
 });
 
-export const voteInputSchema = z.object({
-  winnerSongId: z.string().uuid(),
-});
+export const matchDecisionInputSchema = z.discriminatedUnion("type", [
+  z
+    .object({
+      type: z.literal("vote"),
+      winnerSongId: z.string().uuid(),
+    })
+    .strict(),
+  z.object({ type: z.literal("tiebreak") }).strict(),
+]);
 
 export const abandonGameInputSchema = z.object({
   action: z.literal("abandon"),
@@ -30,6 +36,6 @@ export const gameParamsSchema = z.object({
   sessionId: z.string().uuid(),
 });
 
-export const voteParamsSchema = gameParamsSchema.extend({
+export const matchDecisionParamsSchema = gameParamsSchema.extend({
   matchId: z.string().uuid(),
 });

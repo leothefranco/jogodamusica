@@ -12,7 +12,6 @@ import {
 
 export type PublicTheme = PlayableThemeRecord & {
   supportedBracketSizes: BracketSize[];
-  selectedBracketSize: BracketSize;
 };
 
 type PublicThemeServiceDependencies = {
@@ -22,13 +21,7 @@ type PublicThemeServiceDependencies = {
 
 function presentTheme(theme: PlayableThemeRecord): PublicTheme {
   const supportedBracketSizes = getSupportedBracketSizes(theme.activeSongCount);
-  const selectedBracketSize = supportedBracketSizes.includes(
-    theme.defaultBracketSize,
-  )
-    ? theme.defaultBracketSize
-    : supportedBracketSizes.at(-1)!;
-
-  return { ...theme, supportedBracketSizes, selectedBracketSize };
+  return { ...theme, supportedBracketSizes };
 }
 
 export function createPublicThemeService(

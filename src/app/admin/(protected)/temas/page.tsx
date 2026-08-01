@@ -72,7 +72,6 @@ export default async function AdminThemesPage({
         >
           {themeItems.map((theme) => {
             const { canPublish } = getThemePublishability(
-              theme.defaultBracketSize,
               theme.activeSongCount,
             );
 
@@ -124,7 +123,7 @@ export default async function AdminThemesPage({
                   </Link>
                 </div>
 
-                <div className="mt-7 grid grid-cols-3 gap-px overflow-hidden rounded-xl bg-white/8 text-center">
+                <div className="mt-7 grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-white/8 text-center">
                   <div className="bg-black/25 px-3 py-4">
                     <strong className="block text-lg">
                       {theme.activeSongCount}
@@ -136,12 +135,6 @@ export default async function AdminThemesPage({
                       {theme.totalSongCount}
                     </strong>
                     <span className="text-[0.68rem] text-white/38">total</span>
-                  </div>
-                  <div className="bg-black/25 px-3 py-4">
-                    <strong className="block text-lg">
-                      {theme.defaultBracketSize}
-                    </strong>
-                    <span className="text-[0.68rem] text-white/38">chave</span>
                   </div>
                 </div>
                 <div className="mt-4">

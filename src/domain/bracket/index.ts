@@ -1,9 +1,8 @@
 import type { BracketSize } from "@/domain/music/content-validation";
 import { AppError } from "@/lib/errors";
 
-export type RoundCount = 2 | 3 | 4 | 5;
+export type RoundCount = 2 | 3 | 4 | 5 | 6 | 7;
 export type MatchStatus = "pending" | "ready" | "completed";
-export type MatchSongSlot = "songAId" | "songBId";
 export type MatchCoordinate = {
   roundNumber: number;
   position: number;
@@ -26,12 +25,17 @@ export type Bracket = {
   matches: BracketMatch[];
 };
 
-export type WinnerAdvancement = {
+export type RoundMatchPair = {
+  songAId: string;
+  songBId: string;
+};
+
+export type MatchDecision =
+  { type: "vote"; winnerSongId: string } | { type: "tiebreak" };
+
+export type ResolvedMatchDecision = {
+  winnerSongId: string;
   championSongId: string | null;
-  nextMatch: {
-    coordinate: MatchCoordinate;
-    slot: MatchSongSlot;
-  } | null;
 };
 
 type MatchIdFactory = (coordinate: MatchCoordinate) => string;
@@ -95,11 +99,12 @@ export function createBracket(
   };
 }
 
-export function planWinnerAdvancement(
+export function resolveMatchDecision(
   match: BracketMatch,
   bracketSize: BracketSize,
-  winnerSongId: string,
-): WinnerAdvancement {
+  decision: MatchDecision,
+  random: () => number = Math.random,
+): ResolvedMatchDecision {
   if (match.status === "completed") {
     throw new AppError(
       "MATCH_ALREADY_COMPLETED",
@@ -114,7 +119,20 @@ export function planWinnerAdvancement(
       409,
     );
   }
-  if (![match.songAId, match.songBId].includes(winnerSongId)) {
+  if (!match.songAId || !match.songBId) {
+    throw new AppError(
+      "INVALID_BRACKET_STATE",
+      "O confronto pronto precisa de duas participantes.",
+      500,
+    );
+  }
+
+  const participants = [match.songAId, match.songBId] as const;
+  const winnerSongId =
+    decision.type === "vote"
+      ? decision.winnerSongId
+      : participants[Math.floor(random() * participants.length)];
+  if (!participants.includes(winnerSongId)) {
     throw new AppError(
       "INVALID_MATCH_WINNER",
       "A música vencedora não pertence a este confronto.",
@@ -122,74 +140,10 @@ export function planWinnerAdvancement(
   }
 
   if (match.roundNumber === roundCountFromBracketSize(bracketSize)) {
-    return { championSongId: winnerSongId, nextMatch: null };
+    return { winnerSongId, championSongId: winnerSongId };
   }
 
-  return {
-    championSongId: null,
-    nextMatch: {
-      coordinate: {
-        roundNumber: match.roundNumber + 1,
-        position: Math.ceil(match.position / 2),
-      },
-      slot: match.position % 2 === 1 ? "songAId" : "songBId",
-    },
-  };
-}
-
-export function advanceWinner(
-  bracket: Bracket,
-  matchId: string,
-  winnerSongId: string,
-): Bracket {
-  const match = bracket.matches.find(({ id }) => id === matchId);
-  if (!match) {
-    throw new AppError(
-      "MATCH_NOT_FOUND",
-      "Confronto não encontrado nesta chave.",
-      404,
-    );
-  }
-  const advancement = planWinnerAdvancement(
-    match,
-    bracket.bracketSize,
-    winnerSongId,
-  );
-
-  const matches = bracket.matches.map((item) =>
-    item.id === matchId
-      ? {
-          ...item,
-          winnerSongId,
-          status: "completed" as const,
-        }
-      : { ...item },
-  );
-  if (advancement.championSongId) {
-    return {
-      ...bracket,
-      status: "completed",
-      championSongId: advancement.championSongId,
-      matches,
-    };
-  }
-
-  const { coordinate, slot } = advancement.nextMatch!;
-  const nextMatchIndex = matches.findIndex(
-    ({ roundNumber, position }) =>
-      roundNumber === coordinate.roundNumber &&
-      position === coordinate.position,
-  );
-  const nextMatch = matches[nextMatchIndex];
-  const advancedMatch = { ...nextMatch, [slot]: winnerSongId };
-
-  matches[nextMatchIndex] = {
-    ...advancedMatch,
-    status:
-      advancedMatch.songAId && advancedMatch.songBId ? "ready" : "pending",
-  };
-
-  return { ...bracket, matches };
+  return { winnerSongId, championSongId: null };
 }
 
 export function selectSongsForSession<T>(
@@ -205,7 +159,38 @@ export function selectSongsForSession<T>(
     );
   }
 
-  const shuffled = [...songs];
+  return shuffleItems(songs, random).slice(0, bracketSize);
+}
+
+export function shuffleRoundWinners(
+  winners: readonly string[],
+  random: () => number = Math.random,
+): string[] {
+  return shuffleItems(winners, random);
+}
+
+export function pairRoundWinners(
+  winnerSongIds: readonly string[],
+): RoundMatchPair[] {
+  if (
+    winnerSongIds.length % 2 !== 0 ||
+    new Set(winnerSongIds).size !== winnerSongIds.length
+  ) {
+    throw new AppError(
+      "INVALID_ROUND_WINNERS",
+      "As vencedoras da rodada não formam pares únicos.",
+      500,
+    );
+  }
+
+  return Array.from({ length: winnerSongIds.length / 2 }, (_, index) => ({
+    songAId: winnerSongIds[index * 2],
+    songBId: winnerSongIds[index * 2 + 1],
+  }));
+}
+
+function shuffleItems<T>(items: readonly T[], random: () => number): T[] {
+  const shuffled = [...items];
   for (let index = shuffled.length - 1; index > 0; index -= 1) {
     const randomIndex = Math.floor(random() * (index + 1));
     [shuffled[index], shuffled[randomIndex]] = [
@@ -214,5 +199,5 @@ export function selectSongsForSession<T>(
     ];
   }
 
-  return shuffled.slice(0, bracketSize);
+  return shuffled;
 }

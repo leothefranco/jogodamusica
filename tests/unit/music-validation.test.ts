@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  bracketSizeSchema,
   getSupportedBracketSizes,
   getThemePublishability,
   themeSongInputSchema,
@@ -123,28 +124,38 @@ describe("duração e trecho", () => {
 });
 
 describe("publicação de tema", () => {
+  it.each([64, 128] as const)(
+    "aceita a modalidade de %i músicas",
+    (bracketSize) => {
+      expect(bracketSizeSchema.safeParse(bracketSize).success).toBe(true);
+    },
+  );
+
+  it.each([3, 256])("rejeita a modalidade inválida %i", (bracketSize) => {
+    expect(bracketSizeSchema.safeParse(bracketSize).success).toBe(false);
+  });
+
   it("informa quantas músicas faltam", () => {
-    expect(getThemePublishability(8, 5)).toEqual({
+    expect(getThemePublishability(3)).toEqual({
       canPublish: false,
-      missingSongCount: 3,
+      missingSongCount: 1,
     });
   });
 
-  it("libera publicação com músicas suficientes", () => {
-    expect(getThemePublishability(4, 6)).toEqual({
+  it("libera publicação a partir de quatro músicas", () => {
+    expect(getThemePublishability(4)).toEqual({
       canPublish: true,
       missingSongCount: 0,
     });
   });
 
-  it("valida slug, URL e tamanho de chave", () => {
+  it("valida tema sem modalidade padrão", () => {
     expect(
       themeInputSchema.safeParse({
         name: "Clássicos",
         slug: "classicos",
         description: "",
         coverUrl: "https://example.com/capa.jpg",
-        defaultBracketSize: "16",
       }).success,
     ).toBe(true);
 
@@ -154,7 +165,6 @@ describe("publicação de tema", () => {
         slug: "Slug Inválido",
         description: "",
         coverUrl: "javascript:alert(1)",
-        defaultBracketSize: "10",
       }).success,
     ).toBe(false);
   });
@@ -166,7 +176,9 @@ describe("publicação de tema", () => {
     [8, [4, 8]],
     [16, [4, 8, 16]],
     [32, [4, 8, 16, 32]],
-    [200, [4, 8, 16, 32]],
+    [64, [4, 8, 16, 32, 64]],
+    [128, [4, 8, 16, 32, 64, 128]],
+    [200, [4, 8, 16, 32, 64, 128]],
   ])("deriva modalidades para %i músicas ativas", (count, expected) => {
     expect(getSupportedBracketSizes(count)).toEqual(expected);
   });

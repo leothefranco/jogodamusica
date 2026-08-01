@@ -11,12 +11,11 @@ import {
   themes,
   themeSongs,
 } from "@/db/schema";
-import type { MatchCoordinate, MatchSongSlot } from "@/domain/bracket";
 import { bracketSizeSchema } from "@/domain/music/content-validation";
 import { AppError } from "@/lib/errors";
 import type {
   GameCreationRepository,
-  GameVoteRepository,
+  GameDecisionRepository,
   NewGameMatch,
   NewGameSession,
 } from "@/server/services/game-service";
@@ -126,27 +125,6 @@ async function getMatchUsing(
   return match ?? null;
 }
 
-async function getMatchAtUsing(
-  transaction: Transaction,
-  sessionId: string,
-  roundNumber: number,
-  position: number,
-): Promise<PersistedGameMatch | null> {
-  const [match] = await transaction
-    .select(matchSelection)
-    .from(gameMatches)
-    .where(
-      and(
-        eq(gameMatches.sessionId, sessionId),
-        eq(gameMatches.roundNumber, roundNumber),
-        eq(gameMatches.position, position),
-      ),
-    )
-    .limit(1);
-
-  return match ?? null;
-}
-
 export async function getGameStateRecord(
   sessionId: string,
 ): Promise<GameState | null> {
@@ -244,9 +222,9 @@ export async function withGameCreationTransaction<T>(
   });
 }
 
-export async function withGameVoteTransaction<T>(
+export async function withGameDecisionTransaction<T>(
   sessionId: string,
-  operation: (repository: GameVoteRepository) => Promise<T>,
+  operation: (repository: GameDecisionRepository) => Promise<T>,
 ): Promise<T> {
   return getDatabase().transaction(async (transaction) => {
     await transaction.execute(
@@ -256,8 +234,6 @@ export async function withGameVoteTransaction<T>(
     return operation({
       getSession: () => getSessionUsing(transaction, sessionId),
       getMatch: (matchId) => getMatchUsing(transaction, sessionId, matchId),
-      getMatchAt: ({ roundNumber, position }: MatchCoordinate) =>
-        getMatchAtUsing(transaction, sessionId, roundNumber, position),
       async completeMatch(matchId, winnerSongId, completedAt) {
         const completed = await transaction
           .update(gameMatches)
@@ -283,52 +259,6 @@ export async function withGameVoteTransaction<T>(
           );
         }
       },
-      async placeSongInMatch(
-        matchId: string,
-        slot: MatchSongSlot,
-        songId: string,
-      ) {
-        const match = await getMatchUsing(transaction, sessionId, matchId);
-        if (!match) {
-          throw new AppError(
-            "INVALID_BRACKET_STATE",
-            "O próximo confronto da chave não foi encontrado.",
-            500,
-          );
-        }
-        const values =
-          slot === "songAId"
-            ? {
-                songAId: songId,
-                status: match.songBId
-                  ? ("ready" as const)
-                  : ("pending" as const),
-              }
-            : {
-                songBId: songId,
-                status: match.songAId
-                  ? ("ready" as const)
-                  : ("pending" as const),
-              };
-        const advanced = await transaction
-          .update(gameMatches)
-          .set({ ...values, updatedAt: new Date() })
-          .where(
-            and(
-              eq(gameMatches.sessionId, sessionId),
-              eq(gameMatches.id, matchId),
-              eq(gameMatches.status, "pending"),
-            ),
-          )
-          .returning({ id: gameMatches.id });
-        if (advanced.length === 0) {
-          throw new AppError(
-            "INVALID_BRACKET_STATE",
-            "A vencedora não pôde avançar para o próximo confronto.",
-            409,
-          );
-        }
-      },
       async hasIncompleteMatchesInRound(roundNumber) {
         const [match] = await transaction
           .select({ id: gameMatches.id })
@@ -342,6 +272,77 @@ export async function withGameVoteTransaction<T>(
           )
           .limit(1);
         return Boolean(match);
+      },
+      async getWinnerSongIdsInRound(roundNumber) {
+        const roundMatches = await transaction
+          .select({ winnerSongId: gameMatches.winnerSongId })
+          .from(gameMatches)
+          .where(
+            and(
+              eq(gameMatches.sessionId, sessionId),
+              eq(gameMatches.roundNumber, roundNumber),
+              eq(gameMatches.status, "completed"),
+            ),
+          )
+          .orderBy(asc(gameMatches.position));
+        const winnerSongIds = roundMatches.flatMap(({ winnerSongId }) =>
+          winnerSongId ? [winnerSongId] : [],
+        );
+        if (winnerSongIds.length !== roundMatches.length) {
+          throw new AppError(
+            "INVALID_BRACKET_STATE",
+            "Uma rodada concluída possui confronto sem vencedora.",
+            500,
+          );
+        }
+        return winnerSongIds;
+      },
+      async populateRound(roundNumber, pairs, populatedAt) {
+        const roundMatches = await transaction
+          .select({ id: gameMatches.id })
+          .from(gameMatches)
+          .where(
+            and(
+              eq(gameMatches.sessionId, sessionId),
+              eq(gameMatches.roundNumber, roundNumber),
+              eq(gameMatches.status, "pending"),
+            ),
+          )
+          .orderBy(asc(gameMatches.position));
+        if (roundMatches.length !== pairs.length) {
+          throw new AppError(
+            "INVALID_BRACKET_STATE",
+            "A quantidade de pares não corresponde à próxima rodada.",
+            500,
+          );
+        }
+
+        for (const [index, match] of roundMatches.entries()) {
+          const pair = pairs[index];
+          const updatedRows = await transaction
+            .update(gameMatches)
+            .set({
+              songAId: pair.songAId,
+              songBId: pair.songBId,
+              status: "ready",
+              updatedAt: populatedAt,
+            })
+            .where(
+              and(
+                eq(gameMatches.sessionId, sessionId),
+                eq(gameMatches.id, match.id),
+                eq(gameMatches.status, "pending"),
+              ),
+            )
+            .returning({ id: gameMatches.id });
+          if (updatedRows.length === 0) {
+            throw new AppError(
+              "INVALID_BRACKET_STATE",
+              "A próxima rodada não pôde ser formada.",
+              409,
+            );
+          }
+        }
       },
       async setCurrentRound(roundNumber) {
         await transaction

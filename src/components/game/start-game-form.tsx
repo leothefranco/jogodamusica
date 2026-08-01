@@ -12,22 +12,24 @@ type StartGameFormProps = {
   themeId: string;
   activeSongCount: number;
   supportedBracketSizes: BracketSize[];
-  selectedBracketSize: BracketSize;
 };
 
 export function StartGameForm({
   themeId,
   activeSongCount,
   supportedBracketSizes,
-  selectedBracketSize,
 }: StartGameFormProps) {
   const router = useRouter();
-  const [bracketSize, setBracketSize] =
-    useState<BracketSize>(selectedBracketSize);
+  const [bracketSize, setBracketSize] = useState<BracketSize | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
 
   async function startGame() {
+    if (bracketSize === null) {
+      setError("Escolha uma modalidade antes de iniciar.");
+      return;
+    }
+
     setError(null);
     setIsStarting(true);
 
@@ -94,7 +96,7 @@ export function StartGameForm({
         type="button"
         size="lg"
         onClick={startGame}
-        disabled={isStarting}
+        disabled={isStarting || bracketSize === null}
         className="mt-6 min-h-12 w-full rounded-xl bg-violet-300 font-bold text-[#160d25] hover:bg-violet-200"
       >
         {isStarting ? (
@@ -102,7 +104,11 @@ export function StartGameForm({
         ) : (
           <Play aria-hidden="true" />
         )}
-        {isStarting ? "Preparando chave..." : "Iniciar partida"}
+        {isStarting
+          ? "Preparando chave..."
+          : bracketSize === null
+            ? "Escolha uma modalidade"
+            : "Iniciar partida"}
       </Button>
       {error ? (
         <p className="mt-3 text-sm text-red-200" role="alert">

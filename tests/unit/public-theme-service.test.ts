@@ -8,12 +8,11 @@ const theme = {
   slug: "classicos-da-festa",
   description: "Músicas para cantar junto.",
   coverUrl: null,
-  defaultBracketSize: 16 as const,
   activeSongCount: 10,
 };
 
 describe("catálogo público de temas", () => {
-  it("expõe somente modalidades compatíveis e escolhe um padrão válido", async () => {
+  it("expõe modalidades compatíveis sem escolher um padrão", async () => {
     const service = createPublicThemeService({
       listPlayableThemes: vi.fn().mockResolvedValue([theme]),
       findPlayableThemeBySlug: vi.fn(),
@@ -23,7 +22,6 @@ describe("catálogo público de temas", () => {
       {
         ...theme,
         supportedBracketSizes: [4, 8],
-        selectedBracketSize: 8,
       },
     ]);
   });

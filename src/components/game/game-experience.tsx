@@ -248,11 +248,11 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
     setActivePlayer(null);
     try {
       const response = await fetch(
-        `/api/games/${state.session.id}/matches/${currentMatch.id}/vote`,
+        `/api/games/${state.session.id}/matches/${currentMatch.id}/decision`,
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ winnerSongId: song.songId }),
+          body: JSON.stringify({ type: "vote", winnerSongId: song.songId }),
         },
       );
       const payload = (await response.json()) as GameState & {

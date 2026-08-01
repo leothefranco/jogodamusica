@@ -58,7 +58,6 @@ function createService(options?: {
       description: null,
       coverUrl: null,
       isActive: false,
-      defaultBracketSize: 4,
       activeSongCount: 0,
       totalSongCount: 0,
       updatedAt: new Date(),

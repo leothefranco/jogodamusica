@@ -4,7 +4,6 @@ export const demoThemeSeed = {
   slug: "tema-de-demonstracao",
   description:
     "Tema inativo criado pelo seed. Adicione músicas antes de publicá-lo.",
-  defaultBracketSize: 4,
   isActive: false,
 } as const;
 

@@ -1,18 +1,20 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  advanceWinner,
   bracketSizeFromRoundCount,
   createBracket,
+  pairRoundWinners,
+  resolveMatchDecision,
   roundCountFromBracketSize,
   selectSongsForSession,
+  shuffleRoundWinners,
 } from "@/domain/bracket";
 
 const songIds = (count: number) =>
   Array.from({ length: count }, (_, index) => `song-${index + 1}`);
 
 describe("domínio do chaveamento", () => {
-  it.each([4, 8, 16, 32] as const)(
+  it.each([4, 8, 16, 32, 64, 128] as const)(
     "cria a chave de %i músicas com N - 1 confrontos",
     (bracketSize) => {
       const bracket = createBracket(songIds(bracketSize), bracketSize);
@@ -46,74 +48,51 @@ describe("domínio do chaveamento", () => {
     );
   });
 
-  it("avança vencedores para os lados corretos do confronto seguinte", () => {
+  it("identifica somente a vencedora da final como campeã", () => {
     const bracket = createBracket(songIds(4), 4);
-    const [firstMatch, secondMatch] = bracket.matches.filter(
-      ({ roundNumber }) => roundNumber === 1,
-    );
+    const firstMatch = bracket.matches[0];
+    const final = {
+      ...bracket.matches.find(({ roundNumber }) => roundNumber === 2)!,
+      songAId: "song-1",
+      songBId: "song-2",
+      status: "ready" as const,
+    };
 
-    const afterFirstVote = advanceWinner(
-      bracket,
-      firstMatch.id,
-      firstMatch.songBId!,
-    );
-    const finalAfterFirstVote = afterFirstVote.matches.find(
-      ({ roundNumber }) => roundNumber === 2,
-    );
-
-    expect(finalAfterFirstVote).toMatchObject({
-      songAId: firstMatch.songBId,
-      songBId: null,
-      status: "pending",
-    });
-
-    const afterSecondVote = advanceWinner(
-      afterFirstVote,
-      secondMatch.id,
-      secondMatch.songAId!,
-    );
     expect(
-      afterSecondVote.matches.find(({ roundNumber }) => roundNumber === 2),
-    ).toMatchObject({
-      songAId: firstMatch.songBId,
-      songBId: secondMatch.songAId,
-      status: "ready",
-    });
-  });
-
-  it("conclui a chave quando a final recebe um voto", () => {
-    let bracket = createBracket(songIds(4), 4);
-    for (const match of bracket.matches.filter(
-      ({ roundNumber }) => roundNumber === 1,
-    )) {
-      bracket = advanceWinner(bracket, match.id, match.songAId!);
-    }
-    const final = bracket.matches.find(({ roundNumber }) => roundNumber === 2)!;
-
-    bracket = advanceWinner(bracket, final.id, final.songBId!);
-
-    expect(bracket).toMatchObject({
-      status: "completed",
-      championSongId: final.songBId,
-    });
+      resolveMatchDecision(firstMatch, bracket.bracketSize, {
+        type: "vote",
+        winnerSongId: firstMatch.songAId!,
+      }),
+    ).toEqual({ winnerSongId: firstMatch.songAId, championSongId: null });
+    expect(
+      resolveMatchDecision(final, bracket.bracketSize, {
+        type: "vote",
+        winnerSongId: final.songBId,
+      }),
+    ).toEqual({ winnerSongId: "song-2", championSongId: "song-2" });
   });
 
   it("rejeita uma vencedora que não participa do confronto", () => {
     const bracket = createBracket(songIds(4), 4);
 
     expect(() =>
-      advanceWinner(bracket, bracket.matches[0].id, "song-intrusa"),
+      resolveMatchDecision(bracket.matches[0], 4, {
+        type: "vote",
+        winnerSongId: "song-intrusa",
+      }),
     ).toThrow("A música vencedora não pertence a este confronto.");
   });
 
   it("rejeita um segundo voto no mesmo confronto", () => {
     const bracket = createBracket(songIds(4), 4);
-    const match = bracket.matches[0];
-    const voted = advanceWinner(bracket, match.id, match.songAId!);
+    const match = { ...bracket.matches[0], status: "completed" as const };
 
-    expect(() => advanceWinner(voted, match.id, match.songAId!)).toThrow(
-      "Este confronto já foi concluído.",
-    );
+    expect(() =>
+      resolveMatchDecision(match, 4, {
+        type: "vote",
+        winnerSongId: match.songAId!,
+      }),
+    ).toThrow("Este confronto já foi concluído.");
   });
 });
 
@@ -123,6 +102,8 @@ describe("tamanho da partida", () => {
     [3, 8],
     [4, 16],
     [5, 32],
+    [6, 64],
+    [7, 128],
   ] as const)(
     "converte %i rodadas em uma chave de %i músicas",
     (rounds, size) => {
@@ -146,5 +127,28 @@ describe("sorteio da sessão", () => {
     expect(() => selectSongsForSession(songIds(3), 4)).toThrow(
       "O tema não possui músicas ativas suficientes para uma chave de 4.",
     );
+  });
+});
+
+describe("sorteio de rodada", () => {
+  it("embaralha todas as vencedoras sem alterar a lista recebida", () => {
+    const winners = ["winner-1", "winner-2", "winner-3", "winner-4"];
+
+    expect(shuffleRoundWinners(winners, () => 0)).toEqual([
+      "winner-2",
+      "winner-3",
+      "winner-4",
+      "winner-1",
+    ]);
+    expect(winners).toEqual(["winner-1", "winner-2", "winner-3", "winner-4"]);
+  });
+
+  it("forma os pares da próxima rodada na ordem sorteada", () => {
+    expect(
+      pairRoundWinners(["winner-2", "winner-3", "winner-4", "winner-1"]),
+    ).toEqual([
+      { songAId: "winner-2", songBId: "winner-3" },
+      { songAId: "winner-4", songBId: "winner-1" },
+    ]);
   });
 });
