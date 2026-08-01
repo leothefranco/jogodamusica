@@ -47,11 +47,19 @@ function SongCard({
   voting: boolean;
 }) {
   return (
-    <article className="rounded-3xl border border-white/10 bg-white/[0.035] p-4 sm:p-5">
-      <p className="text-xs font-bold tracking-[0.16em] text-violet-300 uppercase">
-        Música {label}
-      </p>
-      <div className="mt-3">
+    <article className="game-song-card rounded-2xl border border-white/10 bg-white/[0.035] p-2">
+      <div className="flex min-w-0 items-center gap-2 px-1 pb-1.5">
+        <p className="shrink-0 text-xs font-bold tracking-[0.12em] text-violet-300 uppercase">
+          Música {label}
+        </p>
+        <h2 className="min-w-0 flex-1 truncate text-sm font-bold">
+          {song.title}
+        </h2>
+        <p className="max-w-[35%] truncate text-xs text-white/50">
+          {song.artist}
+        </p>
+      </div>
+      <div className="game-player-wrap relative">
         <YouTubePlayer
           ref={playerRef}
           label={label}
@@ -61,40 +69,49 @@ function SongCard({
           onPlayingChange={onPlayingChange}
           onStarted={onStarted}
         />
+        <p
+          role={playerError ? "alert" : "status"}
+          aria-live="polite"
+          className="pointer-events-none absolute inset-x-2 top-2 z-10 rounded-lg bg-black/85 px-2 text-xs text-rose-100 empty:hidden"
+        >
+          {playerError}
+        </p>
+        <div className="absolute inset-x-2 bottom-2 z-10 flex gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={onTogglePlayback}
+            aria-label={
+              isPlaying
+                ? `Pausar música ${label}`
+                : `Reproduzir música ${label}`
+            }
+            aria-pressed={isPlaying}
+            className="min-h-11 min-w-0 flex-1 rounded-xl bg-black/85 px-3 backdrop-blur-sm"
+          >
+            {isPlaying ? (
+              <Pause aria-hidden="true" />
+            ) : (
+              <Play aria-hidden="true" />
+            )}
+            {isPlaying ? `Pausar ${label}` : `Reproduzir ${label}`}
+          </Button>
+          <Button
+            type="button"
+            onClick={onVote}
+            aria-label={`Votar na música ${label}`}
+            disabled={!canVote || voting}
+            className="min-h-11 min-w-0 flex-1 rounded-xl bg-violet-300 px-3 font-bold text-[#160d25] hover:bg-violet-200"
+          >
+            {voting ? (
+              <LoaderCircle className="animate-spin" aria-hidden="true" />
+            ) : (
+              <Check aria-hidden="true" />
+            )}
+            Votar {label}
+          </Button>
+        </div>
       </div>
-      <h2 className="mt-4 text-xl font-bold text-balance">{song.title}</h2>
-      <p className="mt-1 text-sm text-white/50">{song.artist}</p>
-
-      <Button
-        type="button"
-        variant="secondary"
-        onClick={onTogglePlayback}
-        aria-pressed={isPlaying}
-        className="mt-5 min-h-11 w-full rounded-xl"
-      >
-        {isPlaying ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
-        {isPlaying ? `Pausar música ${label}` : `Reproduzir música ${label}`}
-      </Button>
-      <p
-        role={playerError ? "alert" : "status"}
-        aria-live="polite"
-        className="mt-2 min-h-5 text-sm text-rose-200"
-      >
-        {playerError}
-      </p>
-      <Button
-        type="button"
-        onClick={onVote}
-        disabled={!canVote || voting}
-        className="mt-3 min-h-12 w-full rounded-xl bg-violet-300 font-bold text-[#160d25] hover:bg-violet-200"
-      >
-        {voting ? (
-          <LoaderCircle className="animate-spin" aria-hidden="true" />
-        ) : (
-          <Check aria-hidden="true" />
-        )}
-        Votar na música {label}
-      </Button>
     </article>
   );
 }
@@ -309,12 +326,16 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
     state.progress.totalMatches === 0
       ? 0
       : (state.progress.completedMatches / state.progress.totalMatches) * 100;
+  const matchPlayers = [
+    { label: "A" as const, song: songA, playerRef: playerARef },
+    { label: "B" as const, song: songB, playerRef: playerBRef },
+  ];
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#08080f] px-4 py-6 text-white sm:px-8">
+    <main className="game-screen relative bg-[#08080f] text-white">
       <div className="grid-fade pointer-events-none absolute inset-0 opacity-30" />
-      <div className="relative mx-auto max-w-6xl">
-        <header className="flex flex-wrap items-center justify-between gap-3">
+      <div className="game-shell relative mx-auto">
+        <header className="game-header flex items-center justify-between gap-2">
           <div>
             <Link
               href="/"
@@ -322,74 +343,53 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
             >
               Jogo da Música
             </Link>
-            <h1 className="mt-1 text-xl font-black">{state.theme.name}</h1>
+            <h1 className="truncate text-lg font-black">{state.theme.name}</h1>
           </div>
-          <p className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white/65">
+          <p className="shrink-0 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/65">
             {roundLabel}
           </p>
         </header>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
-          <SongCard
-            key={`${currentMatch.id}-A`}
-            label="A"
-            song={songA}
-            isPlaying={
-              activePlayer?.matchId === currentMatch.id &&
-              activePlayer.label === "A"
-            }
-            onTogglePlayback={() => togglePlayback("A")}
-            onVote={() => void vote(songA)}
-            playerError={
-              playerErrors.A?.matchId === currentMatch.id
-                ? playerErrors.A.message
-                : null
-            }
-            playerRef={playerARef}
-            onPlayerError={(errorCode) =>
-              reportPlayerError("A", songA.songId, errorCode)
-            }
-            onPlayerLoadError={() => reportPlayerLoadError("A", songA.songId)}
-            onPlayingChange={(playing) => playingChanged("A", playing)}
-            onStarted={markPlaybackAsStarted}
-            canVote={canVote}
-            voting={isVoting}
-          />
-          <SongCard
-            key={`${currentMatch.id}-B`}
-            label="B"
-            song={songB}
-            isPlaying={
-              activePlayer?.matchId === currentMatch.id &&
-              activePlayer.label === "B"
-            }
-            onTogglePlayback={() => togglePlayback("B")}
-            onVote={() => void vote(songB)}
-            playerError={
-              playerErrors.B?.matchId === currentMatch.id
-                ? playerErrors.B.message
-                : null
-            }
-            playerRef={playerBRef}
-            onPlayerError={(errorCode) =>
-              reportPlayerError("B", songB.songId, errorCode)
-            }
-            onPlayerLoadError={() => reportPlayerLoadError("B", songB.songId)}
-            onPlayingChange={(playing) => playingChanged("B", playing)}
-            onStarted={markPlaybackAsStarted}
-            canVote={canVote}
-            voting={isVoting}
-          />
+        <div className="game-matchup grid gap-2">
+          {matchPlayers.map(({ label, song, playerRef }) => (
+            <SongCard
+              key={`${currentMatch.id}-${label}`}
+              label={label}
+              song={song}
+              isPlaying={
+                activePlayer?.matchId === currentMatch.id &&
+                activePlayer.label === label
+              }
+              onTogglePlayback={() => togglePlayback(label)}
+              onVote={() => void vote(song)}
+              playerError={
+                playerErrors[label]?.matchId === currentMatch.id
+                  ? playerErrors[label].message
+                  : null
+              }
+              playerRef={playerRef}
+              onPlayerError={(errorCode) =>
+                reportPlayerError(label, song.songId, errorCode)
+              }
+              onPlayerLoadError={() =>
+                reportPlayerLoadError(label, song.songId)
+              }
+              onPlayingChange={(playing) => playingChanged(label, playing)}
+              onStarted={markPlaybackAsStarted}
+              canVote={canVote}
+              voting={isVoting}
+            />
+          ))}
         </div>
 
         <section
           aria-label="Estado do confronto"
-          className="mx-auto mt-5 max-w-3xl"
+          className="game-status mx-auto w-full"
         >
           <p
             role={message ? "alert" : "status"}
             aria-live="polite"
-            className="mt-3 min-h-6 text-center text-sm text-white/55"
+            className="min-h-5 truncate text-center text-xs text-white/55"
           >
             {message ??
               (canVote
@@ -398,7 +398,7 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
           </p>
         </section>
 
-        <section aria-label="Progresso da partida" className="mt-6">
+        <section aria-label="Progresso da partida" className="game-progress">
           <div className="flex justify-between text-xs text-white/45">
             <span>Progresso do chaveamento</span>
             <span>
@@ -411,7 +411,7 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
             aria-valuemin={0}
             aria-valuemax={state.progress.totalMatches}
             aria-valuenow={state.progress.completedMatches}
-            className="mt-2 h-2 overflow-hidden rounded-full bg-white/8"
+            className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/8"
           >
             <div
               className="h-full rounded-full bg-gradient-to-r from-violet-400 to-fuchsia-400 transition-[width]"
@@ -420,7 +420,7 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
           </div>
         </section>
 
-        <div className="mt-8 text-center">
+        <div className="game-abandon text-center">
           <button
             type="button"
             onClick={() => void abandon()}

@@ -15,8 +15,10 @@ export default defineConfig({
   },
   webServer: {
     command: `node node_modules/next/dist/bin/next dev --port ${port}`,
+    env: { E2E_TEST_MODE: "1" },
     url: `http://localhost:${port}/icon.svg`,
     reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
   },
   projects: [
     {

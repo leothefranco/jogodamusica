@@ -120,10 +120,13 @@ test.beforeEach(async ({ page }) => {
 test("mostra dois players associados às músicas sem controles nativos", async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 390, height: 700 });
   await page.goto("/e2e-test/dois-players");
 
-  await expect(page.getByLabel("Player da música A")).toBeVisible();
-  await expect(page.getByLabel("Player da música B")).toBeVisible();
+  const playerA = page.getByLabel("Player da música A");
+  const playerB = page.getByLabel("Player da música B");
+  await expect(playerA).toBeVisible();
+  await expect(playerB).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Reproduzir música A" }),
   ).toBeEnabled();
@@ -136,6 +139,50 @@ test("mostra dois players associados às músicas sem controles nativos", async 
       expect.objectContaining({ controls: 0, playsinline: 1 }),
       expect.objectContaining({ controls: 0, playsinline: 1 }),
     ]);
+
+  const [boxA, boxB] = await Promise.all([
+    playerA.boundingBox(),
+    playerB.boundingBox(),
+  ]);
+  expect(boxA).not.toBeNull();
+  expect(boxB).not.toBeNull();
+  expect(boxA!.width).toBeGreaterThanOrEqual(200);
+  expect(boxA!.height).toBeGreaterThanOrEqual(200);
+  expect(boxB!.width).toBeGreaterThanOrEqual(200);
+  expect(boxB!.height).toBeGreaterThanOrEqual(200);
+  expect(boxA!.y + boxA!.height).toBeLessThanOrEqual(boxB!.y);
+  await expect
+    .poll(() =>
+      page.evaluate(() => ({
+        viewportHeight: window.innerHeight,
+        contentHeight: document.documentElement.scrollHeight,
+      })),
+    )
+    .toEqual({ viewportHeight: 700, contentHeight: 700 });
+
+  await page.setViewportSize({ width: 390, height: 560 });
+  await expect
+    .poll(() =>
+      page.evaluate(() => ({
+        viewportHeight: window.innerHeight,
+        contentHeight: document.documentElement.scrollHeight,
+      })),
+    )
+    .toMatchObject({ viewportHeight: 560 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollHeight > window.innerHeight,
+    ),
+  ).toBe(true);
+  await page.keyboard.press("End");
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY))
+    .toBeGreaterThan(0);
+  await expect(
+    page.getByRole("button", {
+      name: "Abandonar partida e voltar ao tema",
+    }),
+  ).toBeInViewport();
 });
 
 test("alterna a reprodução e retoma cada música da própria posição", async ({
