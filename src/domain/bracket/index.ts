@@ -1,7 +1,7 @@
 import type { BracketSize } from "@/domain/music/content-validation";
 import { AppError } from "@/lib/errors";
 
-export type RoundCount = 2 | 3 | 4 | 5;
+export type RoundCount = 2 | 3 | 4 | 5 | 6 | 7;
 export type MatchStatus = "pending" | "ready" | "completed";
 export type MatchCoordinate = {
   roundNumber: number;

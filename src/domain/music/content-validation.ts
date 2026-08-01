@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { AppError } from "@/lib/errors";
 
-export const bracketSizes = [4, 8, 16, 32] as const;
+export const bracketSizes = [4, 8, 16, 32, 64, 128] as const;
 export type BracketSize = (typeof bracketSizes)[number];
 
 export const bracketSizeSchema = z.coerce
@@ -10,7 +10,7 @@ export const bracketSizeSchema = z.coerce
   .refine(
     (value): value is BracketSize =>
       bracketSizes.includes(value as BracketSize),
-    "Escolha 4, 8, 16 ou 32 músicas.",
+    "Escolha 4, 8, 16, 32, 64 ou 128 músicas.",
   );
 
 const optionalText = (maximum: number) =>

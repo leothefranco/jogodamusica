@@ -19,7 +19,7 @@ O projeto deve ser criado de forma incremental, seguindo as fases deste document
 - Participação: todos votam em um único aparelho compartilhado.
 - Temas: lista fixa, criada e gerenciada por administradores.
 - Catálogo do tema: pode conter mais músicas ativas do que uma partida utilizará.
-- Formato da partida: o jogador escolhe entre 2 e 5 rodadas, equivalentes a chaves de 4, 8, 16 ou 32 músicas.
+- Formato da partida: o jogador escolhe entre 2 e 7 rodadas, equivalentes a chaves de 4, 8, 16, 32, 64 ou 128 músicas.
 - Seleção da partida: sorteio sem repetição entre as músicas ativas; excedentes ficam fora daquela sessão.
 - Provedor de mídia inicial: YouTube.
 - Reprodução: YouTube IFrame Player API; sem download, extração ou hospedagem de áudio.
@@ -62,7 +62,7 @@ Criar uma experiência social rápida, clara e divertida para grupos compararem 
 - Página inicial com identidade do produto e lista de temas ativos.
 - Página de detalhes do tema com descrição, quantidade de músicas e quantidades de rodadas disponíveis.
 - Início de nova partida.
-- Quantidades suportadas: 2, 3, 4 ou 5 rodadas, equivalentes respectivamente a 4, 8, 16 ou 32 músicas.
+- Quantidades suportadas: 2, 3, 4, 5, 6 ou 7 rodadas, equivalentes respectivamente a 4, 8, 16, 32, 64 ou 128 músicas.
 - Seleção aleatória de músicas ativas quando o tema tiver mais músicas que o tamanho escolhido.
 - Músicas excedentes permanecem no tema e podem ser sorteadas em partidas futuras.
 - Embaralhamento aleatório das posições iniciais.
@@ -101,7 +101,7 @@ Criar uma experiência social rápida, clara e divertida para grupos compararem 
 
 1. O jogador escolhe um tema ativo.
 2. O sistema apresenta somente quantidades de rodadas compatíveis com a quantidade de músicas ativas.
-3. A interface deve mostrar a equivalência de forma explícita: `2 rodadas · 4 músicas`, `3 rodadas · 8 músicas`, `4 rodadas · 16 músicas` ou `5 rodadas · 32 músicas`.
+3. A interface deve mostrar a equivalência de forma explícita: `2 rodadas · 4 músicas`, `3 rodadas · 8 músicas`, `4 rodadas · 16 músicas`, `5 rodadas · 32 músicas`, `6 rodadas · 64 músicas` ou `7 rodadas · 128 músicas`.
 4. O tamanho padrão do tema aparece pré-selecionado quando for compatível.
 5. Ao iniciar, o servidor cria uma sessão e sorteia, sem repetição, exatamente a quantidade de músicas exigida pela escolha.
 6. Se o tema tiver músicas ativas excedentes, elas ficam fora somente daquela sessão e continuam elegíveis para partidas futuras.
@@ -381,7 +381,7 @@ Usar UUIDs gerados no banco e datas com fuso em `timestamptz`.
 | `description` | text | opcional |
 | `cover_url` | text | opcional |
 | `is_active` | boolean | padrão `false` |
-| `default_bracket_size` | integer | 4, 8, 16 ou 32 |
+| `default_bracket_size` | integer | 4, 8, 16, 32, 64 ou 128 |
 | `created_at` | timestamptz | obrigatório |
 | `updated_at` | timestamptz | obrigatório |
 
@@ -425,7 +425,7 @@ PK composta em `(theme_id, song_id)`.
 |---|---|---|
 | `id` | uuid | PK |
 | `theme_id` | uuid | FK |
-| `bracket_size` | integer | 4, 8, 16 ou 32 |
+| `bracket_size` | integer | 4, 8, 16, 32, 64 ou 128 |
 | `status` | enum | `active`, `completed`, `abandoned` |
 | `current_round` | integer | padrão 1 |
 | `champion_song_id` | uuid | nullable |
@@ -478,7 +478,7 @@ Criar funções puras e testáveis em `src/domain/bracket`.
 ### 11.1 Criação
 
 ```ts
-createBracket(songIds: string[], bracketSize: 4 | 8 | 16 | 32): Bracket
+createBracket(songIds: string[], bracketSize: 4 | 8 | 16 | 32 | 64 | 128): Bracket
 ```
 
 Regras:
@@ -779,7 +779,7 @@ Adicionar `tsx` como dependência de desenvolvimento caso seja usado pelo seed.
 
 ### 19.1 Unitários
 
-- criação de chave para 4, 8, 16 e 32 músicas;
+- criação de chave para 4, 8, 16, 32, 64 e 128 músicas;
 - quantidade total de confrontos igual a N - 1;
 - avanço para a posição correta;
 - conclusão da final;
@@ -788,7 +788,7 @@ Adicionar `tsx` como dependência de desenvolvimento caso seja usado pelo seed.
 - validação dos tempos de trecho;
 - validação de URL e ID do YouTube;
 - cálculo dos tamanhos disponíveis por tema.
-- conversão entre 2–5 rodadas e chaves de 4–32 músicas;
+- conversão entre 2–7 rodadas e chaves de 4–128 músicas;
 - sorteio sem repetição quando o tema possui músicas excedentes;
 - normalização de URL/ID e paginação de playlist;
 - classificação de vídeos duplicados, indisponíveis e não incorporáveis.
@@ -839,8 +839,8 @@ O MVP será considerado pronto quando:
 - um tema não puder ser publicado sem músicas suficientes;
 - um tema poder manter mais músicas ativas do que a quantidade usada em uma partida;
 - o jogador escolher entre as quantidades de rodadas compatíveis com o tema;
-- cada sessão sortear exatamente 4, 8, 16 ou 32 músicas distintas conforme a escolha;
-- um jogador iniciar e concluir chaveamentos de 4, 8, 16 e 32 músicas;
+- cada sessão sortear exatamente 4, 8, 16, 32, 64 ou 128 músicas distintas conforme a escolha;
+- um jogador iniciar e concluir chaveamentos de 4, 8, 16, 32, 64 e 128 músicas;
 - a partida sobreviver a uma atualização de página;
 - cada confronto exigir que os dois trechos sejam iniciados antes do voto;
 - votos duplicados não corromperem o chaveamento;
@@ -912,7 +912,7 @@ Progresso verificado no repositório em 28 de julho de 2026:
 - Exibir prévia revisável antes da confirmação.
 - Associar itens elegíveis em lote com resultado parcial e idempotência.
 - Manter catálogo do tema sem limite vinculado ao tamanho padrão da chave.
-- Exibir no painel quantas modalidades o catálogo suporta: 2, 3, 4 e/ou 5 rodadas.
+- Exibir no painel quantas modalidades o catálogo suporta: de 2 a 7 rodadas.
 - Cobrir normalização, paginação, classificação, autorização, cota e importação parcial com testes.
 
 **Saída:** administrador popula um tema grande com uma playlist e entende quais quantidades de rodadas ele suporta.
@@ -929,7 +929,7 @@ atômica do lote.
 
 - Funções puras de chaveamento.
 - Função pura para calcular opções de rodada a partir da quantidade de músicas ativas.
-- Sorteio sem repetição de exatamente 4, 8, 16 ou 32 músicas, preservando as excedentes fora da sessão.
+- Sorteio sem repetição de exatamente 4, 8, 16, 32, 64 ou 128 músicas, preservando as excedentes fora da sessão.
 - Criação transacional de sessão.
 - Registro de voto e avanço.
 - Testes unitários e de integração.
@@ -1048,7 +1048,7 @@ Estas decisões foram adotadas para evitar bloqueio do MVP e podem ser alteradas
 - duração configurável até o fim do vídeo;
 - voto liberado após iniciar ambas as músicas;
 - ausência de desfazer após confirmação;
-- escolha de 2, 3, 4 ou 5 rodadas, equivalentes a chaves de 4, 8, 16 e 32;
+- escolha de 2, 3, 4, 5, 6 ou 7 rodadas, equivalentes a chaves de 4, 8, 16, 32, 64 e 128;
 - catálogo do tema pode superar o tamanho padrão e não possui máximo definido pelo chaveamento;
 - seleção aleatória sem repetição quando houver músicas excedentes;
 - importação de playlist pública ou não listada com revisão e resultado parcial;

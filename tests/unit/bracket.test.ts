@@ -14,7 +14,7 @@ const songIds = (count: number) =>
   Array.from({ length: count }, (_, index) => `song-${index + 1}`);
 
 describe("domínio do chaveamento", () => {
-  it.each([4, 8, 16, 32] as const)(
+  it.each([4, 8, 16, 32, 64, 128] as const)(
     "cria a chave de %i músicas com N - 1 confrontos",
     (bracketSize) => {
       const bracket = createBracket(songIds(bracketSize), bracketSize);
@@ -90,6 +90,8 @@ describe("tamanho da partida", () => {
     [3, 8],
     [4, 16],
     [5, 32],
+    [6, 64],
+    [7, 128],
   ] as const)(
     "converte %i rodadas em uma chave de %i músicas",
     (rounds, size) => {

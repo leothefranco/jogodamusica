@@ -68,8 +68,8 @@ atualiza as modalidades de rodadas suportadas pelo catálogo.
 25. Como administrador, quero ver quantos itens foram adicionados, já existiam
     ou foram ignorados.
 26. Como administrador, quero voltar ao editor do tema após confirmar.
-27. Como administrador, quero ver se o catálogo ativo suporta 2, 3, 4 ou 5
-    rodadas.
+27. Como administrador, quero ver quais modalidades entre 2 e 7 rodadas o
+    catálogo ativo suporta.
 28. Como administrador, quero que prévias repetidas em cache não consumam
     novamente meu limite operacional.
 29. Como operador, quero limitar cada administrador a cinco prévias não
@@ -98,7 +98,7 @@ atualiza as modalidades de rodadas suportadas pelo catálogo.
 - Metadados de origem globais podem ser atualizados.
 - A gravação dos itens elegíveis ocorre em uma única transação por tema.
 - Modalidades suportadas são derivadas da quantidade de músicas ativas:
-  4/8/16/32 músicas correspondem a 2/3/4/5 rodadas.
+  4/8/16/32/64/128 músicas correspondem a 2/3/4/5/6/7 rodadas.
 - Não haverá persistência durável de prévias; uma ausência de cache ainda
   permite a revalidação segura dos IDs selecionados.
 
@@ -110,7 +110,7 @@ atualiza as modalidades de rodadas suportadas pelo catálogo.
   cache e rate limit sem acessar o YouTube real.
 - O seam do serviço de conteúdo verifica revalidação, preservação de
   associações, idempotência, resultado parcial e atomicidade.
-- O helper público de modalidades verifica os limiares 4, 8, 16 e 32.
+- O helper público de modalidades verifica os limiares 4, 8, 16, 32, 64 e 128.
 - Testes observam resultados públicos e usam mocks somente nas fronteiras com
   YouTube, banco e tempo.
 - Os testes existentes das rotas YouTube e do serviço de conteúdo são o padrão

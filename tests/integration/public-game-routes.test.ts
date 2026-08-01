@@ -60,6 +60,38 @@ describe("contratos públicos de partida", () => {
     });
   });
 
+  it.each([64, 128] as const)(
+    "aceita a modalidade de %i músicas",
+    async (bracketSize) => {
+      gameService.createGameSession.mockResolvedValue({ sessionId });
+
+      const response = await createGame(
+        new Request("http://localhost/api/games", {
+          method: "POST",
+          body: JSON.stringify({ themeId, bracketSize }),
+        }),
+      );
+
+      expect(response.status).toBe(201);
+      expect(gameService.createGameSession).toHaveBeenCalledWith({
+        themeId,
+        bracketSize,
+      });
+    },
+  );
+
+  it("rejeita uma modalidade fora das potências de dois suportadas", async () => {
+    const response = await createGame(
+      new Request("http://localhost/api/games", {
+        method: "POST",
+        body: JSON.stringify({ themeId, bracketSize: 3 }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(gameService.createGameSession).not.toHaveBeenCalled();
+  });
+
   it("lista os temas jogáveis", async () => {
     const themes = [
       {

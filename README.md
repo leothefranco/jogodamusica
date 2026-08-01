@@ -108,7 +108,7 @@ diária estiver completamente esgotada.
    a prévia antes de confirmar.
 5. Revise título, artista, início e duração do trecho.
 6. Ative ou desative músicas individualmente.
-7. Confira as modalidades de 2, 3, 4 ou 5 rodadas suportadas pelo catálogo.
+7. Confira as modalidades de 2 a 7 rodadas suportadas pelo catálogo.
 8. Publique o tema quando a quantidade de músicas ativas atingir o tamanho
    padrão do chaveamento.
 
@@ -121,7 +121,7 @@ não exige uma nova migração.
 
 1. Acesse `/` para ver os temas publicados.
 2. Abra um tema e escolha uma das modalidades compatíveis; a interface mostra
-   a equivalência entre 2–5 rodadas e 4–32 músicas.
+   a equivalência entre 2–7 rodadas e 4–128 músicas.
 3. Inicie a partida. O servidor sorteia as músicas e a URL `/jogo/<id>` permite
    retomar o estado após recarregar a página.
 4. Em cada confronto, inicie as duas músicas no player visível do YouTube. O
@@ -219,7 +219,7 @@ módulos exclusivos do servidor.
   escolhida e persiste sessão, snapshots e todos os confrontos em uma transação.
 - O voto bloqueia a sessão, aceita somente uma participante do confronto pronto
   e conclui o confronto, avança a vencedora ou encerra a partida atomicamente.
-- O domínio puro do torneio cria chaves de 4, 8, 16 e 32 músicas e converte entre
+- O domínio puro do torneio cria chaves de 4, 8, 16, 32, 64 e 128 músicas e converte entre
   quantidades de rodadas e tamanhos de chave sem persistir `roundCount`.
 - A área pública usa Server Components para catálogo, detalhes e resultado; a
   interação da partida fica isolada em Client Components.
