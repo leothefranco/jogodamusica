@@ -7,10 +7,12 @@ type YouTubePlayerErrorEvent = YouTubePlayerEvent & {
 };
 
 interface YouTubePlayer {
+  cueVideoById(options: { videoId: string; startSeconds: number }): void;
   destroy(): void;
   getCurrentTime(): number;
-  loadVideoById(options: { videoId: string; startSeconds: number }): void;
   pauseVideo(): void;
+  playVideo(): void;
+  seekTo(seconds: number, allowSeekAhead: boolean): void;
 }
 
 interface YouTubeNamespace {
@@ -20,6 +22,7 @@ interface YouTubeNamespace {
       height: string;
       width: string;
       playerVars: {
+        controls: 0;
         playsinline: 1;
         rel: 0;
       };
@@ -31,6 +34,8 @@ interface YouTubeNamespace {
     },
   ) => YouTubePlayer;
   PlayerState: {
+    ENDED: number;
+    PAUSED: number;
     PLAYING: number;
   };
 }

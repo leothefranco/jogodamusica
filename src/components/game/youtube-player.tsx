@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+} from "react";
 
 import type { GameSong } from "@/domain/game/state";
 
@@ -40,119 +46,195 @@ function loadYouTubeApi() {
   return youtubeApiPromise;
 }
 
+export type YouTubePlayerHandle = {
+  pause(): void;
+  play(): void;
+};
+
 type YouTubePlayerProps = {
-  track: GameSong | null;
-  requestToken: number;
+  label: "A" | "B";
+  song: GameSong;
   onError(errorCode: number): void;
   onLoadError(): void;
+  onPlayingChange(playing: boolean): void;
   onStarted(songId: string): void;
 };
 
-export function YouTubePlayer({
-  track,
-  requestToken,
-  onError,
-  onLoadError,
-  onStarted,
-}: YouTubePlayerProps) {
+export const YouTubePlayer = forwardRef<
+  YouTubePlayerHandle,
+  YouTubePlayerProps
+>(function YouTubePlayer(
+  { label, song, onError, onLoadError, onPlayingChange, onStarted },
+  ref,
+) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const playerHostRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YouTubePlayer | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const trackRef = useRef(track);
+  const resumeAtRef = useRef(song.startTimeSeconds);
+  const resetOnNextPlayRef = useRef(false);
+  const readyRef = useRef(false);
+  const pendingPlayRef = useRef(false);
+  const callbacksRef = useRef({
+    onError,
+    onLoadError,
+    onPlayingChange,
+    onStarted,
+  });
 
   useEffect(() => {
-    trackRef.current = track;
-  }, [track]);
+    callbacksRef.current = {
+      onError,
+      onLoadError,
+      onPlayingChange,
+      onStarted,
+    };
+  }, [onError, onLoadError, onPlayingChange, onStarted]);
+
+  const clearPreviewTimer = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = null;
+  }, []);
+
+  const markPaused = useCallback(() => {
+    clearPreviewTimer();
+    callbacksRef.current.onPlayingChange(false);
+  }, [clearPreviewTimer]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      pause() {
+        pendingPlayRef.current = false;
+        const player = playerRef.current;
+        if (!player || !readyRef.current) return;
+        if (!resetOnNextPlayRef.current) {
+          resumeAtRef.current = player.getCurrentTime();
+        }
+        player.pauseVideo();
+        markPaused();
+      },
+      play() {
+        pendingPlayRef.current = true;
+        const player = playerRef.current;
+        if (!player || !readyRef.current) return;
+        pendingPlayRef.current = false;
+        const position = resetOnNextPlayRef.current
+          ? song.startTimeSeconds
+          : resumeAtRef.current;
+        resetOnNextPlayRef.current = false;
+        resumeAtRef.current = position;
+        player.seekTo(position, true);
+        player.playVideo();
+      },
+    }),
+    [markPaused, song.startTimeSeconds],
+  );
 
   useEffect(() => {
     let cancelled = false;
 
-    async function playRequestedTrack() {
-      if (!track || !playerHostRef.current) return;
+    async function createPlayer() {
+      if (!playerHostRef.current) return;
       let youtube: YouTubeNamespace;
       try {
         youtube = await loadYouTubeApi();
       } catch {
-        onLoadError();
+        callbacksRef.current.onLoadError();
         return;
       }
       if (cancelled || !playerHostRef.current) return;
 
-      if (!playerRef.current) {
-        playerRef.current = await new Promise<YouTubePlayer>((resolve) => {
-          const player = new youtube.Player(playerHostRef.current!, {
-            height: "100%",
-            width: "100%",
-            playerVars: { playsinline: 1, rel: 0 },
-            events: {
-              onReady: () => resolve(player),
-              onStateChange: (event) => {
-                if (event.data !== youtube.PlayerState.PLAYING) return;
-                if (timerRef.current) clearTimeout(timerRef.current);
-                const currentTrack = trackRef.current;
-                if (!currentTrack) return;
-                onStarted(currentTrack.songId);
-                const previewEnd =
-                  currentTrack.startTimeSeconds +
-                  currentTrack.previewDurationSeconds;
-                const remainingSeconds = Math.max(
-                  previewEnd - event.target.getCurrentTime(),
-                  0,
-                );
-                timerRef.current = setTimeout(
-                  () => event.target.pauseVideo(),
-                  remainingSeconds * 1_000,
-                );
-              },
-              onError: (event) => onError(event.data),
-            },
-          });
-        });
-      }
+      const player = new youtube.Player(playerHostRef.current, {
+        height: "100%",
+        width: "100%",
+        playerVars: { controls: 0, playsinline: 1, rel: 0 },
+        events: {
+          onReady: (event) => {
+            if (cancelled) return;
+            playerRef.current = event.target;
+            event.target.cueVideoById({
+              videoId: song.providerContentId,
+              startSeconds: song.startTimeSeconds,
+            });
+            wrapperRef.current
+              ?.querySelector("iframe")
+              ?.setAttribute(
+                "title",
+                `Player do YouTube — ${song.title}, ${song.artist}`,
+              );
+            readyRef.current = true;
+            if (pendingPlayRef.current) {
+              pendingPlayRef.current = false;
+              event.target.seekTo(resumeAtRef.current, true);
+              event.target.playVideo();
+            }
+          },
+          onStateChange: (event) => {
+            if (event.data === youtube.PlayerState.PLAYING) {
+              clearPreviewTimer();
+              callbacksRef.current.onPlayingChange(true);
+              callbacksRef.current.onStarted(song.songId);
+              const previewEnd =
+                song.startTimeSeconds + song.previewDurationSeconds;
+              const remainingSeconds = Math.max(
+                previewEnd - event.target.getCurrentTime(),
+                0,
+              );
+              timerRef.current = setTimeout(() => {
+                resetOnNextPlayRef.current = true;
+                resumeAtRef.current = song.startTimeSeconds;
+                event.target.pauseVideo();
+                markPaused();
+              }, remainingSeconds * 1_000);
+              return;
+            }
 
-      if (cancelled) return;
-      if (timerRef.current) clearTimeout(timerRef.current);
-      playerRef.current.loadVideoById({
-        videoId: track.providerContentId,
-        startSeconds: track.startTimeSeconds,
+            if (event.data === youtube.PlayerState.ENDED) {
+              resetOnNextPlayRef.current = true;
+              resumeAtRef.current = song.startTimeSeconds;
+              markPaused();
+              return;
+            }
+
+            if (event.data === youtube.PlayerState.PAUSED) markPaused();
+          },
+          onError: (event) => {
+            markPaused();
+            callbacksRef.current.onError(event.data);
+          },
+        },
       });
-      wrapperRef.current
-        ?.querySelector("iframe")
-        ?.setAttribute(
-          "title",
-          `Player do YouTube — ${track.title}, ${track.artist}`,
-        );
+      playerRef.current = player;
     }
 
-    void playRequestedTrack();
+    void createPlayer();
     return () => {
       cancelled = true;
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [onError, onLoadError, onStarted, requestToken, track]);
-
-  useEffect(
-    () => () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
+      clearPreviewTimer();
+      readyRef.current = false;
+      pendingPlayRef.current = false;
       playerRef.current?.destroy();
       playerRef.current = null;
-    },
-    [],
-  );
+    };
+  }, [
+    clearPreviewTimer,
+    markPaused,
+    song.artist,
+    song.previewDurationSeconds,
+    song.providerContentId,
+    song.songId,
+    song.startTimeSeconds,
+    song.title,
+  ]);
 
   return (
     <div
       ref={wrapperRef}
-      aria-label="Player do YouTube"
-      className="relative overflow-hidden rounded-2xl border border-white/10 bg-black"
+      aria-label={`Player da música ${label}`}
+      className="relative min-h-[200px] overflow-hidden rounded-2xl border border-white/10 bg-black"
     >
       <div ref={playerHostRef} className="aspect-video min-h-[200px] w-full" />
-      {!track ? (
-        <p className="absolute inset-0 grid place-items-center px-5 text-center text-sm text-white/45">
-          Inicie uma das músicas para carregar o player.
-        </p>
-      ) : null}
     </div>
   );
-}
+});

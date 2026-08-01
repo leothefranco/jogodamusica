@@ -1,11 +1,14 @@
 "use client";
 
-import { Check, Headphones, LoaderCircle, RotateCcw } from "lucide-react";
+import { Check, LoaderCircle, Pause, Play } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { YouTubePlayer } from "@/components/game/youtube-player";
+import {
+  YouTubePlayer,
+  type YouTubePlayerHandle,
+} from "@/components/game/youtube-player";
 import { Button } from "@/components/ui/button";
 import {
   createPlaybackGate,
@@ -17,17 +20,29 @@ import type { GameSong, GameState } from "@/domain/game/state";
 function SongCard({
   label,
   song,
-  heard,
-  onListen,
+  isPlaying,
+  onTogglePlayback,
   onVote,
+  playerError,
+  playerRef,
+  onPlayerError,
+  onPlayerLoadError,
+  onPlayingChange,
+  onStarted,
   canVote,
   voting,
 }: {
   label: "A" | "B";
   song: GameSong;
-  heard: boolean;
-  onListen(): void;
+  isPlaying: boolean;
+  onTogglePlayback(): void;
   onVote(): void;
+  playerError: string | null;
+  playerRef: React.RefObject<YouTubePlayerHandle | null>;
+  onPlayerError(errorCode: number): void;
+  onPlayerLoadError(): void;
+  onPlayingChange(playing: boolean): void;
+  onStarted(songId: string): void;
   canVote: boolean;
   voting: boolean;
 }) {
@@ -36,13 +51,15 @@ function SongCard({
       <p className="text-xs font-bold tracking-[0.16em] text-violet-300 uppercase">
         Música {label}
       </p>
-      <div className="mt-3 aspect-video overflow-hidden rounded-2xl bg-white/5">
-        {/* YouTube thumbnails are provider metadata and the adjacent text identifies the song. */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={song.thumbnailUrl}
-          alt=""
-          className="h-full w-full object-cover"
+      <div className="mt-3">
+        <YouTubePlayer
+          ref={playerRef}
+          label={label}
+          song={song}
+          onError={onPlayerError}
+          onLoadError={onPlayerLoadError}
+          onPlayingChange={onPlayingChange}
+          onStarted={onStarted}
         />
       </div>
       <h2 className="mt-4 text-xl font-bold text-balance">{song.title}</h2>
@@ -51,16 +68,20 @@ function SongCard({
       <Button
         type="button"
         variant="secondary"
-        onClick={onListen}
+        onClick={onTogglePlayback}
+        aria-pressed={isPlaying}
         className="mt-5 min-h-11 w-full rounded-xl"
       >
-        {heard ? (
-          <RotateCcw aria-hidden="true" />
-        ) : (
-          <Headphones aria-hidden="true" />
-        )}
-        {heard ? `Ouvir música ${label} novamente` : `Ouvir música ${label}`}
+        {isPlaying ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
+        {isPlaying ? `Pausar música ${label}` : `Reproduzir música ${label}`}
       </Button>
+      <p
+        role={playerError ? "alert" : "status"}
+        aria-live="polite"
+        className="mt-2 min-h-5 text-sm text-rose-200"
+      >
+        {playerError}
+      </p>
       <Button
         type="button"
         onClick={onVote}
@@ -81,8 +102,15 @@ function SongCard({
 export function GameExperience({ initialState }: { initialState: GameState }) {
   const router = useRouter();
   const [state, setState] = useState(initialState);
-  const [activeTrack, setActiveTrack] = useState<GameSong | null>(null);
-  const [requestToken, setRequestToken] = useState(0);
+  const playerARef = useRef<YouTubePlayerHandle>(null);
+  const playerBRef = useRef<YouTubePlayerHandle>(null);
+  const [activePlayer, setActivePlayer] = useState<{
+    matchId: string;
+    label: "A" | "B";
+  } | null>(null);
+  const [playerErrors, setPlayerErrors] = useState<
+    Partial<Record<"A" | "B", { matchId: string; message: string }>>
+  >({});
   const [gate, setGate] = useState(() =>
     createPlaybackGate(initialState.currentMatch?.id ?? ""),
   );
@@ -108,10 +136,24 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
     }
   }, [router, state.session.id, state.session.status]);
 
+  const registerPlayerFailure = useCallback(
+    (label: "A" | "B", songId: string, failureMessage: string) => {
+      if (!currentMatch) return;
+      setPlayerErrors((current) => ({
+        ...current,
+        [label]: { matchId: currentMatch.id, message: failureMessage },
+      }));
+      setGate((current) => markSongStarted(current, songId));
+    },
+    [currentMatch],
+  );
+
   const reportPlayerError = useCallback(
-    (errorCode: number) => {
-      setMessage(
-        "Este vídeo não pôde ser reproduzido. Tente novamente ou volte ao tema.",
+    (label: "A" | "B", songId: string, errorCode: number) => {
+      registerPlayerFailure(
+        label,
+        songId,
+        "Este vídeo não pôde ser reproduzido. Você ainda pode votar.",
       );
       void fetch(`/api/games/${state.session.id}/player-errors`, {
         method: "POST",
@@ -122,23 +164,54 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
         }),
       });
     },
-    [currentMatch?.id, state.session.id],
+    [currentMatch?.id, registerPlayerFailure, state.session.id],
   );
 
   const markPlaybackAsStarted = useCallback((songId: string) => {
     setGate((current) => markSongStarted(current, songId));
   }, []);
 
-  const reportPlayerLoadError = useCallback(() => {
-    setMessage(
-      "Não foi possível carregar o player do YouTube. Verifique sua conexão e tente novamente.",
-    );
-  }, []);
+  const reportPlayerLoadError = useCallback(
+    (label: "A" | "B", songId: string) => {
+      registerPlayerFailure(
+        label,
+        songId,
+        "Não foi possível carregar este player. Você ainda pode votar.",
+      );
+    },
+    [registerPlayerFailure],
+  );
 
-  function listen(song: GameSong) {
+  const playerRefs = { A: playerARef, B: playerBRef };
+
+  function togglePlayback(label: "A" | "B") {
+    if (!currentMatch) return;
     setMessage(null);
-    setActiveTrack(song);
-    setRequestToken((token) => token + 1);
+
+    if (
+      activePlayer?.matchId === currentMatch.id &&
+      activePlayer.label === label
+    ) {
+      playerRefs[label].current?.pause();
+      setActivePlayer(null);
+      return;
+    }
+
+    if (activePlayer?.matchId === currentMatch.id) {
+      playerRefs[activePlayer.label].current?.pause();
+    }
+    playerRefs[label].current?.play();
+    setActivePlayer({ matchId: currentMatch.id, label });
+  }
+
+  function playingChanged(label: "A" | "B", playing: boolean) {
+    if (!currentMatch) return;
+    setActivePlayer((current) => {
+      if (playing) return { matchId: currentMatch.id, label };
+      return current?.matchId === currentMatch.id && current.label === label
+        ? null
+        : current;
+    });
   }
 
   async function vote(song: GameSong) {
@@ -153,6 +226,9 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
 
     setIsVoting(true);
     setMessage(null);
+    playerARef.current?.pause();
+    playerBRef.current?.pause();
+    setActivePlayer(null);
     try {
       const response = await fetch(
         `/api/games/${state.session.id}/matches/${currentMatch.id}/vote`,
@@ -172,7 +248,6 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
       }
       setState(payload);
       setGate(createPlaybackGate(payload.currentMatch?.id ?? ""));
-      setActiveTrack(null);
       setMessage(null);
     } catch (caught) {
       setMessage(
@@ -256,33 +331,61 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
 
         <div className="mt-6 grid gap-4 md:grid-cols-2">
           <SongCard
+            key={`${currentMatch.id}-A`}
             label="A"
             song={songA}
-            heard={gate.startedSongIds.has(songA.songId)}
-            onListen={() => listen(songA)}
+            isPlaying={
+              activePlayer?.matchId === currentMatch.id &&
+              activePlayer.label === "A"
+            }
+            onTogglePlayback={() => togglePlayback("A")}
             onVote={() => void vote(songA)}
+            playerError={
+              playerErrors.A?.matchId === currentMatch.id
+                ? playerErrors.A.message
+                : null
+            }
+            playerRef={playerARef}
+            onPlayerError={(errorCode) =>
+              reportPlayerError("A", songA.songId, errorCode)
+            }
+            onPlayerLoadError={() => reportPlayerLoadError("A", songA.songId)}
+            onPlayingChange={(playing) => playingChanged("A", playing)}
+            onStarted={markPlaybackAsStarted}
             canVote={canVote}
             voting={isVoting}
           />
           <SongCard
+            key={`${currentMatch.id}-B`}
             label="B"
             song={songB}
-            heard={gate.startedSongIds.has(songB.songId)}
-            onListen={() => listen(songB)}
+            isPlaying={
+              activePlayer?.matchId === currentMatch.id &&
+              activePlayer.label === "B"
+            }
+            onTogglePlayback={() => togglePlayback("B")}
             onVote={() => void vote(songB)}
+            playerError={
+              playerErrors.B?.matchId === currentMatch.id
+                ? playerErrors.B.message
+                : null
+            }
+            playerRef={playerBRef}
+            onPlayerError={(errorCode) =>
+              reportPlayerError("B", songB.songId, errorCode)
+            }
+            onPlayerLoadError={() => reportPlayerLoadError("B", songB.songId)}
+            onPlayingChange={(playing) => playingChanged("B", playing)}
+            onStarted={markPlaybackAsStarted}
             canVote={canVote}
             voting={isVoting}
           />
         </div>
 
-        <section aria-label="Reprodução" className="mx-auto mt-5 max-w-3xl">
-          <YouTubePlayer
-            track={activeTrack}
-            requestToken={requestToken}
-            onError={reportPlayerError}
-            onLoadError={reportPlayerLoadError}
-            onStarted={markPlaybackAsStarted}
-          />
+        <section
+          aria-label="Estado do confronto"
+          className="mx-auto mt-5 max-w-3xl"
+        >
           <p
             role={message ? "alert" : "status"}
             aria-live="polite"
