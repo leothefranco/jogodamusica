@@ -124,14 +124,19 @@ não exige uma nova migração.
    a equivalência entre 2–5 rodadas e 4–32 músicas.
 3. Inicie a partida. O servidor sorteia as músicas e a URL `/jogo/<id>` permite
    retomar o estado após recarregar a página.
-4. Em cada confronto, inicie as duas músicas no player visível do YouTube. O
-   voto só é liberado depois dessas duas ações e sempre pede confirmação.
+4. Em cada confronto, compare os dois cards empilhados. Cada música mantém seu
+   próprio player do YouTube e um único controle de reproduzir/pausar; iniciar
+   uma pausa a outra sem perder a posição. O voto é liberado depois que as duas
+   músicas forem iniciadas (ou se um player falhar) e sempre pede confirmação.
 5. Ao final, `/resultado/<id>` mostra a campeã e todos os confrontos.
 
-O player usa a YouTube IFrame Player API diretamente no navegador, começa
-somente após gesto explícito e pausa ao fim do trecho configurado. Erros da API
-são registrados no servidor apenas com IDs técnicos da partida/confronto e o
-código do YouTube, sem dados pessoais.
+Os players usam a YouTube IFrame Player API diretamente no navegador, começam
+somente após gesto explícito e reiniciam no começo configurado depois do fim do
+trecho. Em viewports com pelo menos 700 px de altura útil, os cards cabem sem
+rolagem; em telas mais baixas, paisagem ou conteúdo ampliado, a rolagem vertical
+mantém todos os controles acessíveis. Erros da API são registrados no servidor
+apenas com IDs técnicos da partida/confronto e o código do YouTube, sem dados
+pessoais.
 
 ## Comandos
 
@@ -166,6 +171,11 @@ código do YouTube, sem dados pessoais.
 | `SEED_ADMIN_DISPLAY_NAME`              | Servidor  | Nome exibido do administrador     |
 
 Somente variáveis prefixadas com `NEXT_PUBLIC_` podem chegar ao navegador.
+
+Os testes E2E usam uma rota-fixture reconhecida somente pelo servidor iniciado
+pelo Playwright. Essa rota não faz parte da resolução de páginas nem do build de
+produção. Para evitar conflito com outro servidor local, defina
+`PLAYWRIGHT_PORT` antes de executar `npm run test:e2e`.
 
 ## Organização
 
@@ -225,8 +235,9 @@ módulos exclusivos do servidor.
   interação da partida fica isolada em Client Components.
 - O catálogo público conta somente associações ativas com vídeos incorporáveis
   e deriva as modalidades compatíveis sem duplicar a regra nos componentes.
-- A partida mantém um único player YouTube visível, persiste votos pelos Route
-  Handlers e registra abandono de sessão de forma transacional.
+- A partida mantém dois players YouTube simultaneamente visíveis, um em cada
+  card, com reprodução mutuamente exclusiva; persiste votos pelos Route Handlers
+  e registra abandono de sessão de forma transacional.
 - A PWA usa o manifesto nativo do App Router, ícones de 192 e 512 pixels e
   oferece instalação quando o navegador expõe essa capacidade.
 - O service worker armazena somente o fallback offline e assets estáticos da

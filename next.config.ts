@@ -22,6 +22,10 @@ const contentSecurityPolicy = `
   .trim();
 
 const nextConfig: NextConfig = {
+  pageExtensions:
+    process.env.E2E_TEST_MODE === "1"
+      ? ["e2e.tsx", "tsx", "ts", "jsx", "js"]
+      : ["tsx", "ts", "jsx", "js"],
   async headers() {
     return [
       {

@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "playwright/test";
 
+const port = process.env.PLAYWRIGHT_PORT ?? "3000";
+
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
@@ -8,13 +10,15 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: "html",
   use: {
-    baseURL: "http://127.0.0.1:3000",
+    baseURL: `http://localhost:${port}`,
     trace: "on-first-retry",
   },
   webServer: {
-    command: "npm run dev",
-    url: "http://127.0.0.1:3000",
+    command: `node node_modules/next/dist/bin/next dev --port ${port}`,
+    env: { E2E_TEST_MODE: "1" },
+    url: `http://localhost:${port}/icon.svg`,
     reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
   },
   projects: [
     {
