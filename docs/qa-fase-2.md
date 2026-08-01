@@ -156,7 +156,8 @@ Tente salvar, um caso por vez:
 - slug com espaços ou letras maiúsculas;
 - slug já existente;
 - URL `javascript:alert(1)`;
-- tamanho diferente de 4, 8, 16 ou 32, alterando a requisição no navegador.
+- tamanho diferente de 4, 8, 16, 32, 64 ou 128, alterando a requisição no
+  navegador.
 
 Esperado:
 

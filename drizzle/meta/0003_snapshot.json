@@ -1,0 +1,941 @@
+{
+  "id": "40bafda9-1c0d-4374-85bb-67267f6beefc",
+  "prevId": "3b484c14-905c-4afb-bbda-9d63794d574c",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.admin_profiles": {
+      "name": "admin_profiles",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "admin_role",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'admin'"
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "admin_profiles_active_idx": {
+          "name": "admin_profiles_active_idx",
+          "columns": [
+            {
+              "expression": "is_active",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.game_matches": {
+      "name": "game_matches",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "round_number": {
+          "name": "round_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "song_a_id": {
+          "name": "song_a_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "song_b_id": {
+          "name": "song_b_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "winner_song_id": {
+          "name": "winner_song_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "match_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "game_matches_session_status_idx": {
+          "name": "game_matches_session_status_idx",
+          "columns": [
+            {
+              "expression": "session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "game_matches_session_id_game_sessions_id_fk": {
+          "name": "game_matches_session_id_game_sessions_id_fk",
+          "tableFrom": "game_matches",
+          "tableTo": "game_sessions",
+          "columnsFrom": [
+            "session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "game_matches_song_a_id_songs_id_fk": {
+          "name": "game_matches_song_a_id_songs_id_fk",
+          "tableFrom": "game_matches",
+          "tableTo": "songs",
+          "columnsFrom": [
+            "song_a_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "game_matches_song_b_id_songs_id_fk": {
+          "name": "game_matches_song_b_id_songs_id_fk",
+          "tableFrom": "game_matches",
+          "tableTo": "songs",
+          "columnsFrom": [
+            "song_b_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "game_matches_winner_song_id_songs_id_fk": {
+          "name": "game_matches_winner_song_id_songs_id_fk",
+          "tableFrom": "game_matches",
+          "tableTo": "songs",
+          "columnsFrom": [
+            "winner_song_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "game_matches_round_position_uidx": {
+          "name": "game_matches_round_position_uidx",
+          "nullsNotDistinct": false,
+          "columns": [
+            "session_id",
+            "round_number",
+            "position"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "game_matches_round_number_check": {
+          "name": "game_matches_round_number_check",
+          "value": "\"game_matches\".\"round_number\" >= 1"
+        },
+        "game_matches_position_check": {
+          "name": "game_matches_position_check",
+          "value": "\"game_matches\".\"position\" >= 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.game_sessions": {
+      "name": "game_sessions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "theme_id": {
+          "name": "theme_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bracket_size": {
+          "name": "bracket_size",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "game_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "current_round": {
+          "name": "current_round",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "champion_song_id": {
+          "name": "champion_song_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "game_sessions_theme_idx": {
+          "name": "game_sessions_theme_idx",
+          "columns": [
+            {
+              "expression": "theme_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "game_sessions_status_idx": {
+          "name": "game_sessions_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "game_sessions_theme_id_themes_id_fk": {
+          "name": "game_sessions_theme_id_themes_id_fk",
+          "tableFrom": "game_sessions",
+          "tableTo": "themes",
+          "columnsFrom": [
+            "theme_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "game_sessions_champion_song_id_songs_id_fk": {
+          "name": "game_sessions_champion_song_id_songs_id_fk",
+          "tableFrom": "game_sessions",
+          "tableTo": "songs",
+          "columnsFrom": [
+            "champion_song_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "game_sessions_bracket_size_check": {
+          "name": "game_sessions_bracket_size_check",
+          "value": "\"game_sessions\".\"bracket_size\" in (4, 8, 16, 32, 64, 128)"
+        },
+        "game_sessions_current_round_check": {
+          "name": "game_sessions_current_round_check",
+          "value": "\"game_sessions\".\"current_round\" >= 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.session_songs": {
+      "name": "session_songs",
+      "schema": "",
+      "columns": {
+        "session_id": {
+          "name": "session_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "song_id": {
+          "name": "song_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "seed": {
+          "name": "seed",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "varchar(200)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "artist": {
+          "name": "artist",
+          "type": "varchar(200)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "thumbnail_url": {
+          "name": "thumbnail_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "music_provider",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_content_id": {
+          "name": "provider_content_id",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "start_time_seconds": {
+          "name": "start_time_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "preview_duration_seconds": {
+          "name": "preview_duration_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "session_songs_session_idx": {
+          "name": "session_songs_session_idx",
+          "columns": [
+            {
+              "expression": "session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "session_songs_session_id_game_sessions_id_fk": {
+          "name": "session_songs_session_id_game_sessions_id_fk",
+          "tableFrom": "session_songs",
+          "tableTo": "game_sessions",
+          "columnsFrom": [
+            "session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "session_songs_song_id_songs_id_fk": {
+          "name": "session_songs_song_id_songs_id_fk",
+          "tableFrom": "session_songs",
+          "tableTo": "songs",
+          "columnsFrom": [
+            "song_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "session_songs_session_id_song_id_pk": {
+          "name": "session_songs_session_id_song_id_pk",
+          "columns": [
+            "session_id",
+            "song_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {
+        "session_songs_seed_uidx": {
+          "name": "session_songs_seed_uidx",
+          "nullsNotDistinct": false,
+          "columns": [
+            "session_id",
+            "seed"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "session_songs_seed_check": {
+          "name": "session_songs_seed_check",
+          "value": "\"session_songs\".\"seed\" >= 1"
+        },
+        "session_songs_start_time_check": {
+          "name": "session_songs_start_time_check",
+          "value": "\"session_songs\".\"start_time_seconds\" >= 0"
+        },
+        "session_songs_preview_duration_check": {
+          "name": "session_songs_preview_duration_check",
+          "value": "\"session_songs\".\"preview_duration_seconds\" > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.songs": {
+      "name": "songs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "provider": {
+          "name": "provider",
+          "type": "music_provider",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_content_id": {
+          "name": "provider_content_id",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_title": {
+          "name": "source_title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_channel": {
+          "name": "source_channel",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "thumbnail_url": {
+          "name": "thumbnail_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "duration_seconds": {
+          "name": "duration_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_embeddable": {
+          "name": "is_embeddable",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "songs_provider_content_uidx": {
+          "name": "songs_provider_content_uidx",
+          "nullsNotDistinct": false,
+          "columns": [
+            "provider",
+            "provider_content_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "songs_duration_positive_check": {
+          "name": "songs_duration_positive_check",
+          "value": "\"songs\".\"duration_seconds\" > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.theme_songs": {
+      "name": "theme_songs",
+      "schema": "",
+      "columns": {
+        "theme_id": {
+          "name": "theme_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "song_id": {
+          "name": "song_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "varchar(200)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "artist": {
+          "name": "artist",
+          "type": "varchar(200)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "start_time_seconds": {
+          "name": "start_time_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "preview_duration_seconds": {
+          "name": "preview_duration_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "display_order": {
+          "name": "display_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "theme_songs_theme_active_idx": {
+          "name": "theme_songs_theme_active_idx",
+          "columns": [
+            {
+              "expression": "theme_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "is_active",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "theme_songs_theme_id_themes_id_fk": {
+          "name": "theme_songs_theme_id_themes_id_fk",
+          "tableFrom": "theme_songs",
+          "tableTo": "themes",
+          "columnsFrom": [
+            "theme_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "theme_songs_song_id_songs_id_fk": {
+          "name": "theme_songs_song_id_songs_id_fk",
+          "tableFrom": "theme_songs",
+          "tableTo": "songs",
+          "columnsFrom": [
+            "song_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "theme_songs_theme_id_song_id_pk": {
+          "name": "theme_songs_theme_id_song_id_pk",
+          "columns": [
+            "theme_id",
+            "song_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "theme_songs_start_time_check": {
+          "name": "theme_songs_start_time_check",
+          "value": "\"theme_songs\".\"start_time_seconds\" >= 0"
+        },
+        "theme_songs_preview_duration_check": {
+          "name": "theme_songs_preview_duration_check",
+          "value": "\"theme_songs\".\"preview_duration_seconds\" > 0"
+        },
+        "theme_songs_display_order_check": {
+          "name": "theme_songs_display_order_check",
+          "value": "\"theme_songs\".\"display_order\" is null or \"theme_songs\".\"display_order\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.themes": {
+      "name": "themes",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "slug": {
+          "name": "slug",
+          "type": "varchar(140)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cover_url": {
+          "name": "cover_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "default_bracket_size": {
+          "name": "default_bracket_size",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 4
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "themes_slug_uidx": {
+          "name": "themes_slug_uidx",
+          "columns": [
+            {
+              "expression": "slug",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "themes_active_idx": {
+          "name": "themes_active_idx",
+          "columns": [
+            {
+              "expression": "is_active",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "themes_bracket_size_check": {
+          "name": "themes_bracket_size_check",
+          "value": "\"themes\".\"default_bracket_size\" in (4, 8, 16, 32, 64, 128)"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.admin_role": {
+      "name": "admin_role",
+      "schema": "public",
+      "values": [
+        "admin",
+        "editor"
+      ]
+    },
+    "public.game_status": {
+      "name": "game_status",
+      "schema": "public",
+      "values": [
+        "active",
+        "completed",
+        "abandoned"
+      ]
+    },
+    "public.match_status": {
+      "name": "match_status",
+      "schema": "public",
+      "values": [
+        "pending",
+        "ready",
+        "completed"
+      ]
+    },
+    "public.music_provider": {
+      "name": "music_provider",
+      "schema": "public",
+      "values": [
+        "youtube"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

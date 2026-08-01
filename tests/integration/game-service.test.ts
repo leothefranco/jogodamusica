@@ -13,16 +13,19 @@ import {
 const themeId = "10000000-0000-4000-8000-000000000010";
 const sessionId = "20000000-0000-4000-8000-000000000020";
 
-const activeSongs = Array.from({ length: 6 }, (_, index) => ({
-  songId: `30000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
-  title: `Música ${index + 1}`,
-  artist: `Artista ${index + 1}`,
-  thumbnailUrl: `https://example.com/${index + 1}.jpg`,
-  provider: "youtube" as const,
-  providerContentId: `video${String(index + 1).padStart(6, "0")}`,
-  startTimeSeconds: index,
-  previewDurationSeconds: 30,
-}));
+const createActiveSongs = (count: number) =>
+  Array.from({ length: count }, (_, index) => ({
+    songId: `30000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+    title: `Música ${index + 1}`,
+    artist: `Artista ${index + 1}`,
+    thumbnailUrl: `https://example.com/${index + 1}.jpg`,
+    provider: "youtube" as const,
+    providerContentId: `video${String(index + 1).padStart(6, "0")}`,
+    startTimeSeconds: index,
+    previewDurationSeconds: 30,
+  }));
+
+const activeSongs = createActiveSongs(6);
 
 function gameHarness(
   options: {
@@ -204,6 +207,19 @@ describe("criação transacional de partida", () => {
     });
     expect(harness.sessions).toHaveLength(0);
   });
+
+  it.each([64, 128] as const)(
+    "cria uma partida com a modalidade de %i músicas",
+    async (bracketSize) => {
+      const harness = gameHarness({ songs: createActiveSongs(bracketSize) });
+
+      await harness.service.createSession({ themeId, bracketSize });
+
+      expect(harness.sessions[0].bracketSize).toBe(bracketSize);
+      expect(harness.snapshots).toHaveLength(bracketSize);
+      expect(harness.matches).toHaveLength(bracketSize - 1);
+    },
+  );
 });
 
 describe("voto transacional", () => {

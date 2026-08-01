@@ -66,7 +66,7 @@ export const themes = pgTable(
     index("themes_active_idx").on(table.isActive),
     check(
       "themes_bracket_size_check",
-      sql`${table.defaultBracketSize} in (4, 8, 16, 32)`,
+      sql`${table.defaultBracketSize} in (4, 8, 16, 32, 64, 128)`,
     ),
   ],
 );
@@ -151,7 +151,7 @@ export const gameSessions = pgTable(
     index("game_sessions_status_idx").on(table.status),
     check(
       "game_sessions_bracket_size_check",
-      sql`${table.bracketSize} in (4, 8, 16, 32)`,
+      sql`${table.bracketSize} in (4, 8, 16, 32, 64, 128)`,
     ),
     check("game_sessions_current_round_check", sql`${table.currentRound} >= 1`),
   ],

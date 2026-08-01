@@ -19,7 +19,8 @@ Use um projeto Supabase de desenvolvimento e uma chave da YouTube Data API.
 7. Repita a importação e confirme que ajustes existentes não mudam.
 8. Aguarde a expiração da prévia e confirme a revalidação.
 9. Simule timeout, cota esgotada e playlist privada/inacessível.
-10. Confira as modalidades suportadas com 3, 4, 8, 16 e 32 músicas ativas.
+10. Confira as modalidades suportadas com 3, 4, 8, 16, 32, 64 e 128 músicas
+    ativas.
 11. Navegue somente por teclado e teste as larguras 360, 768 e 1280 px.
 
 A Fase 2.1 pode ser considerada aprovada quando esses cenários passarem sem
