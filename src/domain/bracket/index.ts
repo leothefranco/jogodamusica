@@ -30,6 +30,14 @@ export type RoundMatchPair = {
   songBId: string;
 };
 
+export type MatchDecision =
+  { type: "vote"; winnerSongId: string } | { type: "tiebreak" };
+
+export type ResolvedMatchDecision = {
+  winnerSongId: string;
+  championSongId: string | null;
+};
+
 type MatchIdFactory = (coordinate: MatchCoordinate) => string;
 
 const defaultMatchId: MatchIdFactory = ({ roundNumber, position }) =>
@@ -91,11 +99,12 @@ export function createBracket(
   };
 }
 
-export function resolveMatchWinner(
+export function resolveMatchDecision(
   match: BracketMatch,
   bracketSize: BracketSize,
-  winnerSongId: string,
-): string | null {
+  decision: MatchDecision,
+  random: () => number = Math.random,
+): ResolvedMatchDecision {
   if (match.status === "completed") {
     throw new AppError(
       "MATCH_ALREADY_COMPLETED",
@@ -110,7 +119,20 @@ export function resolveMatchWinner(
       409,
     );
   }
-  if (![match.songAId, match.songBId].includes(winnerSongId)) {
+  if (!match.songAId || !match.songBId) {
+    throw new AppError(
+      "INVALID_BRACKET_STATE",
+      "O confronto pronto precisa de duas participantes.",
+      500,
+    );
+  }
+
+  const participants = [match.songAId, match.songBId] as const;
+  const winnerSongId =
+    decision.type === "vote"
+      ? decision.winnerSongId
+      : participants[Math.floor(random() * participants.length)];
+  if (!participants.includes(winnerSongId)) {
     throw new AppError(
       "INVALID_MATCH_WINNER",
       "A música vencedora não pertence a este confronto.",
@@ -118,10 +140,10 @@ export function resolveMatchWinner(
   }
 
   if (match.roundNumber === roundCountFromBracketSize(bracketSize)) {
-    return winnerSongId;
+    return { winnerSongId, championSongId: winnerSongId };
   }
 
-  return null;
+  return { winnerSongId, championSongId: null };
 }
 
 export function selectSongsForSession<T>(

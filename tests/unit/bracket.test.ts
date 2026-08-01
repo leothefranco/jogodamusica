@@ -4,7 +4,7 @@ import {
   bracketSizeFromRoundCount,
   createBracket,
   pairRoundWinners,
-  resolveMatchWinner,
+  resolveMatchDecision,
   roundCountFromBracketSize,
   selectSongsForSession,
   shuffleRoundWinners,
@@ -59,18 +59,27 @@ describe("domínio do chaveamento", () => {
     };
 
     expect(
-      resolveMatchWinner(firstMatch, bracket.bracketSize, firstMatch.songAId!),
-    ).toBeNull();
-    expect(resolveMatchWinner(final, bracket.bracketSize, final.songBId)).toBe(
-      "song-2",
-    );
+      resolveMatchDecision(firstMatch, bracket.bracketSize, {
+        type: "vote",
+        winnerSongId: firstMatch.songAId!,
+      }),
+    ).toEqual({ winnerSongId: firstMatch.songAId, championSongId: null });
+    expect(
+      resolveMatchDecision(final, bracket.bracketSize, {
+        type: "vote",
+        winnerSongId: final.songBId,
+      }),
+    ).toEqual({ winnerSongId: "song-2", championSongId: "song-2" });
   });
 
   it("rejeita uma vencedora que não participa do confronto", () => {
     const bracket = createBracket(songIds(4), 4);
 
     expect(() =>
-      resolveMatchWinner(bracket.matches[0], 4, "song-intrusa"),
+      resolveMatchDecision(bracket.matches[0], 4, {
+        type: "vote",
+        winnerSongId: "song-intrusa",
+      }),
     ).toThrow("A música vencedora não pertence a este confronto.");
   });
 
@@ -78,9 +87,12 @@ describe("domínio do chaveamento", () => {
     const bracket = createBracket(songIds(4), 4);
     const match = { ...bracket.matches[0], status: "completed" as const };
 
-    expect(() => resolveMatchWinner(match, 4, match.songAId!)).toThrow(
-      "Este confronto já foi concluído.",
-    );
+    expect(() =>
+      resolveMatchDecision(match, 4, {
+        type: "vote",
+        winnerSongId: match.songAId!,
+      }),
+    ).toThrow("Este confronto já foi concluído.");
   });
 });
 

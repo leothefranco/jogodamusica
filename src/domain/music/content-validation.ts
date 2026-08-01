@@ -4,6 +4,7 @@ import { AppError } from "@/lib/errors";
 
 export const bracketSizes = [4, 8, 16, 32, 64, 128] as const;
 export type BracketSize = (typeof bracketSizes)[number];
+export const minimumPlayableSongCount = 4;
 
 export const bracketSizeSchema = z.coerce
   .number()
@@ -51,7 +52,6 @@ export const themeInputSchema = z.object({
     ),
   description: optionalText(2_000),
   coverUrl: optionalHttpUrl,
-  defaultBracketSize: bracketSizeSchema,
 });
 
 export const trackAssociationInputSchema = z.object({
@@ -103,11 +103,11 @@ export function validatePreviewWindow(input: {
   }
 }
 
-export function getThemePublishability(
-  defaultBracketSize: BracketSize,
-  activeSongCount: number,
-) {
-  const missingSongCount = Math.max(defaultBracketSize - activeSongCount, 0);
+export function getThemePublishability(activeSongCount: number) {
+  const missingSongCount = Math.max(
+    minimumPlayableSongCount - activeSongCount,
+    0,
+  );
 
   return {
     canPublish: missingSongCount === 0,

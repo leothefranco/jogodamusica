@@ -38,7 +38,6 @@ function createService(overrides: Partial<ServiceDependencies> = {}) {
       description: null,
       coverUrl: null,
       isActive: true,
-      defaultBracketSize: 4,
       activeSongCount: 4,
       totalSongCount: 4,
       updatedAt: new Date("2026-01-01T00:00:00Z"),
@@ -167,7 +166,28 @@ describe("serviço de conteúdo de temas", () => {
     expect(associationWasRemoved).toBe(false);
   });
 
-  it("não publica tema sem músicas ativas suficientes", async () => {
+  it("permite remover associação ativa não reproduzível sem reduzir o mínimo publicável", async () => {
+    let associationWasRemoved = false;
+    const service = createService({
+      findThemeSong: async () => ({
+        ...associatedTrack,
+        isEmbeddable: false,
+      }),
+      removeThemeSongRecord: async (_themeId, songId) => {
+        associationWasRemoved = true;
+        return songId;
+      },
+    });
+
+    await service.removeThemeSong(
+      "10000000-0000-4000-8000-000000000010",
+      associatedTrack.songId,
+    );
+
+    expect(associationWasRemoved).toBe(true);
+  });
+
+  it("não publica tema com apenas três músicas ativas e reproduzíveis", async () => {
     let publicationWasSaved = false;
     const service = createService({
       findThemeSummary: async () => ({
@@ -177,9 +197,8 @@ describe("serviço de conteúdo de temas", () => {
         description: null,
         coverUrl: null,
         isActive: false,
-        defaultBracketSize: 8,
-        activeSongCount: 4,
-        totalSongCount: 4,
+        activeSongCount: 3,
+        totalSongCount: 3,
         updatedAt: new Date("2026-01-01T00:00:00Z"),
       }),
       setThemeActiveRecord: async (themeId) => {
@@ -192,6 +211,34 @@ describe("serviço de conteúdo de temas", () => {
       service.setThemePublication("10000000-0000-4000-8000-000000000010", true),
     ).rejects.toMatchObject({ code: "THEME_NOT_PLAYABLE", status: 409 });
     expect(publicationWasSaved).toBe(false);
+  });
+
+  it("publica tema com quatro músicas ativas e reproduzíveis", async () => {
+    let publicationWasSaved = false;
+    const service = createService({
+      findThemeSummary: async () => ({
+        id: "10000000-0000-4000-8000-000000000010",
+        name: "Clássicos",
+        slug: "classicos",
+        description: null,
+        coverUrl: null,
+        isActive: false,
+        activeSongCount: 4,
+        totalSongCount: 4,
+        updatedAt: new Date("2026-01-01T00:00:00Z"),
+      }),
+      setThemeActiveRecord: async (themeId) => {
+        publicationWasSaved = true;
+        return themeId;
+      },
+    });
+
+    await service.setThemePublication(
+      "10000000-0000-4000-8000-000000000010",
+      true,
+    );
+
+    expect(publicationWasSaved).toBe(true);
   });
 
   it("não exclui tema que possui histórico de partidas", async () => {
@@ -210,25 +257,24 @@ describe("serviço de conteúdo de temas", () => {
     expect(themeWasDeleted).toBe(false);
   });
 
-  it("não aumenta a chave de tema publicado além das músicas ativas", async () => {
-    let themeWasUpdated = false;
+  it("atualiza os dados editoriais de tema publicado sem modalidade padrão", async () => {
+    let savedTheme: Record<string, unknown> | null = null;
     const service = createService({
-      updateThemeRecord: async (themeId) => {
-        themeWasUpdated = true;
+      updateThemeRecord: async (themeId, values) => {
+        savedTheme = values;
         return themeId;
       },
     });
 
-    await expect(
-      service.updateTheme("10000000-0000-4000-8000-000000000010", {
-        name: "Clássicos",
-        slug: "classicos",
-        description: null,
-        coverUrl: null,
-        defaultBracketSize: 8,
-      }),
-    ).rejects.toMatchObject({ code: "THEME_NOT_PLAYABLE", status: 409 });
-    expect(themeWasUpdated).toBe(false);
+    const input = {
+      name: "Clássicos",
+      slug: "classicos",
+      description: null,
+      coverUrl: null,
+    };
+    await service.updateTheme("10000000-0000-4000-8000-000000000010", input);
+
+    expect(savedTheme).toEqual(input);
   });
 
   it("serializa desativações concorrentes para preservar uma chave publicada", async () => {
@@ -241,7 +287,6 @@ describe("serviço de conteúdo de temas", () => {
         description: null,
         coverUrl: null,
         isActive: true,
-        defaultBracketSize: 4,
         activeSongCount,
         totalSongCount: 5,
         updatedAt: new Date("2026-01-01T00:00:00Z"),

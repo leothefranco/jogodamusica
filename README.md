@@ -109,19 +109,20 @@ diária estiver completamente esgotada.
 5. Revise título, artista, início e duração do trecho.
 6. Ative ou desative músicas individualmente.
 7. Confira as modalidades de 2 a 7 rodadas suportadas pelo catálogo.
-8. Publique o tema quando a quantidade de músicas ativas atingir o tamanho
-   padrão do chaveamento.
+8. Publique o tema quando houver pelo menos quatro músicas ativas e
+   reproduzíveis.
 
 Temas com partidas relacionadas não podem ser excluídos. Em temas publicados,
-o painel também impede remover ou desativar músicas quando isso tornaria o
-chaveamento inválido. A Fase 2 utiliza o esquema criado na migração inicial e
-não exige uma nova migração.
+o painel também impede remover ou desativar músicas quando isso deixaria menos
+de quatro opções reproduzíveis. A modalidade padrão foi removida do tema e do
+banco pela migração mais recente.
 
 ## Fluxo público
 
 1. Acesse `/` para ver os temas publicados.
-2. Abra um tema e escolha uma das modalidades compatíveis; a interface mostra
-   a equivalência entre 2–7 rodadas e 4–128 músicas.
+2. Abra um tema e escolha explicitamente uma das modalidades compatíveis; nada
+   vem pré-selecionado e o início permanece desabilitado até a escolha. A
+   interface mostra a equivalência entre 2–7 rodadas e 4–128 músicas.
 3. Inicie a partida. O servidor sorteia as músicas e a URL `/jogo/<id>` permite
    retomar o estado após recarregar a página.
 4. Em cada confronto, inicie as duas músicas no player visível do YouTube. O
@@ -209,7 +210,7 @@ módulos exclusivos do servidor.
   ocultos do navegador não são tratados como fonte confiável.
 - Título e artista exibidos pertencem à associação com o tema, permitindo
   personalizações independentes quando o mesmo vídeo é reutilizado.
-- Publicação exige músicas ativas suficientes para o tamanho padrão.
+- Publicação exige no mínimo quatro músicas ativas e reproduzíveis.
 - Prévia de playlist percorre páginas e valida vídeos em lotes, com teto padrão
   de 200 posições, cache de 15 minutos e limite por administrador.
 - Confirmação de playlist revalida dados confiáveis e grava associações em uma
@@ -217,16 +218,20 @@ módulos exclusivos do servidor.
 - Modalidades suportadas são derivadas da quantidade de músicas ativas.
 - A criação de partida bloqueia o tema, sorteia sem repetição apenas a quantidade
   escolhida e persiste sessão, snapshots e todos os confrontos em uma transação.
-- O voto bloqueia a sessão, aceita somente uma participante do confronto pronto
-  e conclui o confronto, avança a vencedora ou encerra a partida atomicamente.
+- A decisão de confronto bloqueia a sessão e aceita voto em uma participante ou
+  desempate sem vencedora enviada pelo cliente. No desempate, o servidor sorteia
+  a vencedora; em ambos os casos, conclui o confronto ou a partida atomicamente.
+- Ao concluir uma rodada, o servidor embaralha suas vencedoras, persiste a nova
+  ordem e só então monta os confrontos da rodada seguinte.
 - O domínio puro do torneio cria chaves de 4, 8, 16, 32, 64 e 128 músicas e converte entre
   quantidades de rodadas e tamanhos de chave sem persistir `roundCount`.
 - A área pública usa Server Components para catálogo, detalhes e resultado; a
   interação da partida fica isolada em Client Components.
 - O catálogo público conta somente associações ativas com vídeos incorporáveis
   e deriva as modalidades compatíveis sem duplicar a regra nos componentes.
-- A partida mantém um único player YouTube visível, persiste votos pelos Route
-  Handlers e registra abandono de sessão de forma transacional.
+- A partida mantém um único player YouTube visível, persiste decisões pelo Route
+  Handler `/api/games/:sessionId/matches/:matchId/decision` e registra abandono
+  de sessão de forma transacional.
 - A PWA usa o manifesto nativo do App Router, ícones de 192 e 512 pixels e
   oferece instalação quando o navegador expõe essa capacidade.
 - O service worker armazena somente o fallback offline e assets estáticos da
@@ -273,8 +278,8 @@ confirmação revalida os vídeos no YouTube.
   Data API v3, as restrições da credencial e reinicie o servidor.
 - **Cota do YouTube excedida:** evite repetir pesquisas, acompanhe o consumo no
   Google Cloud e tente novamente após a renovação da cota.
-- **Tema não publica:** confirme se a quantidade de músicas ativas é igual ou
-  superior ao tamanho padrão configurado.
+- **Tema não publica:** confirme se existem pelo menos quatro músicas ativas e
+  reproduzíveis.
 
 Em 26 de julho de 2026, `npm audit --omit=dev` também sinaliza avisos upstream
 em `postcss` e `sharp`, incluídos pelo Next.js 16.2.11. A correção automática

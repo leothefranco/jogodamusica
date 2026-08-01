@@ -73,8 +73,7 @@ export default async function EditThemePage({
               {theme.isActive ? "Publicado" : "Rascunho"}
             </span>
             <span className="text-xs text-white/35">
-              {theme.activeSongCount} ativa(s) · chave de{" "}
-              {theme.defaultBracketSize}
+              {theme.activeSongCount} música(s) ativa(s)
             </span>
           </div>
           <h1 className="mt-4 text-4xl font-black tracking-[-0.04em] sm:text-5xl">
@@ -149,7 +148,7 @@ export default async function EditThemePage({
           <CircleAlert className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
           <p>
             Faltam {publishability.missingSongCount} música(s) ativa(s) para
-            publicar uma chave de {theme.defaultBracketSize}.
+            atingir o mínimo de quatro e publicar o tema.
           </p>
         </div>
       ) : null}
@@ -158,8 +157,7 @@ export default async function EditThemePage({
         <section className="rounded-2xl border border-white/8 bg-[#0d0d18] p-5 sm:p-7">
           <h2 className="text-xl font-black">Dados do tema</h2>
           <p className="mt-2 text-sm leading-6 text-white/42">
-            Alterar o tamanho de um tema publicado exige músicas ativas
-            suficientes.
+            Nome, endereço e apresentação do catálogo musical.
           </p>
           <div className="mt-7">
             <ThemeForm
@@ -170,7 +168,6 @@ export default async function EditThemePage({
                 slug: theme.slug,
                 description: theme.description ?? "",
                 coverUrl: theme.coverUrl ?? "",
-                defaultBracketSize: theme.defaultBracketSize,
               }}
             />
           </div>

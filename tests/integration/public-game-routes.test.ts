@@ -3,9 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const gameService = vi.hoisted(() => ({
   abandonGameSession: vi.fn(),
   createGameSession: vi.fn(),
+  decideMatch: vi.fn(),
   getGameState: vi.fn(),
   reportGamePlaybackError: vi.fn(),
-  voteForMatch: vi.fn(),
 }));
 const publicThemeService = vi.hoisted(() => ({
   getPublicThemes: vi.fn(),
@@ -21,7 +21,8 @@ import {
   PATCH as abandonGame,
 } from "@/app/api/games/[sessionId]/route";
 import { POST as reportPlayerError } from "@/app/api/games/[sessionId]/player-errors/route";
-import { POST as vote } from "@/app/api/games/[sessionId]/matches/[matchId]/vote/route";
+import { POST as decide } from "@/app/api/games/[sessionId]/matches/[matchId]/decision/route";
+import { AppError } from "@/lib/errors";
 
 const themeId = "10000000-0000-4000-8000-000000000010";
 const sessionId = "20000000-0000-4000-8000-000000000020";
@@ -135,14 +136,14 @@ describe("contratos públicos de partida", () => {
   });
 
   it("registra o voto e retorna o estado atualizado", async () => {
-    gameService.voteForMatch.mockResolvedValue(gameState);
+    gameService.decideMatch.mockResolvedValue(gameState);
 
-    const response = await vote(
+    const response = await decide(
       new Request(
-        `http://localhost/api/games/${sessionId}/matches/${matchId}/vote`,
+        `http://localhost/api/games/${sessionId}/matches/${matchId}/decision`,
         {
           method: "POST",
-          body: JSON.stringify({ winnerSongId }),
+          body: JSON.stringify({ type: "vote", winnerSongId }),
         },
       ),
       { params: Promise.resolve({ sessionId, matchId }) },
@@ -150,11 +151,73 @@ describe("contratos públicos de partida", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual(gameState);
-    expect(gameService.voteForMatch).toHaveBeenCalledWith({
+    expect(gameService.decideMatch).toHaveBeenCalledWith({
       sessionId,
       matchId,
-      winnerSongId,
+      decision: { type: "vote", winnerSongId },
     });
+  });
+
+  it("registra desempate sem vencedora fornecida pelo cliente", async () => {
+    gameService.decideMatch.mockResolvedValue(gameState);
+
+    const response = await decide(
+      new Request(
+        `http://localhost/api/games/${sessionId}/matches/${matchId}/decision`,
+        { method: "POST", body: JSON.stringify({ type: "tiebreak" }) },
+      ),
+      { params: Promise.resolve({ sessionId, matchId }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(gameService.decideMatch).toHaveBeenCalledWith({
+      sessionId,
+      matchId,
+      decision: { type: "tiebreak" },
+    });
+  });
+
+  it.each([
+    ["voto sem vencedora", { type: "vote" }],
+    ["tipo desconhecido", { type: "coin-flip" }],
+    ["vencedora enviada em um desempate", { type: "tiebreak", winnerSongId }],
+  ])("rejeita %s", async (_scenario, decision) => {
+    const response = await decide(
+      new Request(
+        `http://localhost/api/games/${sessionId}/matches/${matchId}/decision`,
+        {
+          method: "POST",
+          body: JSON.stringify(decision),
+        },
+      ),
+      { params: Promise.resolve({ sessionId, matchId }) },
+    );
+
+    expect(response.status).toBe(400);
+    expect(gameService.decideMatch).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["MATCH_NOT_FOUND", "Confronto não encontrado.", 404],
+    ["GAME_SESSION_NOT_ACTIVE", "Partida encerrada.", 409],
+  ] as const)("preserva erro %s do serviço", async (code, message, status) => {
+    gameService.decideMatch.mockRejectedValue(
+      new AppError(code, message, status),
+    );
+
+    const response = await decide(
+      new Request(
+        `http://localhost/api/games/${sessionId}/matches/${matchId}/decision`,
+        {
+          method: "POST",
+          body: JSON.stringify({ type: "vote", winnerSongId }),
+        },
+      ),
+      { params: Promise.resolve({ sessionId, matchId }) },
+    );
+
+    expect(response.status).toBe(status);
+    await expect(response.json()).resolves.toMatchObject({ error: { code } });
   });
 
   it("abandona uma partida ativa", async () => {

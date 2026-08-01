@@ -1,10 +1,13 @@
-import { voteInputSchema, voteParamsSchema } from "@/domain/game/validation";
+import {
+  matchDecisionInputSchema,
+  matchDecisionParamsSchema,
+} from "@/domain/game/validation";
 import {
   handlePublicGameRequest,
   parsePublicGameBody,
   parsePublicGameValue,
 } from "@/server/http/public-game-handler";
-import { voteForMatch } from "@/server/services/game-service";
+import { decideMatch } from "@/server/services/game-service";
 
 export async function POST(
   request: Request,
@@ -13,9 +16,12 @@ export async function POST(
   return handlePublicGameRequest(async () => {
     const { sessionId, matchId } = parsePublicGameValue(
       await context.params,
-      voteParamsSchema,
+      matchDecisionParamsSchema,
     );
-    const input = await parsePublicGameBody(request, voteInputSchema);
-    return Response.json(await voteForMatch({ sessionId, matchId, ...input }));
+    const decision = await parsePublicGameBody(
+      request,
+      matchDecisionInputSchema,
+    );
+    return Response.json(await decideMatch({ sessionId, matchId, decision }));
   });
 }

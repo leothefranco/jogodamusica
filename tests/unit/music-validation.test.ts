@@ -136,27 +136,26 @@ describe("publicação de tema", () => {
   });
 
   it("informa quantas músicas faltam", () => {
-    expect(getThemePublishability(8, 5)).toEqual({
+    expect(getThemePublishability(3)).toEqual({
       canPublish: false,
-      missingSongCount: 3,
+      missingSongCount: 1,
     });
   });
 
-  it("libera publicação com músicas suficientes", () => {
-    expect(getThemePublishability(4, 6)).toEqual({
+  it("libera publicação a partir de quatro músicas", () => {
+    expect(getThemePublishability(4)).toEqual({
       canPublish: true,
       missingSongCount: 0,
     });
   });
 
-  it("valida slug, URL e tamanho de chave", () => {
+  it("valida tema sem modalidade padrão", () => {
     expect(
       themeInputSchema.safeParse({
         name: "Clássicos",
         slug: "classicos",
         description: "",
         coverUrl: "https://example.com/capa.jpg",
-        defaultBracketSize: "16",
       }).success,
     ).toBe(true);
 
@@ -166,7 +165,6 @@ describe("publicação de tema", () => {
         slug: "Slug Inválido",
         description: "",
         coverUrl: "javascript:alert(1)",
-        defaultBracketSize: "10",
       }).success,
     ).toBe(false);
   });

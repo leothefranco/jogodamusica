@@ -12,10 +12,6 @@ import {
 } from "@/db/schema";
 import type { ResolvedPlaylistTrack } from "@/domain/music/provider";
 import { AppError } from "@/lib/errors";
-import {
-  bracketSizeSchema,
-  type BracketSize,
-} from "@/domain/music/content-validation";
 
 type ThemeContentDatabase = Pick<
   ReturnType<typeof getDatabase>,
@@ -29,7 +25,6 @@ export type ThemeSummary = {
   description: string | null;
   coverUrl: string | null;
   isActive: boolean;
-  defaultBracketSize: BracketSize;
   activeSongCount: number;
   totalSongCount: number;
   updatedAt: Date;
@@ -84,9 +79,8 @@ const themeSummarySelection = {
   description: themes.description,
   coverUrl: themes.coverUrl,
   isActive: themes.isActive,
-  defaultBracketSize: themes.defaultBracketSize,
   activeSongCount:
-    sql<number>`count(${themeSongs.songId}) filter (where ${themeSongs.isActive} = true)`.mapWith(
+    sql<number>`count(${themeSongs.songId}) filter (where ${themeSongs.isActive} = true and ${songs.isEmbeddable} = true)`.mapWith(
       Number,
     ),
   totalSongCount: count(themeSongs.songId).mapWith(Number),
@@ -109,17 +103,6 @@ const themeSongEditorSelection = {
   displayOrder: themeSongs.displayOrder,
 };
 
-function toThemeSummary(
-  row: Omit<ThemeSummary, "defaultBracketSize"> & {
-    defaultBracketSize: number;
-  },
-): ThemeSummary {
-  return {
-    ...row,
-    defaultBracketSize: bracketSizeSchema.parse(row.defaultBracketSize),
-  };
-}
-
 async function findThemeSummaryUsing(
   database: ThemeContentDatabase,
   themeId: string,
@@ -128,11 +111,12 @@ async function findThemeSummaryUsing(
     .select(themeSummarySelection)
     .from(themes)
     .leftJoin(themeSongs, eq(themeSongs.themeId, themes.id))
+    .leftJoin(songs, eq(songs.id, themeSongs.songId))
     .where(eq(themes.id, themeId))
     .groupBy(themes.id)
     .limit(1);
 
-  return theme ? toThemeSummary(theme) : null;
+  return theme ?? null;
 }
 
 async function findThemeSongUsing(
@@ -278,10 +262,11 @@ export async function listThemeSummaries(): Promise<ThemeSummary[]> {
     .select(themeSummarySelection)
     .from(themes)
     .leftJoin(themeSongs, eq(themeSongs.themeId, themes.id))
+    .leftJoin(songs, eq(songs.id, themeSongs.songId))
     .groupBy(themes.id)
     .orderBy(desc(themes.updatedAt));
 
-  return rows.map(toThemeSummary);
+  return rows;
 }
 
 export async function findThemeSummary(

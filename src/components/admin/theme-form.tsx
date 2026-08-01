@@ -9,17 +9,12 @@ import {
 } from "@/components/admin/content-action-state";
 import { adminInputClassName } from "@/components/admin/form-styles";
 import { Button } from "@/components/ui/button";
-import {
-  bracketSizes,
-  type BracketSize,
-} from "@/domain/music/content-validation";
 
 type ThemeFormValues = {
   name: string;
   slug: string;
   description: string;
   coverUrl: string;
-  defaultBracketSize: BracketSize;
 };
 
 type ThemeFormProps = {
@@ -121,21 +116,6 @@ export function ThemeForm({ action, defaults, submitLabel }: ThemeFormProps) {
           aria-invalid={Boolean(state.fieldErrors?.coverUrl)}
         />
         <FieldError errors={state.fieldErrors?.coverUrl} />
-      </label>
-
-      <label className="grid max-w-xs gap-2 text-sm font-semibold">
-        Tamanho padrão do chaveamento
-        <select
-          name="defaultBracketSize"
-          defaultValue={defaults?.defaultBracketSize ?? 4}
-          className={adminInputClassName}
-        >
-          {bracketSizes.map((size) => (
-            <option key={size} value={size} className="bg-[#11111d]">
-              {size} músicas
-            </option>
-          ))}
-        </select>
       </label>
 
       <Button

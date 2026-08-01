@@ -15,7 +15,7 @@ import { bracketSizeSchema } from "@/domain/music/content-validation";
 import { AppError } from "@/lib/errors";
 import type {
   GameCreationRepository,
-  GameVoteRepository,
+  GameDecisionRepository,
   NewGameMatch,
   NewGameSession,
 } from "@/server/services/game-service";
@@ -222,9 +222,9 @@ export async function withGameCreationTransaction<T>(
   });
 }
 
-export async function withGameVoteTransaction<T>(
+export async function withGameDecisionTransaction<T>(
   sessionId: string,
-  operation: (repository: GameVoteRepository) => Promise<T>,
+  operation: (repository: GameDecisionRepository) => Promise<T>,
 ): Promise<T> {
   return getDatabase().transaction(async (transaction) => {
     await transaction.execute(

@@ -47,7 +47,6 @@ function themeInputFromFormData(formData: FormData) {
     slug: formData.get("slug"),
     description: formData.get("description"),
     coverUrl: formData.get("coverUrl"),
-    defaultBracketSize: formData.get("defaultBracketSize"),
   });
 }
 

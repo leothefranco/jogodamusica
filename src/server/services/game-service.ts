@@ -3,11 +3,12 @@ import "server-only";
 import {
   createBracket,
   pairRoundWinners,
-  resolveMatchWinner,
+  resolveMatchDecision,
   roundCountFromBracketSize,
   selectSongsForSession,
   shuffleRoundWinners,
   type RoundMatchPair,
+  type MatchDecision,
 } from "@/domain/bracket";
 import type {
   GameSong,
@@ -22,7 +23,7 @@ import {
   abandonGameSessionRecord,
   getGameStateRecord,
   withGameCreationTransaction,
-  withGameVoteTransaction,
+  withGameDecisionTransaction,
 } from "@/server/repositories/game-repository";
 
 export type {
@@ -50,7 +51,7 @@ export type GameCreationRepository = {
   insertMatches(matches: NewGameMatch[]): Promise<void>;
 };
 
-export type GameVoteRepository = {
+export type GameDecisionRepository = {
   getSession(): Promise<PersistedGameSession | null>;
   getMatch(matchId: string): Promise<PersistedGameMatch | null>;
   completeMatch(
@@ -77,9 +78,9 @@ export type GameServiceDependencies = {
     themeId: string,
     operation: (repository: GameCreationRepository) => Promise<T>,
   ): Promise<T>;
-  withGameVoteTransaction<T>(
+  withGameDecisionTransaction<T>(
     sessionId: string,
-    operation: (repository: GameVoteRepository) => Promise<T>,
+    operation: (repository: GameDecisionRepository) => Promise<T>,
   ): Promise<T>;
 };
 
@@ -88,10 +89,10 @@ export type CreateGameInput = {
   bracketSize: BracketSize;
 };
 
-export type VoteInput = {
+export type DecideMatchInput = {
   sessionId: string;
   matchId: string;
-  winnerSongId: string;
+  decision: MatchDecision;
 };
 
 export function createGameService(dependencies: GameServiceDependencies) {
@@ -169,8 +170,8 @@ export function createGameService(dependencies: GameServiceDependencies) {
       );
     },
 
-    async vote(input: VoteInput): Promise<GameState> {
-      await dependencies.withGameVoteTransaction(
+    async decide(input: DecideMatchInput): Promise<GameState> {
+      await dependencies.withGameDecisionTransaction(
         input.sessionId,
         async (repository) => {
           const session = await repository.getSession();
@@ -197,18 +198,15 @@ export function createGameService(dependencies: GameServiceDependencies) {
               404,
             );
           }
-          const championSongId = resolveMatchWinner(
+          const { winnerSongId, championSongId } = resolveMatchDecision(
             match,
             session.bracketSize,
-            input.winnerSongId,
+            input.decision,
+            dependencies.random,
           );
 
           const completedAt = dependencies.now();
-          await repository.completeMatch(
-            match.id,
-            input.winnerSongId,
-            completedAt,
-          );
+          await repository.completeMatch(match.id, winnerSongId, completedAt);
 
           if (championSongId) {
             const finalRound = roundCountFromBracketSize(session.bracketSize);
@@ -258,12 +256,12 @@ export const defaultGameServiceDependencies = {
 const gameService = createGameService({
   ...defaultGameServiceDependencies,
   withGameCreationTransaction,
-  withGameVoteTransaction,
+  withGameDecisionTransaction,
 });
 
 export const createGameSession = gameService.createSession;
 export const getGameState = gameService.getState;
-export const voteForMatch = gameService.vote;
+export const decideMatch = gameService.decide;
 
 export async function abandonGameSession(sessionId: string): Promise<void> {
   const result = await abandonGameSessionRecord(sessionId, new Date());

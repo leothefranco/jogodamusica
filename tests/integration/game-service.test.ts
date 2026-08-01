@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   createGameService,
   type GameCreationRepository,
+  type GameDecisionRepository,
   type GameServiceDependencies,
-  type GameVoteRepository,
   type PersistedGameMatch,
   type PersistedGameSession,
   type SessionSongSnapshot,
@@ -30,6 +30,7 @@ const activeSongs = createActiveSongs(10);
 function gameHarness(
   options: {
     isActive?: boolean;
+    random?: () => number;
     songs?: typeof activeSongs;
   } = {},
 ) {
@@ -38,7 +39,7 @@ function gameHarness(
   const matches: PersistedGameMatch[] = [];
   let matchIdSequence = 0;
   let creationTransactions = 0;
-  let voteTransactions = 0;
+  let decisionTransactions = 0;
 
   const creationRepository: GameCreationRepository = {
     async getThemeWithActiveSongs() {
@@ -67,7 +68,7 @@ function gameHarness(
       );
     },
   };
-  const voteRepository: GameVoteRepository = {
+  const decisionRepository: GameDecisionRepository = {
     async getSession() {
       return sessions[0] ?? null;
     },
@@ -140,14 +141,14 @@ function gameHarness(
         : null;
     },
     now: () => new Date("2026-07-29T12:00:00Z"),
-    random: () => 0,
+    random: options.random ?? (() => 0),
     async withGameCreationTransaction(_themeId, operation) {
       creationTransactions += 1;
       return operation(creationRepository);
     },
-    async withGameVoteTransaction(_sessionId, operation) {
-      voteTransactions += 1;
-      return operation(voteRepository);
+    async withGameDecisionTransaction(_sessionId, operation) {
+      decisionTransactions += 1;
+      return operation(decisionRepository);
     },
   };
 
@@ -156,7 +157,10 @@ function gameHarness(
     sessions,
     snapshots,
     matches,
-    transactionCounts: () => ({ creationTransactions, voteTransactions }),
+    transactionCounts: () => ({
+      creationTransactions,
+      decisionTransactions,
+    }),
   };
 }
 
@@ -228,7 +232,30 @@ describe("criação transacional de partida", () => {
   );
 });
 
-describe("voto transacional", () => {
+describe("decisão transacional de confronto", () => {
+  it.each([
+    [0, "songAId"],
+    [0.999, "songBId"],
+  ] as const)(
+    "resolve desempate no servidor pela participante %s",
+    async (randomValue, expectedSlot) => {
+      const harness = gameHarness({ random: () => randomValue });
+      await harness.service.createSession({ themeId, bracketSize: 4 });
+      const match = harness.matches[0];
+
+      await harness.service.decide({
+        sessionId,
+        matchId: match.id,
+        decision: { type: "tiebreak" },
+      });
+
+      expect(match).toMatchObject({
+        status: "completed",
+        winnerSongId: match[expectedSlot],
+      });
+    },
+  );
+
   it("sorteia e persiste todos os pares somente ao concluir a rodada", async () => {
     const harness = gameHarness();
     await harness.service.createSession({ themeId, bracketSize: 8 });
@@ -241,10 +268,10 @@ describe("voto transacional", () => {
     const winnerSongIds = firstRound.map(({ songAId }) => songAId!);
 
     for (const match of firstRound.slice(0, -1)) {
-      await harness.service.vote({
+      await harness.service.decide({
         sessionId,
         matchId: match.id,
-        winnerSongId: match.songAId!,
+        decision: { type: "vote", winnerSongId: match.songAId! },
       });
     }
 
@@ -260,10 +287,10 @@ describe("voto transacional", () => {
     expect(secondRound.every(({ status }) => status === "pending")).toBe(true);
 
     const lastMatch = firstRound.at(-1)!;
-    await harness.service.vote({
+    await harness.service.decide({
       sessionId,
       matchId: lastMatch.id,
-      winnerSongId: lastMatch.songAId!,
+      decision: { type: "vote", winnerSongId: lastMatch.songAId! },
     });
 
     expect(
@@ -287,21 +314,21 @@ describe("voto transacional", () => {
     expect(
       secondRound.map(({ songAId, songBId }) => [songAId, songBId]),
     ).toEqual(persistedPairs);
-    expect(harness.transactionCounts().voteTransactions).toBe(4);
+    expect(harness.transactionCounts().decisionTransactions).toBe(4);
   });
 
-  it("rejeita voto repetido sem avançar novamente", async () => {
-    const harness = gameHarness();
+  it("rejeita decisão repetida sem avançar novamente", async () => {
+    const harness = gameHarness({ random: () => 0 });
     await harness.service.createSession({ themeId, bracketSize: 4 });
     const firstMatch = harness.matches[0];
     const input = {
       sessionId,
       matchId: firstMatch.id,
-      winnerSongId: firstMatch.songAId!,
+      decision: { type: "tiebreak" as const },
     };
-    await harness.service.vote(input);
+    await harness.service.decide(input);
 
-    await expect(harness.service.vote(input)).rejects.toMatchObject({
+    await expect(harness.service.decide(input)).rejects.toMatchObject({
       code: "MATCH_ALREADY_COMPLETED",
       status: 409,
     });
@@ -313,18 +340,18 @@ describe("voto transacional", () => {
     for (const match of harness.matches.filter(
       ({ roundNumber }) => roundNumber === 1,
     )) {
-      await harness.service.vote({
+      await harness.service.decide({
         sessionId,
         matchId: match.id,
-        winnerSongId: match.songAId!,
+        decision: { type: "vote", winnerSongId: match.songAId! },
       });
     }
     const final = harness.matches.find(({ roundNumber }) => roundNumber === 2)!;
 
-    await harness.service.vote({
+    await harness.service.decide({
       sessionId,
       matchId: final.id,
-      winnerSongId: final.songBId!,
+      decision: { type: "vote", winnerSongId: final.songBId! },
     });
 
     expect(harness.sessions[0]).toMatchObject({

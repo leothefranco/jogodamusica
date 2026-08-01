@@ -138,8 +138,7 @@ Restaure o perfil ativo antes de continuar.
    - nome: `Teste Fase 2`;
    - slug: `teste-fase-2`;
    - descrição curta;
-   - URL HTTPS de imagem;
-   - tamanho padrão: `4`.
+   - URL HTTPS de imagem.
 4. Salve.
 
 Esperado:
@@ -156,8 +155,6 @@ Tente salvar, um caso por vez:
 - slug com espaços ou letras maiúsculas;
 - slug já existente;
 - URL `javascript:alert(1)`;
-- tamanho diferente de 4, 8, 16, 32, 64 ou 128, alterando a requisição no
-  navegador.
 
 Esperado:
 
@@ -168,7 +165,7 @@ Esperado:
 
 ### 5.3 Editar tema
 
-Altere nome, descrição, imagem e tamanho padrão. Recarregue a página.
+Altere nome, descrição e imagem. Recarregue a página.
 
 Esperado:
 
@@ -289,7 +286,7 @@ Esperado:
 
 ## 8. Regras de publicação
 
-Use um tema de chave padrão 4.
+Use um tema com quatro músicas ativas e reproduzíveis.
 
 ### 8.1 Quantidade insuficiente
 
@@ -320,8 +317,7 @@ Com exatamente quatro músicas ativas, tente:
 
 - desativar uma música;
 - remover uma música ativa;
-- reassociar uma música ativa marcando-a como inativa;
-- aumentar o tamanho padrão para 8.
+- reassociar uma música ativa marcando-a como inativa.
 
 Esperado:
 

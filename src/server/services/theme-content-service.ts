@@ -71,10 +71,7 @@ function assertPublishedThemeCanLoseActiveSong(
 ) {
   if (!theme.isActive) return;
 
-  const publishability = getThemePublishability(
-    theme.defaultBracketSize,
-    theme.activeSongCount - 1,
-  );
+  const publishability = getThemePublishability(theme.activeSongCount - 1);
   if (!publishability.canPublish) {
     throw new AppError("THEME_NOT_PLAYABLE", message, 409);
   }
@@ -97,10 +94,7 @@ export async function getThemeEditor(themeId: string) {
       ...(await musicProvider.getEmbedData(song.providerContentId)),
     })),
   );
-  const publishability = getThemePublishability(
-    theme.defaultBracketSize,
-    theme.activeSongCount,
-  );
+  const publishability = getThemePublishability(theme.activeSongCount);
 
   return { theme, songs, publishability };
 }
@@ -146,20 +140,6 @@ export function createThemeContentService(
           throw new AppError("THEME_NOT_FOUND", "Tema não encontrado.", 404);
         }
 
-        if (current.isActive) {
-          const publishability = getThemePublishability(
-            input.defaultBracketSize,
-            current.activeSongCount,
-          );
-          if (!publishability.canPublish) {
-            throw new AppError(
-              "THEME_NOT_PLAYABLE",
-              `O tema ativo precisa de mais ${publishability.missingSongCount} música(s) ativa(s) para esse tamanho de chave.`,
-              409,
-            );
-          }
-        }
-
         try {
           await repository.updateThemeRecord(input);
         } catch (error) {
@@ -186,10 +166,7 @@ export function createThemeContentService(
         }
 
         if (isActive) {
-          const publishability = getThemePublishability(
-            theme.defaultBracketSize,
-            theme.activeSongCount,
-          );
+          const publishability = getThemePublishability(theme.activeSongCount);
           if (!publishability.canPublish) {
             throw new AppError(
               "THEME_NOT_PLAYABLE",
@@ -231,10 +208,14 @@ export function createThemeContentService(
           throw new AppError("THEME_NOT_FOUND", "Tema não encontrado.", 404);
         }
 
-        if (currentAssociation?.isActive && !input.isActive) {
+        if (
+          currentAssociation?.isActive &&
+          currentAssociation.isEmbeddable &&
+          !input.isActive
+        ) {
           assertPublishedThemeCanLoseActiveSong(
             theme,
-            "Desative o tema antes de reduzir suas músicas ativas abaixo do tamanho padrão.",
+            "Desative o tema antes de reduzir suas músicas ativas abaixo de quatro.",
           );
         }
 
@@ -272,10 +253,10 @@ export function createThemeContentService(
           previewDurationSeconds: input.previewDurationSeconds,
         });
 
-        if (current.isActive && !input.isActive) {
+        if (current.isActive && current.isEmbeddable && !input.isActive) {
           assertPublishedThemeCanLoseActiveSong(
             theme,
-            "Desative o tema antes de reduzir suas músicas ativas abaixo do tamanho padrão.",
+            "Desative o tema antes de reduzir suas músicas ativas abaixo de quatro.",
           );
         }
 
@@ -296,7 +277,7 @@ export function createThemeContentService(
           );
         }
 
-        if (current.isActive) {
+        if (current.isActive && current.isEmbeddable) {
           assertPublishedThemeCanLoseActiveSong(
             theme,
             "Desative o tema antes de remover uma música necessária para o chaveamento.",
