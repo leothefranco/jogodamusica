@@ -57,14 +57,13 @@ type YouTubePlayerProps = {
   onError(errorCode: number): void;
   onLoadError(): void;
   onPlayingChange(playing: boolean): void;
-  onStarted(songId: string): void;
 };
 
 export const YouTubePlayer = forwardRef<
   YouTubePlayerHandle,
   YouTubePlayerProps
 >(function YouTubePlayer(
-  { label, song, onError, onLoadError, onPlayingChange, onStarted },
+  { label, song, onError, onLoadError, onPlayingChange },
   ref,
 ) {
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -79,7 +78,6 @@ export const YouTubePlayer = forwardRef<
     onError,
     onLoadError,
     onPlayingChange,
-    onStarted,
   });
 
   useEffect(() => {
@@ -87,9 +85,8 @@ export const YouTubePlayer = forwardRef<
       onError,
       onLoadError,
       onPlayingChange,
-      onStarted,
     };
-  }, [onError, onLoadError, onPlayingChange, onStarted]);
+  }, [onError, onLoadError, onPlayingChange]);
 
   const clearPreviewTimer = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -174,7 +171,6 @@ export const YouTubePlayer = forwardRef<
             if (event.data === youtube.PlayerState.PLAYING) {
               clearPreviewTimer();
               callbacksRef.current.onPlayingChange(true);
-              callbacksRef.current.onStarted(song.songId);
               const previewEnd =
                 song.startTimeSeconds + song.previewDurationSeconds;
               const remainingSeconds = Math.max(

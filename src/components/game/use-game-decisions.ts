@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import type {
   PendingDecision,
@@ -60,19 +60,24 @@ export function useGameDecisions({
     useState<TiebreakRevealState | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isDeciding, setIsDeciding] = useState(false);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
 
   const requestVote = useCallback(
     (song: GameSong) => {
       if (!currentMatch || !canDecide) return;
+      returnFocusRef.current = document.activeElement as HTMLElement | null;
+      pausePlayback();
       setPendingDecision({ type: "vote", song });
     },
-    [canDecide, currentMatch],
+    [canDecide, currentMatch, pausePlayback],
   );
 
   const requestTiebreak = useCallback(() => {
     if (!currentMatch || !canDecide) return;
+    returnFocusRef.current = document.activeElement as HTMLElement | null;
+    pausePlayback();
     setPendingDecision({ type: "tiebreak" });
-  }, [canDecide, currentMatch]);
+  }, [canDecide, currentMatch, pausePlayback]);
 
   const confirmDecision = useCallback(async () => {
     if (!currentMatch || !pendingDecision) return;
@@ -131,6 +136,12 @@ export function useGameDecisions({
     songs,
   ]);
 
+  const cancelDecision = useCallback(() => {
+    const returnFocusTo = returnFocusRef.current;
+    setPendingDecision(null);
+    queueMicrotask(() => returnFocusTo?.focus());
+  }, []);
+
   return {
     clearMessage: () => setMessage(null),
     confirmDecision,
@@ -140,6 +151,6 @@ export function useGameDecisions({
     requestTiebreak,
     requestVote,
     tiebreakReveal,
-    cancelDecision: () => setPendingDecision(null),
+    cancelDecision,
   };
 }
