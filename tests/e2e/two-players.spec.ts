@@ -20,6 +20,43 @@ declare global {
   }
 }
 
+function completedTiebreakState(winnerSongId: "song-a" | "song-b") {
+  return {
+    theme: { name: "Clássicos do teste", slug: "classicos-do-teste" },
+    session: {
+      id: "00000000-0000-4000-8000-000000000001",
+      themeId: "00000000-0000-4000-8000-000000000002",
+      bracketSize: 4,
+      status: "active",
+      currentRound: 1,
+      championSongId: null,
+      startedAt: "2026-01-01T00:00:00.000Z",
+      completedAt: null,
+    },
+    songs: [],
+    matches: [
+      {
+        id: "match-1",
+        sessionId: "00000000-0000-4000-8000-000000000001",
+        roundNumber: 1,
+        position: 1,
+        songAId: "song-a",
+        songBId: "song-b",
+        winnerSongId,
+        status: "completed",
+        completedAt: "2026-01-01T00:01:00.000Z",
+      },
+    ],
+    currentMatch: null,
+    progress: {
+      completedMatches: 1,
+      totalMatches: 3,
+      currentRound: 1,
+      roundCount: 2,
+    },
+  };
+}
+
 test.beforeEach(async ({ page }) => {
   await page.setExtraHTTPHeaders({ "x-e2e-test": "two-players" });
   await page.addInitScript(() => {
@@ -387,7 +424,7 @@ test("bloqueia confirmações repetidas enquanto a decisão está em andamento",
   expect(requestCount).toBe(1);
 });
 
-test("confirma o desempate na aplicação e revela a vencedora sorteada pelo servidor", async ({
+test("confirma um voto normal e avança o estado do confronto", async ({
   page,
 }) => {
   const decisionRequest = page.waitForRequest(
@@ -410,7 +447,32 @@ test("confirma o desempate na aplicação e revela a vencedora sorteada pelo ser
           startedAt: "2026-01-01T00:00:00.000Z",
           completedAt: null,
         },
-        songs: [],
+        songs: [
+          {
+            sessionId: "00000000-0000-4000-8000-000000000001",
+            songId: "song-a",
+            seed: 1,
+            title: "Canção A",
+            artist: "Artista A",
+            thumbnailUrl: "/icon.svg",
+            provider: "youtube",
+            providerContentId: "youtube-a",
+            startTimeSeconds: 10,
+            previewDurationSeconds: 30,
+          },
+          {
+            sessionId: "00000000-0000-4000-8000-000000000001",
+            songId: "song-b",
+            seed: 2,
+            title: "Canção B",
+            artist: "Artista B",
+            thumbnailUrl: "/icon.svg",
+            provider: "youtube",
+            providerContentId: "youtube-b",
+            startTimeSeconds: 20,
+            previewDurationSeconds: 30,
+          },
+        ],
         matches: [
           {
             id: "match-1",
@@ -419,12 +481,33 @@ test("confirma o desempate na aplicação e revela a vencedora sorteada pelo ser
             position: 1,
             songAId: "song-a",
             songBId: "song-b",
-            winnerSongId: "song-b",
+            winnerSongId: "song-a",
             status: "completed",
             completedAt: "2026-01-01T00:01:00.000Z",
           },
+          {
+            id: "match-2",
+            sessionId: "00000000-0000-4000-8000-000000000001",
+            roundNumber: 1,
+            position: 2,
+            songAId: "song-a",
+            songBId: "song-b",
+            winnerSongId: null,
+            status: "ready",
+            completedAt: null,
+          },
         ],
-        currentMatch: null,
+        currentMatch: {
+          id: "match-2",
+          sessionId: "00000000-0000-4000-8000-000000000001",
+          roundNumber: 1,
+          position: 2,
+          songAId: "song-a",
+          songBId: "song-b",
+          winnerSongId: null,
+          status: "ready",
+          completedAt: null,
+        },
         progress: {
           completedMatches: 1,
           totalMatches: 3,
@@ -436,15 +519,82 @@ test("confirma o desempate na aplicação e revela a vencedora sorteada pelo ser
   );
   await page.goto("/e2e-test/dois-players");
 
+  await page.getByRole("button", { name: "Votar na música A" }).click();
+  await page
+    .getByRole("dialog", { name: "Confirmar voto" })
+    .getByRole("button", { name: "Confirmar voto" })
+    .click();
+
+  expect((await decisionRequest).postDataJSON()).toEqual({
+    type: "vote",
+    winnerSongId: "song-a",
+  });
+  await expect(
+    page.getByText("confronto 2 de 2", { exact: false }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("progressbar", { name: "Progresso do chaveamento" }),
+  ).toHaveAttribute("aria-valuenow", "1");
+});
+
+test("confirma o desempate na aplicação e revela a vencedora sorteada pelo servidor", async ({
+  page,
+}) => {
+  const decisionRequest = page.waitForRequest(
+    (request) =>
+      request.url().endsWith("/decision") && request.method() === "POST",
+  );
+  await page.route("**/decision", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(completedTiebreakState("song-b")),
+    }),
+  );
+  await page.goto("/e2e-test/dois-players");
+
   await page.getByRole("button", { name: "Desempatar" }).click();
   const confirmation = page.getByRole("dialog", {
     name: "Confirmar desempate",
   });
   await expect(confirmation).toBeVisible();
+  const spinStartedAt = Date.now();
   await confirmation.getByRole("button", { name: "Sortear vencedora" }).click();
 
   expect((await decisionRequest).postDataJSON()).toEqual({ type: "tiebreak" });
   const reveal = page.getByRole("status", { name: "Roleta de desempate" });
   await expect(reveal).toBeVisible();
+  await expect(reveal).toContainText("Roleta em movimento");
+  await expect(page.getByRole("button", { name: "Desempatar" })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Reproduzir música A" }),
+  ).toBeDisabled();
+  await expect(reveal).toContainText("Desempate concluído");
   await expect(reveal).toContainText("Canção B");
+  expect(Date.now() - spinStartedAt).toBeGreaterThanOrEqual(2_300);
+});
+
+test("prefers-reduced-motion revela imediatamente sem girar a roleta", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.route("**/decision", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(completedTiebreakState("song-a")),
+    }),
+  );
+  await page.goto("/e2e-test/dois-players");
+
+  await page.getByRole("button", { name: "Desempatar" }).click();
+  await page
+    .getByRole("dialog", { name: "Confirmar desempate" })
+    .getByRole("button", { name: "Sortear vencedora" })
+    .click();
+
+  const reveal = page.getByRole("status", { name: "Roleta de desempate" });
+  await expect(reveal).toContainText("Desempate concluído");
+  await expect(reveal).toContainText("Canção A");
+  await expect(reveal).not.toContainText("Roleta em movimento");
 });

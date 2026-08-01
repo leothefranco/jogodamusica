@@ -10,7 +10,9 @@ export type PendingDecision =
   { type: "vote"; song: GameSong } | { type: "tiebreak" };
 
 export type TiebreakRevealState = {
+  participants: readonly [GameSong, GameSong];
   winner: GameSong;
+  activeSongId: string;
   isSpinning: boolean;
 };
 
@@ -77,6 +79,9 @@ export function TiebreakReveal({
 }) {
   if (!reveal) return null;
 
+  const winnerLabel =
+    reveal.participants[0].songId === reveal.winner.songId ? "A" : "B";
+
   return (
     <div
       role="status"
@@ -84,9 +89,9 @@ export function TiebreakReveal({
       aria-live="assertive"
       className="fixed inset-0 z-50 grid place-items-center bg-[#08080f]/92 p-5 text-center backdrop-blur-md"
     >
-      <div>
+      <div className="w-full max-w-md">
         <div
-          className={`mx-auto grid size-24 place-items-center rounded-full border-4 border-white/20 bg-[conic-gradient(#c4b5fd_0_25%,#e879f9_0_50%,#c4b5fd_0_75%,#e879f9_0)] shadow-[0_0_45px_rgba(196,181,253,0.35)] ${reveal.isSpinning ? "animate-[spin_700ms_ease-in-out]" : ""}`}
+          className={`mx-auto grid size-24 place-items-center rounded-full border-4 border-white/20 bg-[conic-gradient(#c4b5fd_0_25%,#e879f9_0_50%,#c4b5fd_0_75%,#e879f9_0)] shadow-[0_0_45px_rgba(196,181,253,0.35)] ${reveal.isSpinning ? "animate-[spin_700ms_linear_infinite]" : ""}`}
           aria-hidden="true"
         >
           <span className="size-5 rounded-full bg-[#08080f] ring-2 ring-white/70" />
@@ -95,12 +100,37 @@ export function TiebreakReveal({
           {reveal.isSpinning ? "Roleta em movimento" : "Desempate concluído"}
         </p>
         {reveal.isSpinning ? (
-          <p className="mt-2 text-lg font-bold text-white/70">
-            Revelando a vencedora...
-          </p>
+          <>
+            <p className="mt-2 text-lg font-bold text-white/70">
+              Revelando a vencedora...
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-3" aria-hidden="true">
+              {reveal.participants.map((song, index) => {
+                const active = song.songId === reveal.activeSongId;
+                return (
+                  <div
+                    key={song.songId}
+                    className={`rounded-2xl border px-3 py-4 transition-colors ${
+                      active
+                        ? "border-violet-300 bg-violet-300 text-[#160d25]"
+                        : "border-white/10 bg-white/5 text-white/50"
+                    }`}
+                  >
+                    <span className="text-xs font-black tracking-widest uppercase">
+                      Música {index === 0 ? "A" : "B"}
+                    </span>
+                    <p className="mt-1 truncate font-bold">{song.title}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </>
         ) : (
           <>
-            <p className="mt-2 text-3xl font-black">{reveal.winner.title}</p>
+            <p className="mt-2 text-sm font-bold text-white/60">
+              Música {winnerLabel}
+            </p>
+            <p className="mt-1 text-3xl font-black">{reveal.winner.title}</p>
             <p className="mt-1 text-white/60">{reveal.winner.artist} avança</p>
           </>
         )}

@@ -294,7 +294,10 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
   ];
 
   return (
-    <main className="game-screen relative bg-[#08080f] text-white">
+    <main
+      className="game-screen relative bg-[#08080f] text-white"
+      aria-busy={decisions.isDeciding}
+    >
       <div className="grid-fade pointer-events-none absolute inset-0 opacity-30" />
       <div className="game-shell relative mx-auto">
         <header className="game-header flex items-center justify-between gap-2">
@@ -394,7 +397,7 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
           <button
             type="button"
             onClick={() => void abandon()}
-            disabled={isAbandoning}
+            disabled={isAbandoning || decisions.isDeciding}
             className="min-h-11 rounded-lg px-4 text-sm text-white/45 outline-none hover:text-white focus-visible:ring-2 focus-visible:ring-violet-300"
           >
             {isAbandoning

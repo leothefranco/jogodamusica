@@ -13,7 +13,14 @@ import type {
   PersistedGameMatch,
 } from "@/domain/game/state";
 
-const TIEBREAK_SPIN_DURATION_MS = 700;
+const TIEBREAK_SPIN_DURATION_MS = 2_500;
+const TIEBREAK_RESULT_HOLD_MS = 700;
+const TIEBREAK_SWITCH_INTERVAL_MS = 180;
+const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
+
+function wait(durationMs: number) {
+  return new Promise<void>((resolve) => window.setTimeout(resolve, durationMs));
+}
 
 async function submitMatchDecision(
   sessionId: string,
@@ -60,6 +67,7 @@ export function useGameDecisions({
     useState<TiebreakRevealState | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isDeciding, setIsDeciding] = useState(false);
+  const decidingRef = useRef(false);
   const returnFocusRef = useRef<HTMLElement | null>(null);
 
   const requestVote = useCallback(
@@ -80,13 +88,14 @@ export function useGameDecisions({
   }, [canDecide, currentMatch, pausePlayback]);
 
   const confirmDecision = useCallback(async () => {
-    if (!currentMatch || !pendingDecision) return;
+    if (!currentMatch || !pendingDecision || decidingRef.current) return;
 
     const decision: MatchDecision =
       pendingDecision.type === "vote"
         ? { type: "vote", winnerSongId: pendingDecision.song.songId }
         : { type: "tiebreak" };
 
+    decidingRef.current = true;
     setIsDeciding(true);
     setMessage(null);
     pausePlayback();
@@ -104,17 +113,47 @@ export function useGameDecisions({
         const winner = songs.find(
           (song) => song.songId === completedMatch?.winnerSongId,
         );
-        if (!winner) {
+        const participantA = songs.find(
+          (song) => song.songId === currentMatch.songAId,
+        );
+        const participantB = songs.find(
+          (song) => song.songId === currentMatch.songBId,
+        );
+        if (!winner || !participantA || !participantB) {
           throw new Error("O servidor não informou a vencedora do desempate.");
         }
-        setTiebreakReveal({ winner, isSpinning: true });
-        await new Promise((resolve) =>
-          setTimeout(resolve, TIEBREAK_SPIN_DURATION_MS),
-        );
-        setTiebreakReveal({ winner, isSpinning: false });
-        await new Promise((resolve) =>
-          setTimeout(resolve, TIEBREAK_SPIN_DURATION_MS),
-        );
+        const participants = [participantA, participantB] as const;
+        const reducedMotion = window.matchMedia(REDUCED_MOTION_QUERY).matches;
+        let activeParticipantIndex = 0;
+        let switchTimer: number | null = null;
+
+        if (!reducedMotion) {
+          setTiebreakReveal({
+            participants,
+            winner,
+            activeSongId: participants[activeParticipantIndex].songId,
+            isSpinning: true,
+          });
+          switchTimer = window.setInterval(() => {
+            activeParticipantIndex = activeParticipantIndex === 0 ? 1 : 0;
+            setTiebreakReveal({
+              participants,
+              winner,
+              activeSongId: participants[activeParticipantIndex].songId,
+              isSpinning: true,
+            });
+          }, TIEBREAK_SWITCH_INTERVAL_MS);
+          await wait(TIEBREAK_SPIN_DURATION_MS);
+          window.clearInterval(switchTimer);
+        }
+
+        setTiebreakReveal({
+          participants,
+          winner,
+          activeSongId: winner.songId,
+          isSpinning: false,
+        });
+        await wait(TIEBREAK_RESULT_HOLD_MS);
         setTiebreakReveal(null);
       }
       applyState(payload);
@@ -125,6 +164,7 @@ export function useGameDecisions({
           : "Não foi possível registrar a decisão.",
       );
     } finally {
+      decidingRef.current = false;
       setIsDeciding(false);
     }
   }, [
