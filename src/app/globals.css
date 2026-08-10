@@ -125,6 +125,8 @@
   display: grid;
   gap: 0.75rem;
   max-width: 28rem;
+  min-height: calc(100dvh - 2rem);
+  width: 100%;
 }
 
 .game-matchup {
@@ -136,15 +138,27 @@
   min-height: 200px;
 }
 
+.game-song-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.game-player-wrap,
+.game-youtube-player,
+.game-player-host,
+.game-player-host iframe {
+  width: 100%;
+}
+
 @media (min-height: 700px) {
   .game-screen {
-    padding-block: 0.5rem;
+    padding-block: 0.25rem;
   }
 
   .game-shell {
     grid-template-rows: auto minmax(0, 1fr) auto auto auto;
-    gap: 0.375rem;
-    height: 100%;
+    gap: 0.25rem;
+    min-height: calc(100dvh - 0.5rem);
   }
 
   .game-matchup {
@@ -152,9 +166,19 @@
     min-height: 0;
   }
 
-  .game-song-card,
-  .game-player-wrap {
+  .game-song-card {
     min-height: 0;
+  }
+
+  .game-player-wrap,
+  .game-youtube-player,
+  .game-player-host,
+  .game-player-host iframe {
+    height: 100%;
+  }
+
+  .game-player-host {
+    aspect-ratio: auto;
   }
 }
 

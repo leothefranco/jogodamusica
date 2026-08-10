@@ -17,6 +17,7 @@
 
 # local worktrees and generated review artifacts
 /tmp/
+/.codex-remote-attachments/
 
 # next.js
 /.next/

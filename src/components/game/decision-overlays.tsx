@@ -4,17 +4,59 @@ import { Dialog } from "@base-ui/react/dialog";
 import { LoaderCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import type {
+  PendingDecision,
+  TiebreakRevealState,
+} from "@/components/game/decision-machine";
 import type { GameSong } from "@/domain/game/state";
 
-export type PendingDecision =
-  { type: "vote"; song: GameSong } | { type: "tiebreak" };
+export type {
+  PendingDecision,
+  TiebreakRevealState,
+} from "@/components/game/decision-machine";
 
-export type TiebreakRevealState = {
-  participants: readonly [GameSong, GameSong];
-  winner: GameSong;
-  activeSongId: string;
-  isSpinning: boolean;
-};
+function TiebreakSongCard({
+  song,
+  label,
+  active,
+  winner,
+}: {
+  song: GameSong;
+  label: "A" | "B";
+  active: boolean;
+  winner: boolean;
+}) {
+  return (
+    <div
+      className={`overflow-hidden rounded-2xl border text-left transition-all ${
+        active
+          ? "scale-[1.02] border-violet-300 bg-violet-300/15 shadow-[0_0_28px_rgba(196,181,253,0.22)]"
+          : "border-white/10 bg-white/5 opacity-60"
+      }`}
+    >
+      <div
+        role="img"
+        aria-label={`Capa de ${song.title}, de ${song.artist}`}
+        className="aspect-video w-full bg-cover bg-center"
+        style={{ backgroundImage: `url(${JSON.stringify(song.thumbnailUrl)})` }}
+      />
+      <div className="p-3">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs font-black tracking-widest text-violet-300 uppercase">
+            Música {label}
+          </span>
+          {winner && (
+            <span className="rounded-full bg-violet-300 px-2 py-0.5 text-[0.65rem] font-black tracking-wide text-[#160d25] uppercase">
+              Vencedora
+            </span>
+          )}
+        </div>
+        <p className="mt-1 truncate font-bold">{song.title}</p>
+        <p className="truncate text-xs text-white/55">{song.artist}</p>
+      </div>
+    </div>
+  );
+}
 
 export function DecisionConfirmation({
   decision,
@@ -99,41 +141,24 @@ export function TiebreakReveal({
         <p className="mt-5 text-sm font-bold tracking-[0.18em] text-violet-300 uppercase">
           {reveal.isSpinning ? "Roleta em movimento" : "Desempate concluído"}
         </p>
-        {reveal.isSpinning ? (
-          <>
-            <p className="mt-2 text-lg font-bold text-white/70">
-              Revelando a vencedora...
-            </p>
-            <div className="mt-5 grid grid-cols-2 gap-3" aria-hidden="true">
-              {reveal.participants.map((song, index) => {
-                const active = song.songId === reveal.activeSongId;
-                return (
-                  <div
-                    key={song.songId}
-                    className={`rounded-2xl border px-3 py-4 transition-colors ${
-                      active
-                        ? "border-violet-300 bg-violet-300 text-[#160d25]"
-                        : "border-white/10 bg-white/5 text-white/50"
-                    }`}
-                  >
-                    <span className="text-xs font-black tracking-widest uppercase">
-                      Música {index === 0 ? "A" : "B"}
-                    </span>
-                    <p className="mt-1 truncate font-bold">{song.title}</p>
-                  </div>
-                );
-              })}
-            </div>
-          </>
-        ) : (
-          <>
-            <p className="mt-2 text-sm font-bold text-white/60">
-              Música {winnerLabel}
-            </p>
-            <p className="mt-1 text-3xl font-black">{reveal.winner.title}</p>
-            <p className="mt-1 text-white/60">{reveal.winner.artist} avança</p>
-          </>
-        )}
+        <p className="mt-2 text-lg font-bold text-white/70">
+          {reveal.isSpinning
+            ? "Revelando a vencedora..."
+            : `Música ${winnerLabel}: ${reveal.winner.title} avança`}
+        </p>
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          {reveal.participants.map((song, index) => (
+            <TiebreakSongCard
+              key={song.songId}
+              song={song}
+              label={index === 0 ? "A" : "B"}
+              active={song.songId === reveal.activeSongId}
+              winner={
+                !reveal.isSpinning && song.songId === reveal.winner.songId
+              }
+            />
+          ))}
+        </div>
       </div>
     </div>
   );

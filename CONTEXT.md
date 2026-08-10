@@ -9,6 +9,10 @@ músicas e eleger uma campeã.
 Embaralhamento persistido dos vencedores de uma rodada para formar os confrontos da rodada seguinte. O resultado não muda ao recarregar a partida.
 _Avoid_: Avanço automático, chave fixa
 
+**Transição do chaveamento**:
+Mudança definitiva provocada por uma decisão de confronto. Pode concluir a rodada, iniciar o Sorteio de rodada ou declarar a campeã da partida.
+_Avoid_: Atualização da chave, avanço automático
+
 **Desempate**:
 Decisão aleatória e definitiva entre as duas músicas de um confronto quando o grupo não escolhe uma vencedora. A roleta apenas revela o resultado já registrado.
 _Avoid_: Novo voto, voto aleatório, sorteio visual

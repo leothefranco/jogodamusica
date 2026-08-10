@@ -1,9 +1,9 @@
 "use client";
 
-import { Check, Dices, LoaderCircle, Pause, Play } from "lucide-react";
+import { Check, Dices, LoaderCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   YouTubePlayer,
@@ -16,13 +16,12 @@ import {
 import { useGameDecisions } from "@/components/game/use-game-decisions";
 import { Button } from "@/components/ui/button";
 import { getRoundLabel } from "@/domain/game/experience";
+import { projectCurrentConfrontation } from "@/domain/game/projections";
 import type { GameSong, GameState } from "@/domain/game/state";
 
 function SongCard({
   label,
   song,
-  isPlaying,
-  onTogglePlayback,
   onVote,
   playerError,
   playerRef,
@@ -30,13 +29,10 @@ function SongCard({
   onPlayerLoadError,
   onPlayingChange,
   canVote,
-  playbackDisabled,
   voting,
 }: {
   label: "A" | "B";
   song: GameSong;
-  isPlaying: boolean;
-  onTogglePlayback(): void;
   onVote(): void;
   playerError: string | null;
   playerRef: React.RefObject<YouTubePlayerHandle | null>;
@@ -44,7 +40,6 @@ function SongCard({
   onPlayerLoadError(): void;
   onPlayingChange(playing: boolean): void;
   canVote: boolean;
-  playbackDisabled: boolean;
   voting: boolean;
 }) {
   return (
@@ -76,43 +71,21 @@ function SongCard({
         >
           {playerError}
         </p>
-        <div className="absolute inset-x-2 bottom-2 z-10 flex gap-2">
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={onTogglePlayback}
-            aria-label={
-              isPlaying
-                ? `Pausar música ${label}`
-                : `Reproduzir música ${label}`
-            }
-            aria-pressed={isPlaying}
-            disabled={playbackDisabled}
-            className="min-h-11 min-w-0 flex-1 rounded-xl bg-black/85 px-3 backdrop-blur-sm"
-          >
-            {isPlaying ? (
-              <Pause aria-hidden="true" />
-            ) : (
-              <Play aria-hidden="true" />
-            )}
-            {isPlaying ? `Pausar ${label}` : `Reproduzir ${label}`}
-          </Button>
-          <Button
-            type="button"
-            onClick={onVote}
-            aria-label={`Votar na música ${label}`}
-            disabled={!canVote || voting}
-            className="min-h-11 min-w-0 flex-1 rounded-xl bg-violet-300 px-3 font-bold text-[#160d25] hover:bg-violet-200"
-          >
-            {voting ? (
-              <LoaderCircle className="animate-spin" aria-hidden="true" />
-            ) : (
-              <Check aria-hidden="true" />
-            )}
-            Votar {label}
-          </Button>
-        </div>
       </div>
+      <Button
+        type="button"
+        onClick={onVote}
+        aria-label={`Votar na música ${label}`}
+        disabled={!canVote || voting}
+        className="mt-2 min-h-11 w-full rounded-xl bg-violet-300 px-3 font-bold text-[#160d25] hover:bg-violet-200"
+      >
+        {voting ? (
+          <LoaderCircle className="animate-spin" aria-hidden="true" />
+        ) : (
+          <Check aria-hidden="true" />
+        )}
+        Votar {label}
+      </Button>
     </article>
   );
 }
@@ -122,42 +95,27 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
   const [state, setState] = useState(initialState);
   const playerARef = useRef<YouTubePlayerHandle>(null);
   const playerBRef = useRef<YouTubePlayerHandle>(null);
-  const [activePlayer, setActivePlayer] = useState<{
-    matchId: string;
-    label: "A" | "B";
-  } | null>(null);
   const [playerErrors, setPlayerErrors] = useState<
     Partial<Record<"A" | "B", { matchId: string; message: string }>>
   >({});
   const [message, setMessage] = useState<string | null>(null);
   const [isAbandoning, setIsAbandoning] = useState(false);
 
-  const currentMatch = state.currentMatch;
-  const songsById = useMemo(
-    () => new Map(state.songs.map((song) => [song.songId, song])),
-    [state.songs],
-  );
-  const songA = currentMatch?.songAId
-    ? songsById.get(currentMatch.songAId)
-    : null;
-  const songB = currentMatch?.songBId
-    ? songsById.get(currentMatch.songBId)
-    : null;
+  const confrontation = projectCurrentConfrontation(state);
+  const currentMatch = confrontation?.match ?? null;
+  const songA = confrontation?.songA ?? null;
+  const songB = confrontation?.songB ?? null;
   const canVote = Boolean(currentMatch);
 
   const pausePlayback = useCallback(() => {
     playerARef.current?.pause();
     playerBRef.current?.pause();
-    setActivePlayer(null);
   }, []);
   const applyDecisionState = useCallback((payload: GameState) => {
     setState(payload);
   }, []);
   const decisions = useGameDecisions({
-    sessionId: state.session.id,
-    currentMatch,
-    songs: state.songs,
-    canDecide: canVote,
+    gameState: state,
     pausePlayback,
     applyState: applyDecisionState,
   });
@@ -209,35 +167,11 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
 
   const playerRefs = { A: playerARef, B: playerBRef };
 
-  function togglePlayback(label: "A" | "B") {
-    if (!currentMatch) return;
+  function playingChanged(label: "A" | "B", playing: boolean) {
+    if (!playing) return;
     setMessage(null);
     decisions.clearMessage();
-
-    if (
-      activePlayer?.matchId === currentMatch.id &&
-      activePlayer.label === label
-    ) {
-      playerRefs[label].current?.pause();
-      setActivePlayer(null);
-      return;
-    }
-
-    if (activePlayer?.matchId === currentMatch.id) {
-      playerRefs[activePlayer.label].current?.pause();
-    }
-    playerRefs[label].current?.play();
-    setActivePlayer({ matchId: currentMatch.id, label });
-  }
-
-  function playingChanged(label: "A" | "B", playing: boolean) {
-    if (!currentMatch) return;
-    setActivePlayer((current) => {
-      if (playing) return { matchId: currentMatch.id, label };
-      return current?.matchId === currentMatch.id && current.label === label
-        ? null
-        : current;
-    });
+    playerRefs[label === "A" ? "B" : "A"].current?.pause();
   }
 
   async function abandon() {
@@ -284,10 +218,7 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
     roundNumber: currentMatch.roundNumber,
     matchPosition: currentMatch.position,
   });
-  const progress =
-    state.progress.totalMatches === 0
-      ? 0
-      : (state.progress.completedMatches / state.progress.totalMatches) * 100;
+  const progress = confrontation?.progressPercent ?? 0;
   const matchPlayers = [
     { label: "A" as const, song: songA, playerRef: playerARef },
     { label: "B" as const, song: songB, playerRef: playerBRef },
@@ -301,7 +232,7 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
       <div className="grid-fade pointer-events-none absolute inset-0 opacity-30" />
       <div className="game-shell relative mx-auto">
         <header className="game-header flex items-center justify-between gap-2">
-          <div>
+          <div className="min-w-0">
             <Link
               href="/"
               className="text-xs font-semibold tracking-[0.16em] text-violet-300 uppercase outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
@@ -322,7 +253,7 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
             className="min-h-11 rounded-xl px-3"
           >
             <Dices aria-hidden="true" />
-            Empate
+            <span className="hidden min-[430px]:inline">Empate</span>
           </Button>
         </header>
 
@@ -332,11 +263,6 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
               key={`${currentMatch.id}-${label}`}
               label={label}
               song={song}
-              isPlaying={
-                activePlayer?.matchId === currentMatch.id &&
-                activePlayer.label === label
-              }
-              onTogglePlayback={() => togglePlayback(label)}
               onVote={() => decisions.requestVote(song)}
               playerError={
                 playerErrors[label]?.matchId === currentMatch.id
@@ -348,9 +274,6 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
               onPlayerLoadError={() => reportPlayerLoadError(label)}
               onPlayingChange={(playing) => playingChanged(label, playing)}
               canVote={canVote}
-              playbackDisabled={
-                decisions.pendingDecision !== null || decisions.isDeciding
-              }
               voting={decisions.isDeciding}
             />
           ))}

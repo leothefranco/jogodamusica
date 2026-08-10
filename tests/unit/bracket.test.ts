@@ -3,11 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   bracketSizeFromRoundCount,
   createBracket,
-  pairRoundWinners,
-  resolveMatchDecision,
   roundCountFromBracketSize,
   selectSongsForSession,
-  shuffleRoundWinners,
+  transitionBracket,
 } from "@/domain/bracket";
 
 const songIds = (count: number) =>
@@ -59,26 +57,36 @@ describe("domínio do chaveamento", () => {
     };
 
     expect(
-      resolveMatchDecision(firstMatch, bracket.bracketSize, {
-        type: "vote",
-        winnerSongId: firstMatch.songAId!,
-      }),
-    ).toEqual({ winnerSongId: firstMatch.songAId, championSongId: null });
+      transitionBracket({
+        bracketSize: bracket.bracketSize,
+        currentMatch: firstMatch,
+        decision: { type: "vote", winnerSongId: firstMatch.songAId! },
+        roundMatches: bracket.matches.filter(
+          ({ roundNumber }) => roundNumber === 1,
+        ),
+      }).session.championSongId,
+    ).toBeNull();
     expect(
-      resolveMatchDecision(final, bracket.bracketSize, {
-        type: "vote",
-        winnerSongId: final.songBId,
-      }),
-    ).toEqual({ winnerSongId: "song-2", championSongId: "song-2" });
+      transitionBracket({
+        bracketSize: bracket.bracketSize,
+        currentMatch: final,
+        decision: { type: "vote", winnerSongId: final.songBId },
+        roundMatches: [final],
+      }).session.championSongId,
+    ).toBe("song-2");
   });
 
   it("rejeita uma vencedora que não participa do confronto", () => {
     const bracket = createBracket(songIds(4), 4);
 
     expect(() =>
-      resolveMatchDecision(bracket.matches[0], 4, {
-        type: "vote",
-        winnerSongId: "song-intrusa",
+      transitionBracket({
+        bracketSize: 4,
+        currentMatch: bracket.matches[0],
+        decision: { type: "vote", winnerSongId: "song-intrusa" },
+        roundMatches: bracket.matches.filter(
+          ({ roundNumber }) => roundNumber === 1,
+        ),
       }),
     ).toThrow("A música vencedora não pertence a este confronto.");
   });
@@ -88,9 +96,11 @@ describe("domínio do chaveamento", () => {
     const match = { ...bracket.matches[0], status: "completed" as const };
 
     expect(() =>
-      resolveMatchDecision(match, 4, {
-        type: "vote",
-        winnerSongId: match.songAId!,
+      transitionBracket({
+        bracketSize: 4,
+        currentMatch: match,
+        decision: { type: "vote", winnerSongId: match.songAId! },
+        roundMatches: [match],
       }),
     ).toThrow("Este confronto já foi concluído.");
   });
@@ -131,24 +141,118 @@ describe("sorteio da sessão", () => {
 });
 
 describe("sorteio de rodada", () => {
-  it("embaralha todas as vencedoras sem alterar a lista recebida", () => {
-    const winners = ["winner-1", "winner-2", "winner-3", "winner-4"];
+  it("mantém a rodada enquanto ainda existe confronto incompleto", () => {
+    const bracket = createBracket(songIds(4), 4);
+    const currentMatch = bracket.matches[0];
 
-    expect(shuffleRoundWinners(winners, () => 0)).toEqual([
-      "winner-2",
-      "winner-3",
-      "winner-4",
-      "winner-1",
-    ]);
-    expect(winners).toEqual(["winner-1", "winner-2", "winner-3", "winner-4"]);
+    expect(
+      transitionBracket({
+        bracketSize: 4,
+        currentMatch,
+        decision: { type: "vote", winnerSongId: currentMatch.songAId! },
+        roundMatches: bracket.matches.filter(
+          ({ roundNumber }) => roundNumber === currentMatch.roundNumber,
+        ),
+      }),
+    ).toEqual({
+      completedMatch: {
+        matchId: currentMatch.id,
+        winnerSongId: currentMatch.songAId,
+      },
+      nextRound: null,
+      session: {
+        championSongId: null,
+        currentRound: 1,
+        status: "active",
+      },
+    });
   });
 
-  it("forma os pares da próxima rodada na ordem sorteada", () => {
+  it("forma a próxima rodada quando a decisão conclui a rodada atual", () => {
+    const bracket = createBracket(songIds(8), 8);
+    const roundMatches = bracket.matches
+      .filter(({ roundNumber }) => roundNumber === 1)
+      .map((match, index) =>
+        index < 3
+          ? {
+              ...match,
+              status: "completed" as const,
+              winnerSongId: match.songAId,
+            }
+          : match,
+      );
+    const currentMatch = roundMatches[3];
+
     expect(
-      pairRoundWinners(["winner-2", "winner-3", "winner-4", "winner-1"]),
-    ).toEqual([
-      { songAId: "winner-2", songBId: "winner-3" },
-      { songAId: "winner-4", songBId: "winner-1" },
-    ]);
+      transitionBracket({
+        bracketSize: 8,
+        currentMatch,
+        decision: { type: "vote", winnerSongId: currentMatch.songAId! },
+        random: () => 0,
+        roundMatches,
+      }),
+    ).toEqual({
+      completedMatch: {
+        matchId: currentMatch.id,
+        winnerSongId: "song-7",
+      },
+      nextRound: {
+        roundNumber: 2,
+        pairs: [
+          { songAId: "song-3", songBId: "song-5" },
+          { songAId: "song-7", songBId: "song-1" },
+        ],
+      },
+      session: {
+        championSongId: null,
+        currentRound: 2,
+        status: "active",
+      },
+    });
+  });
+
+  it("conclui a partida quando a decisão resolve a final", () => {
+    const final = {
+      ...createBracket(songIds(4), 4).matches.find(
+        ({ roundNumber }) => roundNumber === 2,
+      )!,
+      songAId: "song-1",
+      songBId: "song-3",
+      status: "ready" as const,
+    };
+
+    expect(
+      transitionBracket({
+        bracketSize: 4,
+        currentMatch: final,
+        decision: { type: "tiebreak" },
+        random: () => 0.9,
+        roundMatches: [final],
+      }),
+    ).toEqual({
+      completedMatch: {
+        matchId: final.id,
+        winnerSongId: "song-3",
+      },
+      nextRound: null,
+      session: {
+        championSongId: "song-3",
+        currentRound: 2,
+        status: "completed",
+      },
+    });
+  });
+
+  it("rejeita uma transição sem o contexto completo da rodada", () => {
+    const currentMatch = createBracket(songIds(4), 4).matches[0];
+
+    expect(() =>
+      transitionBracket({
+        bracketSize: 4,
+        currentMatch,
+        decision: { type: "vote", winnerSongId: currentMatch.songAId! },
+        roundMatches: [],
+      }),
+    ).toThrow("O contexto da rodada não contém o confronto atual.");
   });
 });

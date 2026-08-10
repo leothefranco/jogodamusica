@@ -86,12 +86,21 @@ test.beforeEach(async ({ page }) => {
         queueMicrotask(() => options.events.onReady({ target: this }));
       }
 
-      cueVideoById(options: { videoId: string; startSeconds: number }) {
+      cueVideoById(options: {
+        videoId: string;
+        startSeconds: number;
+        endSeconds: number;
+      }) {
         this.currentTime = options.startSeconds;
         calls.push({
           player: this.index,
           method: "cue",
           value: options.videoId,
+        });
+        calls.push({
+          player: this.index,
+          method: "cue-end",
+          value: options.endSeconds,
         });
       }
 
@@ -110,8 +119,10 @@ test.beforeEach(async ({ page }) => {
       }
 
       seekTo(seconds: number) {
-        this.currentTime = seconds;
         calls.push({ player: this.index, method: "seek", value: seconds });
+        queueMicrotask(() => {
+          this.currentTime = seconds;
+        });
       }
 
       destroy() {
@@ -154,7 +165,7 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test("mostra dois players associados às músicas sem controles nativos", async ({
+test("mostra dois players com controles nativos e votos fora da mídia", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 700 });
@@ -165,11 +176,8 @@ test("mostra dois players associados às músicas sem controles nativos", async 
   await expect(playerA).toBeVisible();
   await expect(playerB).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Reproduzir música A" }),
-  ).toBeEnabled();
-  await expect(
-    page.getByRole("button", { name: "Reproduzir música B" }),
-  ).toBeEnabled();
+    page.getByRole("button", { name: /Reproduzir música/ }),
+  ).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Votar na música A" }),
   ).toBeEnabled();
@@ -180,9 +188,17 @@ test("mostra dois players associados às músicas sem controles nativos", async 
   await expect
     .poll(() => page.evaluate(() => window.__youtubeTest.playerVars))
     .toEqual([
-      expect.objectContaining({ controls: 0, playsinline: 1 }),
-      expect.objectContaining({ controls: 0, playsinline: 1 }),
+      expect.objectContaining({ controls: 1, playsinline: 1 }),
+      expect.objectContaining({ controls: 1, playsinline: 1 }),
     ]);
+  await expect
+    .poll(() => page.evaluate(() => window.__youtubeTest.calls))
+    .toEqual(
+      expect.arrayContaining([
+        { player: 0, method: "cue-end", value: 40 },
+        { player: 1, method: "cue-end", value: 50 },
+      ]),
+    );
 
   const [boxA, boxB] = await Promise.all([
     playerA.boundingBox(),
@@ -195,14 +211,11 @@ test("mostra dois players associados às músicas sem controles nativos", async 
   expect(boxB!.width).toBeGreaterThanOrEqual(200);
   expect(boxB!.height).toBeGreaterThanOrEqual(200);
   expect(boxA!.y + boxA!.height).toBeLessThanOrEqual(boxB!.y);
-  await expect
-    .poll(() =>
-      page.evaluate(() => ({
-        viewportHeight: window.innerHeight,
-        contentHeight: document.documentElement.scrollHeight,
-      })),
-    )
-    .toEqual({ viewportHeight: 700, contentHeight: 700 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollHeight > window.innerHeight,
+    ),
+  ).toBe(true);
 
   await page.setViewportSize({ width: 390, height: 560 });
   await expect
@@ -229,61 +242,69 @@ test("mostra dois players associados às músicas sem controles nativos", async 
   ).toBeInViewport();
 });
 
-test("alterna a reprodução e retoma cada música da própria posição", async ({
+test("pausa o outro player quando a reprodução começa pelos controles nativos", async ({
   page,
 }) => {
   await page.goto("/e2e-test/dois-players");
-  const playA = page.getByRole("button", { name: "Reproduzir música A" });
-  const playB = page.getByRole("button", { name: "Reproduzir música B" });
-
-  await playA.click();
-  await page.evaluate(() => window.__youtubeTest.setCurrentTime(0, 17));
-  await playB.click();
-  await page.evaluate(() => window.__youtubeTest.setCurrentTime(1, 29));
-  await page.getByRole("button", { name: "Reproduzir música A" }).click();
+  await expect
+    .poll(() => page.evaluate(() => window.__youtubeTest.playerVars.length))
+    .toBe(2);
+  await page.evaluate(() => window.__youtubeTest.emitState(0, 1));
+  await page.evaluate(() => window.__youtubeTest.emitState(1, 1));
 
   await expect
     .poll(() => page.evaluate(() => window.__youtubeTest.calls))
     .toEqual(
       expect.arrayContaining([
         { player: 0, method: "pause" },
-        { player: 1, method: "play" },
         { player: 1, method: "pause" },
-        { player: 0, method: "seek", value: 17 },
-        { player: 0, method: "play" },
       ]),
     );
-  await expect(
-    page.getByRole("button", { name: "Pausar música A" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Reproduzir música B" }),
-  ).toBeVisible();
 });
 
 test("reinicia no começo do trecho depois que a prévia termina", async ({
   page,
 }) => {
   await page.goto("/e2e-test/dois-players");
-  await page.getByRole("button", { name: "Reproduzir música A" }).click();
+  await expect
+    .poll(() => page.evaluate(() => window.__youtubeTest.playerVars.length))
+    .toBe(2);
   await page.evaluate(() => {
     window.__youtubeTest.setCurrentTime(0, 40);
     window.__youtubeTest.emitState(0, 1);
   });
-  await expect(
-    page.getByRole("button", { name: "Reproduzir música A" }),
-  ).toBeVisible();
-
-  await page.getByRole("button", { name: "Reproduzir música A" }).click();
+  await expect
+    .poll(() => page.evaluate(() => window.__youtubeTest.calls))
+    .toEqual(expect.arrayContaining([{ player: 0, method: "pause" }]));
+  await page.evaluate(() => window.__youtubeTest.emitState(0, 1));
 
   await expect
     .poll(() => page.evaluate(() => window.__youtubeTest.calls))
     .toEqual(
-      expect.arrayContaining([
-        { player: 0, method: "pause" },
-        { player: 0, method: "seek", value: 10 },
-      ]),
+      expect.arrayContaining([{ player: 0, method: "seek", value: 10 }]),
     );
+});
+
+test("mantém a reprodução dentro do trecho configurado", async ({ page }) => {
+  await page.goto("/e2e-test/dois-players");
+  await expect
+    .poll(() => page.evaluate(() => window.__youtubeTest.playerVars.length))
+    .toBe(2);
+
+  await page.evaluate(() => {
+    window.__youtubeTest.emitState(0, 1);
+    window.__youtubeTest.setCurrentTime(0, 2);
+  });
+  await expect
+    .poll(() => page.evaluate(() => window.__youtubeTest.calls))
+    .toEqual(
+      expect.arrayContaining([{ player: 0, method: "seek", value: 10 }]),
+    );
+
+  await page.evaluate(() => window.__youtubeTest.setCurrentTime(0, 45));
+  await expect
+    .poll(() => page.evaluate(() => window.__youtubeTest.calls))
+    .toEqual(expect.arrayContaining([{ player: 0, method: "pause" }]));
 });
 
 test("mantém o voto disponível quando um dos players falha", async ({
@@ -316,7 +337,10 @@ test("pausa os players e cancela o modal acessível sem retomar o áudio", async
     await dialog.dismiss();
   });
   await page.goto("/e2e-test/dois-players");
-  await page.getByRole("button", { name: "Reproduzir música A" }).click();
+  await expect
+    .poll(() => page.evaluate(() => window.__youtubeTest.playerVars.length))
+    .toBe(2);
+  await page.evaluate(() => window.__youtubeTest.emitState(0, 1));
   await page.evaluate(() => window.__youtubeTest.setCurrentTime(0, 17));
 
   const voteA = page.getByRole("button", { name: "Votar na música A" });
@@ -350,9 +374,6 @@ test("pausa os players e cancela o modal acessível sem retomar o áudio", async
 
   await expect(confirmation).toBeHidden();
   await expect(voteA).toBeFocused();
-  await expect(
-    page.getByRole("button", { name: "Reproduzir música A" }),
-  ).toBeVisible();
   const callsAfterCancel = await page.evaluate(
     () => window.__youtubeTest.calls.length,
   );
@@ -367,15 +388,6 @@ test("pausa os players e cancela o modal acessível sem retomar o áudio", async
   await expect(confirmation).toBeHidden();
   await expect(voteA).toBeFocused();
 
-  await page.getByRole("button", { name: "Reproduzir música A" }).click();
-  await expect
-    .poll(() => page.evaluate(() => window.__youtubeTest.calls))
-    .toEqual(
-      expect.arrayContaining([
-        { player: 0, method: "seek", value: 17 },
-        { player: 0, method: "play" },
-      ]),
-    );
   expect(browserDialogOpened).toBe(false);
 });
 
@@ -565,12 +577,22 @@ test("confirma o desempate na aplicação e revela a vencedora sorteada pelo ser
   const reveal = page.getByRole("status", { name: "Roleta de desempate" });
   await expect(reveal).toBeVisible();
   await expect(reveal).toContainText("Roleta em movimento");
+  await expect(
+    reveal.getByRole("img", { name: "Capa de Canção A, de Artista A" }),
+  ).toBeVisible();
+  await expect(
+    reveal.getByRole("img", { name: "Capa de Canção B, de Artista B" }),
+  ).toBeVisible();
   await expect(page.getByRole("button", { name: "Desempatar" })).toBeDisabled();
   await expect(
-    page.getByRole("button", { name: "Reproduzir música A" }),
+    page.getByRole("button", { name: "Votar na música A" }),
   ).toBeDisabled();
   await expect(reveal).toContainText("Desempate concluído");
   await expect(reveal).toContainText("Canção B");
+  await expect(reveal).toContainText("Vencedora");
+  await page.waitForTimeout(1_000);
+  await expect(reveal).toBeVisible();
+  await expect(reveal).toContainText("Vencedora");
   expect(Date.now() - spinStartedAt).toBeGreaterThanOrEqual(2_300);
 });
 

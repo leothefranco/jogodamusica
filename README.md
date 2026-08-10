@@ -127,17 +127,17 @@ banco pela migração mais recente.
    retomar o estado após recarregar a página.
 4. Em cada confronto, compare os dois cards empilhados. Cada música mantém seu
    próprio player do YouTube e um único controle de reproduzir/pausar; iniciar
-   uma pausa a outra sem perder a posição. O voto é liberado depois que as duas
-   músicas forem iniciadas e sempre pede confirmação em um diálogo da aplicação.
+   uma pausa a outra sem perder a posição. O voto fica disponível imediatamente
+   e sempre pede confirmação em um diálogo da aplicação.
    Em caso de empate, o servidor sorteia a vencedora e uma roleta revela o
    resultado já registrado.
 5. Ao final, `/resultado/<id>` mostra a campeã e todos os confrontos.
 
 Os players usam a YouTube IFrame Player API diretamente no navegador, começam
 somente após gesto explícito e reiniciam no começo configurado depois do fim do
-trecho. Em viewports com pelo menos 700 px de altura útil, os cards cabem sem
-rolagem; em telas mais baixas, paisagem ou conteúdo ampliado, a rolagem vertical
-mantém todos os controles acessíveis. Erros da API são registrados no servidor
+trecho. Quando a altura útil comporta os dois players com o mínimo de 200 px, os
+cards crescem para preencher a tela; em telas mais baixas, paisagem ou conteúdo
+ampliado, a rolagem vertical mantém todos os controles acessíveis. Erros da API são registrados no servidor
 apenas com IDs técnicos da partida/confronto e o código do YouTube, sem dados
 pessoais.
 

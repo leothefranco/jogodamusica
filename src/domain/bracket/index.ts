@@ -38,6 +38,22 @@ export type ResolvedMatchDecision = {
   championSongId: string | null;
 };
 
+export type BracketTransition = {
+  completedMatch: {
+    matchId: string;
+    winnerSongId: string;
+  };
+  nextRound: {
+    roundNumber: number;
+    pairs: RoundMatchPair[];
+  } | null;
+  session: {
+    status: "active" | "completed";
+    currentRound: number;
+    championSongId: string | null;
+  };
+};
+
 type MatchIdFactory = (coordinate: MatchCoordinate) => string;
 
 const defaultMatchId: MatchIdFactory = ({ roundNumber, position }) =>
@@ -99,7 +115,7 @@ export function createBracket(
   };
 }
 
-export function resolveMatchDecision(
+function resolveMatchDecision(
   match: BracketMatch,
   bracketSize: BracketSize,
   decision: MatchDecision,
@@ -146,6 +162,101 @@ export function resolveMatchDecision(
   return { winnerSongId, championSongId: null };
 }
 
+export function transitionBracket(input: {
+  bracketSize: BracketSize;
+  currentMatch: BracketMatch;
+  decision: MatchDecision;
+  roundMatches: readonly BracketMatch[];
+  random?: () => number;
+}): BracketTransition {
+  const hasCurrentMatch = input.roundMatches.some(
+    (match) => match.id === input.currentMatch.id,
+  );
+  const hasOnlyCurrentRound = input.roundMatches.every(
+    (match) => match.roundNumber === input.currentMatch.roundNumber,
+  );
+  if (!hasCurrentMatch || !hasOnlyCurrentRound) {
+    throw new AppError(
+      "INVALID_BRACKET_STATE",
+      "O contexto da rodada não contém o confronto atual.",
+      500,
+    );
+  }
+
+  const { winnerSongId, championSongId } = resolveMatchDecision(
+    input.currentMatch,
+    input.bracketSize,
+    input.decision,
+    input.random,
+  );
+
+  const completedMatch = {
+    matchId: input.currentMatch.id,
+    winnerSongId,
+  };
+
+  if (championSongId) {
+    return {
+      completedMatch,
+      nextRound: null,
+      session: {
+        status: "completed",
+        currentRound: input.currentMatch.roundNumber,
+        championSongId,
+      },
+    };
+  }
+
+  const roundIsComplete = input.roundMatches.every(
+    (match) =>
+      match.id === input.currentMatch.id || match.status === "completed",
+  );
+
+  if (roundIsComplete) {
+    const winnerSongIds = [...input.roundMatches]
+      .sort((left, right) => left.position - right.position)
+      .map((match) =>
+        match.id === input.currentMatch.id ? winnerSongId : match.winnerSongId,
+      );
+    if (winnerSongIds.some((songId) => !songId)) {
+      throw new AppError(
+        "INVALID_BRACKET_STATE",
+        "Uma rodada concluída possui confronto sem vencedora.",
+        500,
+      );
+    }
+    const nextRoundNumber = input.currentMatch.roundNumber + 1;
+
+    return {
+      completedMatch,
+      nextRound: {
+        roundNumber: nextRoundNumber,
+        pairs: pairRoundWinners(
+          shuffleRoundWinners(
+            winnerSongIds as string[],
+            input.random ?? Math.random,
+          ),
+        ),
+      },
+      session: {
+        status: "active",
+        currentRound: nextRoundNumber,
+        championSongId: null,
+      },
+    };
+  }
+
+  return {
+    completedMatch,
+    nextRound: null,
+    session: {
+      status: "active",
+      currentRound: input.currentMatch.roundNumber,
+      championSongId: null,
+    },
+  };
+}
+
 export function selectSongsForSession<T>(
   songs: readonly T[],
   bracketSize: BracketSize,
@@ -162,16 +273,14 @@ export function selectSongsForSession<T>(
   return shuffleItems(songs, random).slice(0, bracketSize);
 }
 
-export function shuffleRoundWinners(
+function shuffleRoundWinners(
   winners: readonly string[],
   random: () => number = Math.random,
 ): string[] {
   return shuffleItems(winners, random);
 }
 
-export function pairRoundWinners(
-  winnerSongIds: readonly string[],
-): RoundMatchPair[] {
+function pairRoundWinners(winnerSongIds: readonly string[]): RoundMatchPair[] {
   if (
     winnerSongIds.length % 2 !== 0 ||
     new Set(winnerSongIds).size !== winnerSongIds.length

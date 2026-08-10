@@ -119,7 +119,7 @@ Criar uma experiência social rápida, clara e divertida para grupos compararem 
 - O botão `Ouvir música B` carrega o vídeo B no tempo configurado.
 - Ao atingir a duração configurada, o aplicativo pausa o player.
 - Ao iniciar uma música, qualquer reprodução anterior deve parar.
-- O voto fica desabilitado até que A e B tenham sido iniciadas.
+- O voto fica disponível assim que o confronto está pronto, mesmo antes da reprodução das músicas.
 - A escolha abre uma confirmação com título e artista.
 - Depois da confirmação, o resultado é persistido e não pode ser desfeito no MVP.
 - O servidor deve rejeitar votos duplicados ou em partidas concluídas.
@@ -853,7 +853,7 @@ O MVP será considerado pronto quando:
 - cada sessão sortear exatamente 4, 8, 16, 32, 64 ou 128 músicas distintas conforme a escolha;
 - um jogador iniciar e concluir chaveamentos de 4, 8, 16, 32, 64 e 128 músicas;
 - a partida sobreviver a uma atualização de página;
-- cada confronto exigir que os dois trechos sejam iniciados antes do voto;
+- cada confronto permitir voto assim que estiver pronto, mesmo sem reprodução prévia;
 - votos duplicados não corromperem o chaveamento;
 - a campeã e o chaveamento completo forem exibidos;
 - as páginas públicas funcionarem bem em 360 px de largura;
@@ -1057,7 +1057,7 @@ Estas decisões foram adotadas para evitar bloqueio do MVP e podem ser alteradas
 
 - trecho padrão com a duração total da música;
 - duração configurável até o fim do vídeo;
-- voto liberado após iniciar ambas as músicas;
+- voto liberado assim que o confronto estiver pronto;
 - ausência de desfazer após confirmação;
 - escolha de 2, 3, 4, 5, 6 ou 7 rodadas, equivalentes a chaves de 4, 8, 16, 32, 64 e 128;
 - catálogo do tema precisa de no mínimo quatro músicas publicáveis, pode superar qualquer modalidade disponível e não possui máximo definido pelo chaveamento;

@@ -2,27 +2,12 @@ import "server-only";
 
 import {
   createBracket,
-  pairRoundWinners,
-  resolveMatchDecision,
-  roundCountFromBracketSize,
   selectSongsForSession,
-  shuffleRoundWinners,
-  type RoundMatchPair,
+  transitionBracket,
   type MatchDecision,
 } from "@/domain/bracket";
-import type {
-  GameSong,
-  GameState,
-  PersistedGameMatch,
-  PersistedGameSession,
-  SessionSongSnapshot,
-} from "@/domain/game/state";
-import {
-  gameMatchId,
-  gameSongId,
-  type GameMatchId,
-  type GameSongId,
-} from "@/domain/game/ids";
+import type { GameSong, GameState } from "@/domain/game/state";
+import { gameMatchId } from "@/domain/game/ids";
 import type { BracketSize } from "@/domain/music/content-validation";
 import { AppError } from "@/lib/errors";
 import {
@@ -31,50 +16,25 @@ import {
   withGameCreationTransaction,
   withGameDecisionTransaction,
 } from "@/server/repositories/game-repository";
+import type {
+  GameCreationRepository,
+  GameDecisionRepository,
+} from "@/server/repositories/game-repository-contract";
 
 export type {
   PersistedGameMatch,
   PersistedGameSession,
   SessionSongSnapshot,
 } from "@/domain/game/state";
+export type {
+  GameCreationRepository,
+  GameDecisionRepository,
+  GameTheme,
+  NewGameMatch,
+  NewGameSession,
+} from "@/server/repositories/game-repository-contract";
 
 export type ActiveThemeSong = GameSong;
-
-export type GameTheme = {
-  id: string;
-  isActive: boolean;
-  songs: ActiveThemeSong[];
-};
-
-export type NewGameSession = Omit<PersistedGameSession, "id">;
-
-export type NewGameMatch = Omit<PersistedGameMatch, "id">;
-
-export type GameCreationRepository = {
-  getThemeWithActiveSongs(): Promise<GameTheme | null>;
-  insertSession(session: NewGameSession): Promise<string>;
-  insertSessionSongs(songs: SessionSongSnapshot[]): Promise<void>;
-  insertMatches(matches: NewGameMatch[]): Promise<void>;
-};
-
-export type GameDecisionRepository = {
-  getSession(): Promise<PersistedGameSession | null>;
-  getMatch(matchId: GameMatchId): Promise<PersistedGameMatch | null>;
-  completeMatch(
-    matchId: GameMatchId,
-    winnerSongId: GameSongId,
-    completedAt: Date,
-  ): Promise<void>;
-  hasIncompleteMatchesInRound(roundNumber: number): Promise<boolean>;
-  getWinnerSongIdsInRound(roundNumber: number): Promise<string[]>;
-  populateRound(
-    roundNumber: number,
-    pairs: RoundMatchPair[],
-    populatedAt: Date,
-  ): Promise<void>;
-  setCurrentRound(roundNumber: number): Promise<void>;
-  completeSession(championSongId: GameSongId, completedAt: Date): Promise<void>;
-};
 
 export type GameServiceDependencies = {
   getGameState(sessionId: string): Promise<GameState | null>;
@@ -142,25 +102,21 @@ export function createGameService(dependencies: GameServiceDependencies) {
             input.bracketSize,
           );
 
-          const sessionId = await repository.insertSession({
-            themeId: theme.id,
-            bracketSize: input.bracketSize,
-            status: "active",
-            currentRound: 1,
-            championSongId: null,
-            startedAt,
-            completedAt: null,
-          });
-          await repository.insertSessionSongs(
-            selectedSongs.map((song, index) => ({
+          const sessionId = await repository.createGame({
+            session: {
+              themeId: theme.id,
+              bracketSize: input.bracketSize,
+              status: "active",
+              currentRound: 1,
+              championSongId: null,
+              startedAt,
+              completedAt: null,
+            },
+            songs: selectedSongs.map((song, index) => ({
               ...song,
-              sessionId,
               seed: index + 1,
             })),
-          );
-          await repository.insertMatches(
-            bracket.matches.map((match) => ({
-              sessionId,
+            matches: bracket.matches.map((match) => ({
               roundNumber: match.roundNumber,
               position: match.position,
               songAId: match.songAId,
@@ -169,7 +125,7 @@ export function createGameService(dependencies: GameServiceDependencies) {
               status: match.status,
               completedAt: null,
             })),
-          );
+          });
 
           return { sessionId };
         },
@@ -180,7 +136,10 @@ export function createGameService(dependencies: GameServiceDependencies) {
       await dependencies.withGameDecisionTransaction(
         input.sessionId,
         async (repository) => {
-          const session = await repository.getSession();
+          const context = await repository.loadDecisionContext(
+            gameMatchId(input.matchId),
+          );
+          const session = context.session;
           if (!session) {
             throw new AppError(
               "GAME_SESSION_NOT_FOUND",
@@ -196,7 +155,7 @@ export function createGameService(dependencies: GameServiceDependencies) {
             );
           }
 
-          const match = await repository.getMatch(gameMatchId(input.matchId));
+          const match = context.match;
           if (!match) {
             throw new AppError(
               "MATCH_NOT_FOUND",
@@ -204,46 +163,17 @@ export function createGameService(dependencies: GameServiceDependencies) {
               404,
             );
           }
-          const { winnerSongId, championSongId } = resolveMatchDecision(
-            match,
-            session.bracketSize,
-            input.decision,
-            dependencies.random,
-          );
-
           const completedAt = dependencies.now();
-          await repository.completeMatch(
-            gameMatchId(match.id),
-            gameSongId(winnerSongId),
+          await repository.applyTransition(
+            transitionBracket({
+              bracketSize: session.bracketSize,
+              currentMatch: match,
+              decision: input.decision,
+              random: dependencies.random,
+              roundMatches: context.roundMatches,
+            }),
             completedAt,
           );
-
-          if (championSongId) {
-            const finalRound = roundCountFromBracketSize(session.bracketSize);
-            await repository.setCurrentRound(finalRound);
-            await repository.completeSession(
-              gameSongId(championSongId),
-              completedAt,
-            );
-            return;
-          }
-
-          if (await repository.hasIncompleteMatchesInRound(match.roundNumber)) {
-            return;
-          }
-
-          const nextRoundNumber = match.roundNumber + 1;
-          const winnerSongIds = await repository.getWinnerSongIdsInRound(
-            match.roundNumber,
-          );
-          await repository.populateRound(
-            nextRoundNumber,
-            pairRoundWinners(
-              shuffleRoundWinners(winnerSongIds, dependencies.random),
-            ),
-            completedAt,
-          );
-          await repository.setCurrentRound(nextRoundNumber);
         },
       );
 

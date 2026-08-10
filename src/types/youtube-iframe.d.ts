@@ -7,7 +7,11 @@ type YouTubePlayerErrorEvent = YouTubePlayerEvent & {
 };
 
 interface YouTubePlayer {
-  cueVideoById(options: { videoId: string; startSeconds: number }): void;
+  cueVideoById(options: {
+    videoId: string;
+    startSeconds: number;
+    endSeconds: number;
+  }): void;
   destroy(): void;
   getCurrentTime(): number;
   pauseVideo(): void;
@@ -22,7 +26,7 @@ interface YouTubeNamespace {
       height: string;
       width: string;
       playerVars: {
-        controls: 0;
+        controls: 1;
         playsinline: 1;
         rel: 0;
       };

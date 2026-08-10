@@ -1,9 +1,17 @@
-import { ArrowLeft, Crown, RotateCcw, Trophy } from "lucide-react";
+import {
+  ArrowLeft,
+  Crown,
+  Download,
+  ExternalLink,
+  RotateCcw,
+  Trophy,
+} from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { buttonVariants } from "@/components/ui/button";
 import { getRoundLabel } from "@/domain/game/experience";
+import { projectCompletedGame } from "@/domain/game/projections";
 import { cn } from "@/lib/utils";
 import { getPublicGamePageState } from "../../game-page-state";
 
@@ -19,11 +27,9 @@ export default async function ResultPage({
   if (state.session.status === "abandoned")
     redirect(`/tema/${state.theme.slug}`);
 
-  const songsById = new Map(state.songs.map((song) => [song.songId, song]));
-  const champion = state.session.championSongId
-    ? songsById.get(state.session.championSongId)
-    : null;
-  if (!champion) notFound();
+  const result = projectCompletedGame(state);
+  if (!result) notFound();
+  const { champion } = result;
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#08080f] px-5 py-10 text-white sm:px-8">
@@ -50,14 +56,75 @@ export default async function ResultPage({
           </div>
         </section>
 
+        <section
+          className="mx-auto mt-12 max-w-4xl rounded-3xl border border-violet-300/15 bg-violet-300/[0.045] p-5 sm:p-7"
+          aria-labelledby="imagem-do-resultado"
+        >
+          <div className="grid items-center gap-7 md:grid-cols-[minmax(0,1fr)_260px]">
+            <div>
+              <p className="text-xs font-bold tracking-[0.18em] text-violet-300 uppercase">
+                Pronta para compartilhar
+              </p>
+              <h2
+                id="imagem-do-resultado"
+                className="mt-3 text-2xl font-black sm:text-3xl"
+              >
+                Sua campeã virou uma história
+              </h2>
+              <p className="mt-3 max-w-xl text-sm leading-6 text-white/55 sm:text-base">
+                Geramos uma imagem vertical para Stories e Status com o tema, a
+                música vencedora e o endereço do Jogo da Música.
+              </p>
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                <a
+                  href={`/api/resultados/${sessionId}/imagem?download=1`}
+                  className={cn(
+                    buttonVariants({ size: "lg" }),
+                    "min-h-12 rounded-xl bg-violet-300 px-5 font-bold text-[#160d25] hover:bg-violet-200",
+                  )}
+                >
+                  <Download aria-hidden="true" />
+                  Baixar imagem
+                </a>
+                <a
+                  href={`/api/resultados/${sessionId}/imagem`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={cn(
+                    buttonVariants({ variant: "outline", size: "lg" }),
+                    "min-h-12 rounded-xl px-5",
+                  )}
+                >
+                  <ExternalLink aria-hidden="true" />
+                  Abrir imagem
+                </a>
+              </div>
+            </div>
+
+            <a
+              href={`/api/resultados/${sessionId}/imagem`}
+              target="_blank"
+              rel="noreferrer"
+              className="group mx-auto block w-full max-w-[260px] overflow-hidden rounded-2xl border border-white/10 bg-black/25 shadow-2xl shadow-violet-950/40 outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
+              aria-label="Abrir a imagem do resultado em tamanho completo"
+            >
+              {/* This is a same-origin generated image. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={`/api/resultados/${sessionId}/imagem`}
+                alt={`Imagem compartilhável da campeã ${champion.title}`}
+                className="aspect-[9/16] w-full object-cover transition-transform duration-300 group-hover:scale-[1.02] motion-reduce:transition-none"
+              />
+            </a>
+          </div>
+        </section>
+
         <section className="mt-12" aria-labelledby="chaveamento">
           <h2 id="chaveamento" className="text-2xl font-black">
             Chaveamento completo
           </h2>
           <div className="mt-5 grid gap-4 md:grid-cols-2">
-            {state.matches.map((match) => {
-              const songA = match.songAId ? songsById.get(match.songAId) : null;
-              const songB = match.songBId ? songsById.get(match.songBId) : null;
+            {result.matches.map(({ match, songA, songB }) => {
               return (
                 <article
                   key={match.id}

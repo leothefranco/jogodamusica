@@ -48,7 +48,6 @@ function loadYouTubeApi() {
 
 export type YouTubePlayerHandle = {
   pause(): void;
-  play(): void;
 };
 
 type YouTubePlayerProps = {
@@ -69,11 +68,10 @@ export const YouTubePlayer = forwardRef<
   const wrapperRef = useRef<HTMLDivElement>(null);
   const playerHostRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YouTubePlayer | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const resumeAtRef = useRef(song.startTimeSeconds);
+  const guardIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const restartGraceUntilRef = useRef(0);
   const resetOnNextPlayRef = useRef(false);
   const readyRef = useRef(false);
-  const pendingPlayRef = useRef(false);
   const callbacksRef = useRef({
     onError,
     onLoadError,
@@ -88,44 +86,27 @@ export const YouTubePlayer = forwardRef<
     };
   }, [onError, onLoadError, onPlayingChange]);
 
-  const clearPreviewTimer = useCallback(() => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = null;
+  const clearPreviewGuard = useCallback(() => {
+    if (guardIntervalRef.current) clearInterval(guardIntervalRef.current);
+    guardIntervalRef.current = null;
   }, []);
 
   const markPaused = useCallback(() => {
-    clearPreviewTimer();
+    clearPreviewGuard();
     callbacksRef.current.onPlayingChange(false);
-  }, [clearPreviewTimer]);
+  }, [clearPreviewGuard]);
 
   useImperativeHandle(
     ref,
     () => ({
       pause() {
-        pendingPlayRef.current = false;
         const player = playerRef.current;
         if (!player || !readyRef.current) return;
-        if (!resetOnNextPlayRef.current) {
-          resumeAtRef.current = player.getCurrentTime();
-        }
         player.pauseVideo();
         markPaused();
       },
-      play() {
-        pendingPlayRef.current = true;
-        const player = playerRef.current;
-        if (!player || !readyRef.current) return;
-        pendingPlayRef.current = false;
-        const position = resetOnNextPlayRef.current
-          ? song.startTimeSeconds
-          : resumeAtRef.current;
-        resetOnNextPlayRef.current = false;
-        resumeAtRef.current = position;
-        player.seekTo(position, true);
-        player.playVideo();
-      },
     }),
-    [markPaused, song.startTimeSeconds],
+    [markPaused],
   );
 
   useEffect(() => {
@@ -145,7 +126,7 @@ export const YouTubePlayer = forwardRef<
       const player = new youtube.Player(playerHostRef.current, {
         height: "100%",
         width: "100%",
-        playerVars: { controls: 0, playsinline: 1, rel: 0 },
+        playerVars: { controls: 1, playsinline: 1, rel: 0 },
         events: {
           onReady: (event) => {
             if (cancelled) return;
@@ -153,6 +134,7 @@ export const YouTubePlayer = forwardRef<
             event.target.cueVideoById({
               videoId: song.providerContentId,
               startSeconds: song.startTimeSeconds,
+              endSeconds: song.startTimeSeconds + song.previewDurationSeconds,
             });
             wrapperRef.current
               ?.querySelector("iframe")
@@ -161,34 +143,47 @@ export const YouTubePlayer = forwardRef<
                 `Player do YouTube — ${song.title}, ${song.artist}`,
               );
             readyRef.current = true;
-            if (pendingPlayRef.current) {
-              pendingPlayRef.current = false;
-              event.target.seekTo(resumeAtRef.current, true);
-              event.target.playVideo();
-            }
           },
           onStateChange: (event) => {
             if (event.data === youtube.PlayerState.PLAYING) {
-              clearPreviewTimer();
+              clearPreviewGuard();
+              if (resetOnNextPlayRef.current) {
+                resetOnNextPlayRef.current = false;
+                restartGraceUntilRef.current = Date.now() + 1_500;
+                event.target.seekTo(song.startTimeSeconds, true);
+              }
               callbacksRef.current.onPlayingChange(true);
               const previewEnd =
                 song.startTimeSeconds + song.previewDurationSeconds;
-              const remainingSeconds = Math.max(
-                previewEnd - event.target.getCurrentTime(),
-                0,
-              );
-              timerRef.current = setTimeout(() => {
-                resetOnNextPlayRef.current = true;
-                resumeAtRef.current = song.startTimeSeconds;
-                event.target.pauseVideo();
-                markPaused();
-              }, remainingSeconds * 1_000);
+              guardIntervalRef.current = setInterval(() => {
+                const currentTime = event.target.getCurrentTime();
+                const isRestarting = restartGraceUntilRef.current > Date.now();
+
+                if (
+                  isRestarting &&
+                  Math.abs(currentTime - song.startTimeSeconds) > 1
+                ) {
+                  event.target.seekTo(song.startTimeSeconds, true);
+                  return;
+                }
+
+                restartGraceUntilRef.current = 0;
+                if (currentTime < song.startTimeSeconds - 0.5) {
+                  event.target.seekTo(song.startTimeSeconds, true);
+                  return;
+                }
+
+                if (currentTime >= previewEnd) {
+                  resetOnNextPlayRef.current = true;
+                  event.target.pauseVideo();
+                  markPaused();
+                }
+              }, 250);
               return;
             }
 
             if (event.data === youtube.PlayerState.ENDED) {
               resetOnNextPlayRef.current = true;
-              resumeAtRef.current = song.startTimeSeconds;
               markPaused();
               return;
             }
@@ -207,14 +202,14 @@ export const YouTubePlayer = forwardRef<
     void createPlayer();
     return () => {
       cancelled = true;
-      clearPreviewTimer();
+      clearPreviewGuard();
+      restartGraceUntilRef.current = 0;
       readyRef.current = false;
-      pendingPlayRef.current = false;
       playerRef.current?.destroy();
       playerRef.current = null;
     };
   }, [
-    clearPreviewTimer,
+    clearPreviewGuard,
     markPaused,
     song.artist,
     song.previewDurationSeconds,
@@ -228,9 +223,12 @@ export const YouTubePlayer = forwardRef<
     <div
       ref={wrapperRef}
       aria-label={`Player da música ${label}`}
-      className="relative min-h-[200px] overflow-hidden rounded-2xl border border-white/10 bg-black"
+      className="game-youtube-player relative min-h-[200px] overflow-hidden rounded-2xl border border-white/10 bg-black"
     >
-      <div ref={playerHostRef} className="aspect-video min-h-[200px] w-full" />
+      <div
+        ref={playerHostRef}
+        className="game-player-host aspect-video min-h-[200px] w-full"
+      />
     </div>
   );
 });

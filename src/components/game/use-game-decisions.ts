@@ -1,26 +1,20 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import type {
-  PendingDecision,
-  TiebreakRevealState,
-} from "@/components/game/decision-overlays";
+import {
+  createDecisionMachineState,
+  transitionDecisionMachine,
+  type DecisionMachineEvent,
+} from "@/components/game/decision-machine";
 import type { MatchDecision } from "@/domain/bracket";
-import type {
-  GameSong,
-  GameState,
-  PersistedGameMatch,
-} from "@/domain/game/state";
+import { decodeGameState } from "@/domain/game/transport";
+import type { GameSong, GameState } from "@/domain/game/state";
 
 const TIEBREAK_SPIN_DURATION_MS = 2_500;
-const TIEBREAK_RESULT_HOLD_MS = 700;
+const TIEBREAK_RESULT_HOLD_MS = 2_500;
 const TIEBREAK_SWITCH_INTERVAL_MS = 180;
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
-
-function wait(durationMs: number) {
-  return new Promise<void>((resolve) => window.setTimeout(resolve, durationMs));
-}
 
 async function submitMatchDecision(
   sessionId: string,
@@ -35,77 +29,117 @@ async function submitMatchDecision(
       body: JSON.stringify(decision),
     },
   );
-  const payload = (await response.json()) as GameState & {
-    error?: { message?: string };
-  };
+  const payload: unknown = await response.json();
   if (!response.ok) {
+    const error =
+      typeof payload === "object" && payload !== null
+        ? Reflect.get(payload, "error")
+        : null;
+    const message =
+      typeof error === "object" && error !== null
+        ? Reflect.get(error, "message")
+        : null;
     throw new Error(
-      payload.error?.message ?? "Não foi possível registrar a decisão.",
+      typeof message === "string"
+        ? message
+        : "Não foi possível registrar a decisão.",
     );
   }
-  return payload;
+  return decodeGameState(payload);
 }
 
 export function useGameDecisions({
-  sessionId,
-  currentMatch,
-  songs,
-  canDecide,
+  gameState,
   pausePlayback,
   applyState,
 }: {
-  sessionId: string;
-  currentMatch: PersistedGameMatch | null;
-  songs: readonly GameSong[];
-  canDecide: boolean;
+  gameState: GameState;
   pausePlayback(): void;
   applyState(state: GameState): void;
 }) {
-  const [pendingDecision, setPendingDecision] =
-    useState<PendingDecision | null>(null);
-  const [tiebreakReveal, setTiebreakReveal] =
-    useState<TiebreakRevealState | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-  const [isDeciding, setIsDeciding] = useState(false);
-  const decidingRef = useRef(false);
+  const [machine, setMachine] = useState(createDecisionMachineState);
+  const machineRef = useRef(machine);
+  const mountedRef = useRef(true);
+  const timeoutIdsRef = useRef(new Set<number>());
+  const switchTimerRef = useRef<number | null>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
+  const currentMatch = gameState.currentMatch;
+  const songs = gameState.songs;
+
+  const send = useCallback((event: DecisionMachineEvent) => {
+    if (!mountedRef.current) return false;
+    const current = machineRef.current;
+    const next = transitionDecisionMachine(current, event);
+    if (next === current) return false;
+    machineRef.current = next;
+    setMachine(next);
+    return true;
+  }, []);
+
+  const wait = useCallback(
+    (durationMs: number) =>
+      new Promise<void>((resolve) => {
+        const timeoutId = window.setTimeout(() => {
+          timeoutIdsRef.current.delete(timeoutId);
+          resolve();
+        }, durationMs);
+        timeoutIdsRef.current.add(timeoutId);
+      }),
+    [],
+  );
+
+  const stopTiebreakSwitching = useCallback(() => {
+    if (switchTimerRef.current === null) return;
+    window.clearInterval(switchTimerRef.current);
+    switchTimerRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    const timeoutIds = timeoutIdsRef.current;
+    return () => {
+      mountedRef.current = false;
+      stopTiebreakSwitching();
+      for (const timeoutId of timeoutIds) {
+        window.clearTimeout(timeoutId);
+      }
+      timeoutIds.clear();
+    };
+  }, [stopTiebreakSwitching]);
 
   const requestVote = useCallback(
     (song: GameSong) => {
-      if (!currentMatch || !canDecide) return;
+      if (!currentMatch) return;
+      if (!send({ type: "request", decision: { type: "vote", song } })) return;
       returnFocusRef.current = document.activeElement as HTMLElement | null;
       pausePlayback();
-      setPendingDecision({ type: "vote", song });
     },
-    [canDecide, currentMatch, pausePlayback],
+    [currentMatch, pausePlayback, send],
   );
 
   const requestTiebreak = useCallback(() => {
-    if (!currentMatch || !canDecide) return;
+    if (!currentMatch) return;
+    if (!send({ type: "request", decision: { type: "tiebreak" } })) return;
     returnFocusRef.current = document.activeElement as HTMLElement | null;
     pausePlayback();
-    setPendingDecision({ type: "tiebreak" });
-  }, [canDecide, currentMatch, pausePlayback]);
+  }, [currentMatch, pausePlayback, send]);
 
   const confirmDecision = useCallback(async () => {
-    if (!currentMatch || !pendingDecision || decidingRef.current) return;
+    const pendingDecision = machineRef.current.pendingDecision;
+    if (!currentMatch || !pendingDecision || !send({ type: "submit" })) return;
 
     const decision: MatchDecision =
       pendingDecision.type === "vote"
         ? { type: "vote", winnerSongId: pendingDecision.song.songId }
         : { type: "tiebreak" };
 
-    decidingRef.current = true;
-    setIsDeciding(true);
-    setMessage(null);
     pausePlayback();
     try {
       const payload = await submitMatchDecision(
-        sessionId,
+        gameState.session.id,
         currentMatch.id,
         decision,
       );
-      setPendingDecision(null);
       if (decision.type === "tiebreak") {
         const completedMatch = payload.matches.find(
           (match) => match.id === currentMatch.id,
@@ -125,72 +159,61 @@ export function useGameDecisions({
         const participants = [participantA, participantB] as const;
         const reducedMotion = window.matchMedia(REDUCED_MOTION_QUERY).matches;
         let activeParticipantIndex = 0;
-        let switchTimer: number | null = null;
+
+        if (!send({ type: "revealStarted", participants, winner })) return;
 
         if (!reducedMotion) {
-          setTiebreakReveal({
-            participants,
-            winner,
-            activeSongId: participants[activeParticipantIndex].songId,
-            isSpinning: true,
-          });
-          switchTimer = window.setInterval(() => {
+          switchTimerRef.current = window.setInterval(() => {
             activeParticipantIndex = activeParticipantIndex === 0 ? 1 : 0;
-            setTiebreakReveal({
-              participants,
-              winner,
+            send({
+              type: "revealAdvanced",
               activeSongId: participants[activeParticipantIndex].songId,
-              isSpinning: true,
             });
           }, TIEBREAK_SWITCH_INTERVAL_MS);
           await wait(TIEBREAK_SPIN_DURATION_MS);
-          window.clearInterval(switchTimer);
+          stopTiebreakSwitching();
         }
 
-        setTiebreakReveal({
-          participants,
-          winner,
-          activeSongId: winner.songId,
-          isSpinning: false,
-        });
+        send({ type: "revealSettled" });
         await wait(TIEBREAK_RESULT_HOLD_MS);
-        setTiebreakReveal(null);
       }
+      send({ type: "completed" });
       applyState(payload);
     } catch (caught) {
-      setMessage(
-        caught instanceof Error
-          ? caught.message
-          : "Não foi possível registrar a decisão.",
-      );
-    } finally {
-      decidingRef.current = false;
-      setIsDeciding(false);
+      send({
+        type: "failed",
+        message:
+          caught instanceof Error
+            ? caught.message
+            : "Não foi possível registrar a decisão.",
+      });
     }
   }, [
     applyState,
     currentMatch,
+    gameState.session.id,
     pausePlayback,
-    pendingDecision,
-    sessionId,
+    send,
     songs,
+    stopTiebreakSwitching,
+    wait,
   ]);
 
   const cancelDecision = useCallback(() => {
     const returnFocusTo = returnFocusRef.current;
-    setPendingDecision(null);
+    if (!send({ type: "cancel" })) return;
     queueMicrotask(() => returnFocusTo?.focus());
-  }, []);
+  }, [send]);
 
   return {
-    clearMessage: () => setMessage(null),
+    clearMessage: () => send({ type: "clearMessage" }),
     confirmDecision,
-    isDeciding,
-    message,
-    pendingDecision,
+    isDeciding: machine.phase === "submitting" || machine.phase === "revealing",
+    message: machine.message,
+    pendingDecision: machine.pendingDecision,
     requestTiebreak,
     requestVote,
-    tiebreakReveal,
+    tiebreakReveal: machine.tiebreakReveal,
     cancelDecision,
   };
 }

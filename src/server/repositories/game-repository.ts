@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, eq, ne, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 
 import { getDatabase } from "@/db";
 import {
@@ -14,17 +14,16 @@ import {
 import { bracketSizeSchema } from "@/domain/music/content-validation";
 import { AppError } from "@/lib/errors";
 import type {
-  GameCreationRepository,
-  GameDecisionRepository,
-  NewGameMatch,
-  NewGameSession,
-} from "@/server/services/game-service";
-import type {
   GameState,
   PersistedGameMatch,
   PersistedGameSession,
   SessionSongSnapshot,
 } from "@/domain/game/state";
+import type {
+  GameCreationRepository,
+  GameDecisionRepository,
+  NewGameSession,
+} from "@/server/repositories/game-repository-contract";
 
 type Database = ReturnType<typeof getDatabase>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -86,7 +85,7 @@ async function insertSessionSongsUsing(
 
 async function insertMatchesUsing(
   transaction: Transaction,
-  matches: NewGameMatch[],
+  matches: Array<Omit<PersistedGameMatch, "id">>,
 ) {
   await transaction.insert(gameMatches).values(matches);
 }
@@ -214,10 +213,18 @@ export async function withGameCreationTransaction<T>(
 
         return { ...theme, songs: activeSongs };
       },
-      insertSession: (session) => insertSessionUsing(transaction, session),
-      insertSessionSongs: (snapshots) =>
-        insertSessionSongsUsing(transaction, snapshots),
-      insertMatches: (matches) => insertMatchesUsing(transaction, matches),
+      async createGame(plan) {
+        const sessionId = await insertSessionUsing(transaction, plan.session);
+        await insertSessionSongsUsing(
+          transaction,
+          plan.songs.map((song) => ({ ...song, sessionId })),
+        );
+        await insertMatchesUsing(
+          transaction,
+          plan.matches.map((match) => ({ ...match, sessionId })),
+        );
+        return sessionId;
+      },
     });
   });
 }
@@ -232,13 +239,29 @@ export async function withGameDecisionTransaction<T>(
     );
 
     return operation({
-      getSession: () => getSessionUsing(transaction, sessionId),
-      getMatch: (matchId) => getMatchUsing(transaction, sessionId, matchId),
-      async completeMatch(matchId, winnerSongId, completedAt) {
+      async loadDecisionContext(matchId) {
+        const session = await getSessionUsing(transaction, sessionId);
+        const match = await getMatchUsing(transaction, sessionId, matchId);
+        const roundMatches = match
+          ? await transaction
+              .select(matchSelection)
+              .from(gameMatches)
+              .where(
+                and(
+                  eq(gameMatches.sessionId, sessionId),
+                  eq(gameMatches.roundNumber, match.roundNumber),
+                ),
+              )
+              .orderBy(asc(gameMatches.position))
+          : [];
+
+        return { session, match, roundMatches };
+      },
+      async applyTransition(transition, completedAt) {
         const completed = await transaction
           .update(gameMatches)
           .set({
-            winnerSongId,
+            winnerSongId: transition.completedMatch.winnerSongId,
             status: "completed",
             completedAt,
             updatedAt: completedAt,
@@ -246,7 +269,7 @@ export async function withGameDecisionTransaction<T>(
           .where(
             and(
               eq(gameMatches.sessionId, sessionId),
-              eq(gameMatches.id, matchId),
+              eq(gameMatches.id, transition.completedMatch.matchId),
               eq(gameMatches.status, "ready"),
             ),
           )
@@ -258,105 +281,78 @@ export async function withGameDecisionTransaction<T>(
             409,
           );
         }
-      },
-      async hasIncompleteMatchesInRound(roundNumber) {
-        const [match] = await transaction
-          .select({ id: gameMatches.id })
-          .from(gameMatches)
-          .where(
-            and(
-              eq(gameMatches.sessionId, sessionId),
-              eq(gameMatches.roundNumber, roundNumber),
-              ne(gameMatches.status, "completed"),
-            ),
-          )
-          .limit(1);
-        return Boolean(match);
-      },
-      async getWinnerSongIdsInRound(roundNumber) {
-        const roundMatches = await transaction
-          .select({ winnerSongId: gameMatches.winnerSongId })
-          .from(gameMatches)
-          .where(
-            and(
-              eq(gameMatches.sessionId, sessionId),
-              eq(gameMatches.roundNumber, roundNumber),
-              eq(gameMatches.status, "completed"),
-            ),
-          )
-          .orderBy(asc(gameMatches.position));
-        const winnerSongIds = roundMatches.flatMap(({ winnerSongId }) =>
-          winnerSongId ? [winnerSongId] : [],
-        );
-        if (winnerSongIds.length !== roundMatches.length) {
-          throw new AppError(
-            "INVALID_BRACKET_STATE",
-            "Uma rodada concluída possui confronto sem vencedora.",
-            500,
-          );
-        }
-        return winnerSongIds;
-      },
-      async populateRound(roundNumber, pairs, populatedAt) {
-        const roundMatches = await transaction
-          .select({ id: gameMatches.id })
-          .from(gameMatches)
-          .where(
-            and(
-              eq(gameMatches.sessionId, sessionId),
-              eq(gameMatches.roundNumber, roundNumber),
-              eq(gameMatches.status, "pending"),
-            ),
-          )
-          .orderBy(asc(gameMatches.position));
-        if (roundMatches.length !== pairs.length) {
-          throw new AppError(
-            "INVALID_BRACKET_STATE",
-            "A quantidade de pares não corresponde à próxima rodada.",
-            500,
-          );
-        }
 
-        for (const [index, match] of roundMatches.entries()) {
-          const pair = pairs[index];
-          const updatedRows = await transaction
-            .update(gameMatches)
-            .set({
-              songAId: pair.songAId,
-              songBId: pair.songBId,
-              status: "ready",
-              updatedAt: populatedAt,
-            })
+        if (transition.nextRound) {
+          const roundMatches = await transaction
+            .select({ id: gameMatches.id })
+            .from(gameMatches)
             .where(
               and(
                 eq(gameMatches.sessionId, sessionId),
-                eq(gameMatches.id, match.id),
+                eq(gameMatches.roundNumber, transition.nextRound.roundNumber),
                 eq(gameMatches.status, "pending"),
               ),
             )
-            .returning({ id: gameMatches.id });
-          if (updatedRows.length === 0) {
+            .orderBy(asc(gameMatches.position));
+          if (roundMatches.length !== transition.nextRound.pairs.length) {
             throw new AppError(
               "INVALID_BRACKET_STATE",
-              "A próxima rodada não pôde ser formada.",
-              409,
+              "A quantidade de pares não corresponde à próxima rodada.",
+              500,
             );
           }
+
+          for (const [index, match] of roundMatches.entries()) {
+            const pair = transition.nextRound.pairs[index];
+            const updatedRows = await transaction
+              .update(gameMatches)
+              .set({
+                songAId: pair.songAId,
+                songBId: pair.songBId,
+                status: "ready",
+                updatedAt: completedAt,
+              })
+              .where(
+                and(
+                  eq(gameMatches.sessionId, sessionId),
+                  eq(gameMatches.id, match.id),
+                  eq(gameMatches.status, "pending"),
+                ),
+              )
+              .returning({ id: gameMatches.id });
+            if (updatedRows.length === 0) {
+              throw new AppError(
+                "INVALID_BRACKET_STATE",
+                "A próxima rodada não pôde ser formada.",
+                409,
+              );
+            }
+          }
         }
-      },
-      async setCurrentRound(roundNumber) {
-        await transaction
-          .update(gameSessions)
-          .set({ currentRound: roundNumber, updatedAt: new Date() })
-          .where(eq(gameSessions.id, sessionId));
-      },
-      async completeSession(championSongId, completedAt) {
+
+        if (transition.session.status === "completed") {
+          await transaction
+            .update(gameSessions)
+            .set({
+              status: "completed",
+              currentRound: transition.session.currentRound,
+              championSongId: transition.session.championSongId,
+              completedAt,
+              updatedAt: completedAt,
+            })
+            .where(
+              and(
+                eq(gameSessions.id, sessionId),
+                eq(gameSessions.status, "active"),
+              ),
+            );
+          return;
+        }
+
         await transaction
           .update(gameSessions)
           .set({
-            status: "completed",
-            championSongId,
-            completedAt,
+            currentRound: transition.session.currentRound,
             updatedAt: completedAt,
           })
           .where(

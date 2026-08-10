@@ -30,6 +30,7 @@ const activeSongs = createActiveSongs(10);
 function gameHarness(
   options: {
     isActive?: boolean;
+    failWhenPopulatingRound?: boolean;
     random?: () => number;
     songs?: typeof activeSongs;
   } = {},
@@ -49,70 +50,68 @@ function gameHarness(
         songs: options.songs ?? activeSongs,
       };
     },
-    async insertSession(session) {
-      sessions.push({ id: sessionId, ...session });
-      return sessionId;
-    },
-    async insertSessionSongs(items) {
-      snapshots.push(...items);
-    },
-    async insertMatches(items) {
+    async createGame(plan) {
+      sessions.push({ id: sessionId, ...plan.session });
+      snapshots.push(...plan.songs.map((song) => ({ ...song, sessionId })));
       matches.push(
-        ...items.map((match) => {
+        ...plan.matches.map((match) => {
           matchIdSequence += 1;
           return {
             id: `40000000-0000-4000-8000-${String(matchIdSequence).padStart(12, "0")}`,
+            sessionId,
             ...match,
           };
         }),
       );
+      return sessionId;
     },
   };
   const decisionRepository: GameDecisionRepository = {
-    async getSession() {
-      return sessions[0] ?? null;
+    async loadDecisionContext(matchId) {
+      const session = sessions[0] ?? null;
+      const match = matches.find(({ id }) => id === matchId) ?? null;
+      return {
+        session,
+        match,
+        roundMatches: match
+          ? matches
+              .filter(({ roundNumber }) => roundNumber === match.roundNumber)
+              .sort((left, right) => left.position - right.position)
+          : [],
+      };
     },
-    async getMatch(matchId) {
-      return matches.find(({ id }) => id === matchId) ?? null;
-    },
-    async completeMatch(matchId, winnerSongId, completedAt) {
-      const match = matches.find(({ id }) => id === matchId)!;
+    async applyTransition(transition, completedAt) {
+      const match = matches.find(
+        ({ id }) => id === transition.completedMatch.matchId,
+      )!;
       match.status = "completed";
-      match.winnerSongId = winnerSongId;
+      match.winnerSongId = transition.completedMatch.winnerSongId;
       match.completedAt = completedAt;
-    },
-    async hasIncompleteMatchesInRound(roundNumber) {
-      return matches.some(
-        (match) =>
-          match.roundNumber === roundNumber && match.status !== "completed",
-      );
-    },
-    async getWinnerSongIdsInRound(roundNumber) {
-      return matches
-        .filter(
-          (match) =>
-            match.roundNumber === roundNumber && match.status === "completed",
-        )
-        .sort((left, right) => left.position - right.position)
-        .map(({ winnerSongId }) => winnerSongId!);
-    },
-    async populateRound(roundNumber, pairs) {
-      const roundMatches = matches
-        .filter((match) => match.roundNumber === roundNumber)
-        .sort((left, right) => left.position - right.position);
-      roundMatches.forEach((match, index) => {
-        match.songAId = pairs[index].songAId;
-        match.songBId = pairs[index].songBId;
-        match.status = "ready";
-      });
-    },
-    async setCurrentRound(roundNumber) {
-      sessions[0].currentRound = roundNumber;
-    },
-    async completeSession(championSongId, completedAt) {
-      sessions[0].status = "completed";
-      sessions[0].championSongId = championSongId;
-      sessions[0].completedAt = completedAt;
+
+      if (transition.nextRound) {
+        if (options.failWhenPopulatingRound) {
+          throw new Error("Falha de persistência simulada.");
+        }
+        const roundMatches = matches
+          .filter(
+            ({ roundNumber }) =>
+              roundNumber === transition.nextRound!.roundNumber,
+          )
+          .sort((left, right) => left.position - right.position);
+        roundMatches.forEach((nextMatch, index) => {
+          const pair = transition.nextRound!.pairs[index];
+          nextMatch.songAId = pair.songAId;
+          nextMatch.songBId = pair.songBId;
+          nextMatch.status = "ready";
+        });
+      }
+
+      sessions[0].currentRound = transition.session.currentRound;
+      if (transition.session.status === "completed") {
+        sessions[0].status = "completed";
+        sessions[0].championSongId = transition.session.championSongId;
+        sessions[0].completedAt = completedAt;
+      }
     },
   };
   const dependencies: GameServiceDependencies = {
@@ -148,7 +147,15 @@ function gameHarness(
     },
     async withGameDecisionTransaction(_sessionId, operation) {
       decisionTransactions += 1;
-      return operation(decisionRepository);
+      const sessionSnapshot = structuredClone(sessions);
+      const matchSnapshot = structuredClone(matches);
+      try {
+        return await operation(decisionRepository);
+      } catch (error) {
+        sessions.splice(0, sessions.length, ...sessionSnapshot);
+        matches.splice(0, matches.length, ...matchSnapshot);
+        throw error;
+      }
     },
   };
 
@@ -315,6 +322,32 @@ describe("decisão transacional de confronto", () => {
       secondRound.map(({ songAId, songBId }) => [songAId, songBId]),
     ).toEqual(persistedPairs);
     expect(harness.transactionCounts().decisionTransactions).toBe(4);
+  });
+
+  it("não persiste parcialmente a decisão quando a transação falha", async () => {
+    const harness = gameHarness({ failWhenPopulatingRound: true });
+    await harness.service.createSession({ themeId, bracketSize: 4 });
+    const firstRound = harness.matches.filter(
+      ({ roundNumber }) => roundNumber === 1,
+    );
+    await harness.service.decide({
+      sessionId,
+      matchId: firstRound[0].id,
+      decision: { type: "vote", winnerSongId: firstRound[0].songAId! },
+    });
+
+    await expect(
+      harness.service.decide({
+        sessionId,
+        matchId: firstRound[1].id,
+        decision: { type: "vote", winnerSongId: firstRound[1].songAId! },
+      }),
+    ).rejects.toThrow("Falha de persistência simulada.");
+
+    await expect(harness.service.getState(sessionId)).resolves.toMatchObject({
+      currentMatch: { id: firstRound[1].id },
+      progress: { completedMatches: 1, currentRound: 1 },
+    });
   });
 
   it("rejeita decisão repetida sem avançar novamente", async () => {
