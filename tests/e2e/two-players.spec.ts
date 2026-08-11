@@ -242,6 +242,46 @@ test("mostra dois players com controles nativos e votos fora da mídia", async (
   ).toBeInViewport();
 });
 
+test("aproveita a largura do desktop com os players lado a lado", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/e2e-test/dois-players");
+
+  const [boxA, boxB] = await Promise.all([
+    page.getByLabel("Player da música A").boundingBox(),
+    page.getByLabel("Player da música B").boundingBox(),
+  ]);
+
+  expect(boxA).not.toBeNull();
+  expect(boxB).not.toBeNull();
+  expect(boxA!.width).toBeGreaterThan(400);
+  expect(boxB!.width).toBeGreaterThan(400);
+  expect(Math.abs(boxA!.y - boxB!.y)).toBeLessThan(2);
+  expect(boxA!.x + boxA!.width).toBeLessThanOrEqual(boxB!.x);
+});
+
+test("informa a conclusão enquanto abre o resultado final", async ({
+  browser,
+}) => {
+  const context = await browser.newContext({
+    javaScriptEnabled: false,
+    extraHTTPHeaders: { "x-e2e-test": "two-players" },
+  });
+  const page = await context.newPage();
+
+  await page.goto("/e2e-test/dois-players?completed=1");
+
+  await expect(
+    page.getByText("Partida concluída. Abrindo o resultado..."),
+  ).toHaveCount(1);
+  await expect(page.getByText("Preparando o próximo confronto...")).toHaveCount(
+    0,
+  );
+
+  await context.close();
+});
+
 test("pausa o outro player quando a reprodução começa pelos controles nativos", async ({
   page,
 }) => {

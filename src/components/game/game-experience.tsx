@@ -198,6 +198,11 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
   }
 
   if (!currentMatch || !songA || !songB) {
+    const transitionMessage =
+      state.session.status === "completed"
+        ? "Partida concluída. Abrindo o resultado..."
+        : "Preparando o próximo confronto...";
+
     return (
       <main className="grid min-h-screen place-items-center bg-[#08080f] px-5 text-white">
         <div role="status" className="text-center">
@@ -205,9 +210,7 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
             className="mx-auto size-8 animate-spin text-violet-300"
             aria-hidden="true"
           />
-          <p className="mt-4 text-white/60">
-            Preparando o próximo confronto...
-          </p>
+          <p className="mt-4 text-white/60">{transitionMessage}</p>
         </div>
       </main>
     );

@@ -182,6 +182,40 @@
   }
 }
 
+@media (min-width: 900px) {
+  .game-screen {
+    padding: 1.5rem;
+  }
+
+  .game-shell {
+    align-content: center;
+    gap: 0.75rem;
+    grid-template-rows: auto;
+    max-width: 72rem;
+    min-height: calc(100dvh - 3rem);
+  }
+
+  .game-matchup {
+    gap: 1rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: auto;
+  }
+
+  .game-player-wrap,
+  .game-youtube-player,
+  .game-player-host {
+    height: auto;
+  }
+
+  .game-player-host {
+    aspect-ratio: 16 / 9;
+  }
+
+  .game-player-host iframe {
+    height: 100%;
+  }
+}
+
 @keyframes wave-pulse {
   from {
     transform: scaleY(0.45);

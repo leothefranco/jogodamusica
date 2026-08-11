@@ -74,9 +74,28 @@ const fixture: GameState = {
   },
 };
 
-export default async function TwoPlayersFixturePage() {
+export default async function TwoPlayersFixturePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ completed?: string }>;
+}) {
   const requestHeaders = await headers();
   if (requestHeaders.get("x-e2e-test") !== "two-players") notFound();
 
-  return <GameExperience initialState={fixture} />;
+  const { completed } = await searchParams;
+  const initialState: GameState =
+    completed === "1"
+      ? {
+          ...fixture,
+          session: {
+            ...fixture.session,
+            status: "completed",
+            championSongId: "song-a",
+            completedAt: new Date("2026-01-01T00:03:00.000Z"),
+          },
+          currentMatch: null,
+        }
+      : fixture;
+
+  return <GameExperience initialState={initialState} />;
 }
