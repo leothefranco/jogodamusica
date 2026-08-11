@@ -8,10 +8,18 @@ substituir os cenários detalhados já existentes em
 Use apenas o Supabase de QA. Não informe credenciais, URLs secretas, UUIDs ou
 dados pessoais nas evidências.
 
+O endereço-base deste ciclo é
+`https://jogodamusica-git-codex-phase6-quality-deploy-jogo-da-musica.vercel.app`.
+Distribua o link completo com `_vercel_share` fora do Git e apenas aos
+testadores. Nunca registre esse token neste documento, em issues ou screenshots.
+No plano Hobby, gerar outro link compartilhável revoga o anterior.
+
 ## Registro da execução
 
 - Commit candidato: `________________`
-- Preview: `https://________________.vercel.app`
+- Preview base:
+  `https://jogodamusica-git-codex-phase6-quality-deploy-jogo-da-musica.vercel.app`
+- Link externo recebido fora do Git: [ ]
 - Executor(es): `________________`
 - Período: `________________`
 - Supabase de QA confirmado: [ ]
