@@ -73,6 +73,10 @@ operador do seed. Não precisam permanecer no runtime da Vercel.
 - [ ] `DATABASE_URL` usa o Transaction Pooler e TLS.
 - [ ] A chave YouTube está restrita à YouTube Data API v3.
 - [ ] Nenhum segredo usa o prefixo `NEXT_PUBLIC_`.
+- [ ] RLS está habilitado em todas as tabelas do schema `public`; no modelo atual,
+      não existem policies para `anon` ou `authenticated`, pois o acesso aos
+      dados ocorre exclusivamente pelo servidor.
+- [ ] A proteção do Supabase Auth contra senhas vazadas está habilitada.
 - [ ] Após qualquer alteração de variável, um novo deployment foi criado; mudar
       a configuração não altera builds que já existem.
 
