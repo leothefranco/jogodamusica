@@ -33,13 +33,13 @@ meia-noite do horário do Pacífico (`PT`), e os valores padrão são declarados
 como sujeitos a alteração
 ([calculadora oficial de cota](https://developers.google.com/youtube/v3/determine_quota_cost)).
 
-| Método | Custo atual | Balde |
-| --- | ---: | --- |
-| `search.list` | 1 por chamada, máximo padrão de 100 chamadas/dia | Pesquisa |
-| `videos.list` | 1 unidade | Geral, 10.000/dia |
-| `playlistItems.list` | 1 unidade por página | Geral, 10.000/dia |
-| `playlists.list` | 1 unidade | Geral, 10.000/dia |
-| `channels.list` | 1 unidade | Geral, 10.000/dia; não é usado pelo fluxo atual |
+| Método               |                                      Custo atual | Balde                                           |
+| -------------------- | -----------------------------------------------: | ----------------------------------------------- |
+| `search.list`        | 1 por chamada, máximo padrão de 100 chamadas/dia | Pesquisa                                        |
+| `videos.list`        |                                        1 unidade | Geral, 10.000/dia                               |
+| `playlistItems.list` |                             1 unidade por página | Geral, 10.000/dia                               |
+| `playlists.list`     |                                        1 unidade | Geral, 10.000/dia                               |
+| `channels.list`      |                                        1 unidade | Geral, 10.000/dia; não é usado pelo fluxo atual |
 
 Os custos são confirmados nas referências oficiais de
 [`search.list`](https://developers.google.com/youtube/v3/docs/search/list),
@@ -48,8 +48,7 @@ Os custos são confirmados nas referências oficiais de
 e [`channels.list`](https://developers.google.com/youtube/v3/docs/channels/list).
 
 > Atenção: a informação histórica de que cada `search.list` custa 100 das
-> 10.000 unidades gerais não descreve mais o modelo oficial vigente em agosto de
-> 2026. Agora a chamada custa 1, mas existe o limite diário separado de 100
+> 10.000 unidades gerais não descreve mais o modelo oficial vigente em agosto de 2026. Agora a chamada custa 1, mas existe o limite diário separado de 100
 > pesquisas.
 
 ## Consumo do app

@@ -3,11 +3,10 @@
 Aplicação web para grupos compararem músicas em confrontos eliminatórios, usando
 um único aparelho, até eleger uma campeã.
 
-Este repositório concluiu a **Fase 5 — PWA, acessibilidade e robustez**. A base
-Next.js, o modelo PostgreSQL/Drizzle, o acesso administrativo, o catálogo
-flexível, o fluxo público de partidas e a experiência instalável estão
-implementados. A próxima etapa planejada é a **Fase 6 — Qualidade e deploy**,
-com Playwright, integração contínua e publicação, conforme a
+O código das Fases 0–5 está concluído. A **Fase 6 — Qualidade e deploy** possui
+Playwright e um gate de integração contínua; a promoção do primeiro beta para
+produção depende da aprovação do QA externo e do
+[checklist de produção](./docs/checklist-producao.md), conforme a
 [especificação](./jogo-da-musica-especificacao-codex.md).
 
 ## Requisitos no Windows
@@ -175,10 +174,55 @@ pessoais.
 
 Somente variáveis prefixadas com `NEXT_PUBLIC_` podem chegar ao navegador.
 
+`SEED_ADMIN_USER_ID` e `SEED_ADMIN_DISPLAY_NAME` são usados somente na execução
+controlada do seed. Eles não precisam permanecer configurados no runtime da
+Vercel.
+
 Os testes E2E usam uma rota-fixture reconhecida somente pelo servidor iniciado
 pelo Playwright. Essa rota não faz parte da resolução de páginas nem do build de
 produção. Para evitar conflito com outro servidor local, defina
 `PLAYWRIGHT_PORT` antes de executar `npm run test:e2e`.
+
+## Integração contínua
+
+O workflow [`.github/workflows/ci.yml`](./.github/workflows/ci.yml) executa em
+pull requests, pushes para `master` e acionamentos manuais. O gate único
+**Quality gate** instala dependências com `npm ci` e exige, nesta ordem:
+
+1. formatação;
+2. lint;
+3. verificação de tipos;
+4. testes unitários e de integração;
+5. build de produção;
+6. testes Playwright em Chromium.
+
+O CI não recebe credenciais reais. Os testes de navegador usam a fixture
+interna e um player simulado, geram um build isolado com `E2E_TEST_MODE=1` e
+rodam contra `next start`; integrações com Supabase e YouTube reais pertencem ao
+QA externo. O build de produção sem a fixture é validado antes desse build E2E.
+Em caso de falha no Playwright, o relatório HTML fica disponível como artefato
+por sete dias.
+
+Proteja `master` exigindo pull request e o check **Quality gate**, bloqueando
+force push e exclusão. A conta GitHub administradora ainda pode realizar ações
+de recuperação deliberadas conforme a política do repositório.
+
+## Deploy e QA externo
+
+O beta usa a integração nativa GitHub–Vercel: branches e pull requests geram
+Previews, enquanto `master` é a Production Branch. Preview/QA e Production
+devem usar projetos Supabase separados; segredos da Vercel nunca são copiados
+para GitHub Actions.
+
+No primeiro release, mantenha a atribuição automática do domínio de produção
+desativada. Depois que o Preview, o CI e o QA externo forem aprovados, aplique
+migrações e seed de forma controlada, gere o deployment staged de Production,
+faça o smoke test e promova-o manualmente. Migrações nunca rodam no build.
+
+- [Checklist e runbook de produção](./docs/checklist-producao.md)
+- [Roteiro e registro de QA externo](./docs/qa-externo-fase-6.md)
+- [QA detalhado da Fase 2](./docs/qa-fase-2.md)
+- [QA detalhado da Fase 2.1](./docs/qa-fase-2.1.md)
 
 ## Organização
 
