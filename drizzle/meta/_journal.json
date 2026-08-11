@@ -43,6 +43,13 @@
       "when": 1786412509078,
       "tag": "0005_enable_public_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786468117433,
+      "tag": "0006_numerous_tarantula",
+      "breakpoints": true
     }
   ]
 }

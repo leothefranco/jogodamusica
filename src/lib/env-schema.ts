@@ -17,6 +17,10 @@ export const serverEnvSchema = z.object({
   DATABASE_URL: databaseUrlSchema,
 });
 
+export const rateLimitEnvSchema = z.object({
+  RATE_LIMIT_KEY_SECRET: z.string().min(32),
+});
+
 export const youtubePlaylistImportEnvSchema = z.object({
   YOUTUBE_PLAYLIST_IMPORT_MAX_ITEMS: z.coerce
     .number()
@@ -42,6 +46,7 @@ export const seedEnvSchema = z.object({
 
 export type PublicSupabaseEnv = z.infer<typeof publicSupabaseInputSchema>;
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
+export type RateLimitEnv = z.infer<typeof rateLimitEnvSchema>;
 export type YouTubeEnv = z.infer<typeof youtubeEnvSchema>;
 export type YouTubePlaylistImportEnv = z.infer<
   typeof youtubePlaylistImportEnvSchema

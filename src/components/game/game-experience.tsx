@@ -10,6 +10,7 @@ import {
   type YouTubePlayerHandle,
 } from "@/components/game/youtube-player";
 import {
+  AbandonConfirmation,
   DecisionConfirmation,
   TiebreakReveal,
 } from "@/components/game/decision-overlays";
@@ -100,6 +101,9 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
   >({});
   const [message, setMessage] = useState<string | null>(null);
   const [isAbandoning, setIsAbandoning] = useState(false);
+  const [abandonError, setAbandonError] = useState<string | null>(null);
+  const [isAbandonConfirmationOpen, setIsAbandonConfirmationOpen] =
+    useState(false);
 
   const confrontation = projectCurrentConfrontation(state);
   const currentMatch = confrontation?.match ?? null;
@@ -176,6 +180,7 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
 
   async function abandon() {
     setIsAbandoning(true);
+    setAbandonError(null);
     setMessage(null);
     try {
       const response = await fetch(`/api/games/${state.session.id}`, {
@@ -188,7 +193,7 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
       }
       router.push(`/tema/${state.theme.slug}`);
     } catch (caught) {
-      setMessage(
+      setAbandonError(
         caught instanceof Error
           ? caught.message
           : "Não foi possível abandonar a partida.",
@@ -322,7 +327,11 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
         <div className="game-abandon text-center">
           <button
             type="button"
-            onClick={() => void abandon()}
+            onClick={() => {
+              pausePlayback();
+              setAbandonError(null);
+              setIsAbandonConfirmationOpen(true);
+            }}
             disabled={isAbandoning || decisions.isDeciding}
             className="min-h-11 rounded-lg px-4 text-sm text-white/45 outline-none hover:text-white focus-visible:ring-2 focus-visible:ring-violet-300"
           >
@@ -337,6 +346,16 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
         busy={decisions.isDeciding}
         onCancel={decisions.cancelDecision}
         onConfirm={() => void decisions.confirmDecision()}
+      />
+      <AbandonConfirmation
+        open={isAbandonConfirmationOpen}
+        busy={isAbandoning}
+        errorMessage={abandonError}
+        onCancel={() => {
+          setAbandonError(null);
+          setIsAbandonConfirmationOpen(false);
+        }}
+        onConfirm={() => void abandon()}
       />
       <TiebreakReveal reveal={decisions.tiebreakReveal} />
     </main>

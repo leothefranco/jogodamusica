@@ -11,6 +11,7 @@ import {
   abandonGameSession,
   getGameState,
 } from "@/server/services/game-service";
+import { enforcePublicRateLimit } from "@/server/services/rate-limit";
 
 export async function GET(
   _request: Request,
@@ -33,6 +34,12 @@ export async function PATCH(
     const { sessionId } = parsePublicGameValue(
       await context.params,
       gameParamsSchema,
+    );
+    await enforcePublicRateLimit(
+      request,
+      "game-abandon",
+      { limit: 10, windowMs: 10 * 60_000 },
+      sessionId,
     );
     await parsePublicGameBody(request, abandonGameInputSchema);
     await abandonGameSession(sessionId);

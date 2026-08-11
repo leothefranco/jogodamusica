@@ -9,6 +9,7 @@ import {
 import Link from "next/link";
 
 import { buttonVariants } from "@/components/ui/button";
+import { countLabel } from "@/lib/language";
 import { cn } from "@/lib/utils";
 import { getPublicThemes } from "@/server/services/public-theme-service";
 
@@ -173,7 +174,10 @@ export default async function HomePage() {
                     </p>
                     <p className="mt-5 text-xs font-semibold text-violet-200">
                       {theme.activeSongCount} músicas ·{" "}
-                      {theme.supportedBracketSizes.length} modalidade(s)
+                      {countLabel(
+                        theme.supportedBracketSizes.length,
+                        "modalidade",
+                      )}
                     </p>
                   </div>
                 </Link>

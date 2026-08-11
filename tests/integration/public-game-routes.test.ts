@@ -10,9 +10,13 @@ const gameService = vi.hoisted(() => ({
 const publicThemeService = vi.hoisted(() => ({
   getPublicThemes: vi.fn(),
 }));
+const rateLimitService = vi.hoisted(() => ({
+  enforcePublicRateLimit: vi.fn(),
+}));
 
 vi.mock("@/server/services/game-service", () => gameService);
 vi.mock("@/server/services/public-theme-service", () => publicThemeService);
+vi.mock("@/server/services/rate-limit", () => rateLimitService);
 
 import { GET as getThemes } from "@/app/api/themes/route";
 import { POST as createGame } from "@/app/api/games/route";
@@ -42,7 +46,10 @@ const gameState = {
 };
 
 describe("contratos públicos de partida", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    rateLimitService.enforcePublicRateLimit.mockResolvedValue(undefined);
+  });
 
   it("cria uma partida e retorna sua URL", async () => {
     gameService.createGameSession.mockResolvedValue({ sessionId });
@@ -59,6 +66,35 @@ describe("contratos públicos de partida", () => {
       sessionId,
       url: `/jogo/${sessionId}`,
     });
+  });
+
+  it("limita a criação de partidas antes de tocar o domínio", async () => {
+    rateLimitService.enforcePublicRateLimit.mockRejectedValue(
+      new AppError(
+        "RATE_LIMITED",
+        "Muitas partidas em pouco tempo.",
+        429,
+        null,
+        { "Retry-After": "120" },
+      ),
+    );
+
+    const response = await createGame(
+      new Request("http://localhost/api/games", {
+        method: "POST",
+        headers: { "x-forwarded-for": "203.0.113.10" },
+        body: JSON.stringify({ themeId, bracketSize: 4 }),
+      }),
+    );
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get("Retry-After")).toBe("120");
+    expect(gameService.createGameSession).not.toHaveBeenCalled();
+    expect(rateLimitService.enforcePublicRateLimit).toHaveBeenCalledWith(
+      expect.any(Request),
+      "game-create",
+      { limit: 20, windowMs: 60 * 60_000 },
+    );
   });
 
   it.each([64, 128] as const)(
@@ -158,6 +194,32 @@ describe("contratos públicos de partida", () => {
     });
   });
 
+  it("limita decisões por sessão antes de tocar o domínio", async () => {
+    rateLimitService.enforcePublicRateLimit.mockRejectedValue(
+      new AppError("RATE_LIMITED", "Aguarde.", 429),
+    );
+
+    const response = await decide(
+      new Request(
+        `http://localhost/api/games/${sessionId}/matches/${matchId}/decision`,
+        {
+          method: "POST",
+          body: JSON.stringify({ type: "vote", winnerSongId }),
+        },
+      ),
+      { params: Promise.resolve({ sessionId, matchId }) },
+    );
+
+    expect(response.status).toBe(429);
+    expect(gameService.decideMatch).not.toHaveBeenCalled();
+    expect(rateLimitService.enforcePublicRateLimit).toHaveBeenCalledWith(
+      expect.any(Request),
+      "game-decision",
+      { limit: 90, windowMs: 60_000 },
+      sessionId,
+    );
+  });
+
   it("registra desempate sem vencedora fornecida pelo cliente", async () => {
     gameService.decideMatch.mockResolvedValue(gameState);
 
@@ -235,6 +297,29 @@ describe("contratos públicos de partida", () => {
     expect(gameService.abandonGameSession).toHaveBeenCalledWith(sessionId);
   });
 
+  it("limita abandonos por sessão antes de tocar o domínio", async () => {
+    rateLimitService.enforcePublicRateLimit.mockRejectedValue(
+      new AppError("RATE_LIMITED", "Aguarde.", 429),
+    );
+
+    const response = await abandonGame(
+      new Request(`http://localhost/api/games/${sessionId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "abandon" }),
+      }),
+      { params: Promise.resolve({ sessionId }) },
+    );
+
+    expect(response.status).toBe(429);
+    expect(gameService.abandonGameSession).not.toHaveBeenCalled();
+    expect(rateLimitService.enforcePublicRateLimit).toHaveBeenCalledWith(
+      expect.any(Request),
+      "game-abandon",
+      { limit: 10, windowMs: 10 * 60_000 },
+      sessionId,
+    );
+  });
+
   it("registra falha do player sem dados pessoais", async () => {
     gameService.reportGamePlaybackError.mockResolvedValue(undefined);
 
@@ -252,5 +337,28 @@ describe("contratos públicos de partida", () => {
       matchId,
       errorCode: 101,
     });
+  });
+
+  it("limita relatos de falha por sessão antes de tocar o domínio", async () => {
+    rateLimitService.enforcePublicRateLimit.mockRejectedValue(
+      new AppError("RATE_LIMITED", "Aguarde.", 429),
+    );
+
+    const response = await reportPlayerError(
+      new Request(`http://localhost/api/games/${sessionId}/player-errors`, {
+        method: "POST",
+        body: JSON.stringify({ errorCode: 101, matchId }),
+      }),
+      { params: Promise.resolve({ sessionId }) },
+    );
+
+    expect(response.status).toBe(429);
+    expect(gameService.reportGamePlaybackError).not.toHaveBeenCalled();
+    expect(rateLimitService.enforcePublicRateLimit).toHaveBeenCalledWith(
+      expect.any(Request),
+      "player-error",
+      { limit: 20, windowMs: 10 * 60_000 },
+      sessionId,
+    );
   });
 });

@@ -2,9 +2,11 @@
 
 import { FormEvent, useState } from "react";
 import { CheckCheck, LoaderCircle, ListMusic } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 import { adminInputClassName } from "@/components/admin/form-styles";
 import { Button } from "@/components/ui/button";
+import { countLabel } from "@/lib/language";
 import type { PlaylistPreview } from "@/server/services/playlist-import-service";
 
 type ApiError = { error?: { message?: string } };
@@ -31,6 +33,7 @@ export function PlaylistImportManager({
   themeId: string;
   maxItems: number;
 }) {
+  const router = useRouter();
   const [input, setInput] = useState("");
   const [preview, setPreview] = useState<PlaylistPreview | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -95,8 +98,8 @@ export function PlaylistImportManager({
         );
       }
       const { added, alreadyAssociated, ignored } = payload.data;
-      const message = `${added} adicionada(s), ${alreadyAssociated} já associada(s), ${ignored} ignorada(s)`;
-      window.location.assign(
+      const message = `${countLabel(added, "adicionada", "adicionadas")}, ${countLabel(alreadyAssociated, "já associada", "já associadas")}, ${countLabel(ignored, "ignorada", "ignoradas")}`;
+      router.push(
         `/admin/temas/${themeId}?message=${encodeURIComponent(message)}`,
       );
     } catch (caught) {
@@ -181,9 +184,13 @@ export function PlaylistImportManager({
                 {preview.playlistTitle}
               </h2>
               <p className="mt-2 text-sm text-white/45">
-                {preview.positionsScanned} posição(ões) ·{" "}
-                {preview.uniqueVideoCount} vídeo(s) único(s) ·{" "}
-                {preview.duplicateCount} duplicata(s)
+                {countLabel(preview.positionsScanned, "posição", "posições")} ·{" "}
+                {countLabel(
+                  preview.uniqueVideoCount,
+                  "vídeo único",
+                  "vídeos únicos",
+                )}{" "}
+                · {countLabel(preview.duplicateCount, "duplicata")}
               </p>
               {preview.isTruncated ? (
                 <p className="mt-2 text-sm font-semibold text-amber-200">
@@ -261,7 +268,11 @@ export function PlaylistImportManager({
 
           <div className="mt-7 flex flex-col gap-3 border-t border-white/8 pt-6 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-white/48">
-              {selectedIds.length} item(ns) selecionado(s)
+              {countLabel(
+                selectedIds.length,
+                "item selecionado",
+                "itens selecionados",
+              )}
             </p>
             <Button
               type="button"

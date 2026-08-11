@@ -37,6 +37,22 @@ export const matchStatusEnum = pgEnum("match_status", [
   "completed",
 ]);
 
+export const rateLimitBuckets = pgTable(
+  "rate_limit_buckets",
+  {
+    keyHash: varchar("key_hash", { length: 64 }).primaryKey(),
+    requestCount: integer("request_count").default(1).notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("rate_limit_buckets_expires_at_idx").on(table.expiresAt),
+    check("rate_limit_buckets_count_check", sql`${table.requestCount} > 0`),
+  ],
+);
+
 export const adminProfiles = pgTable(
   "admin_profiles",
   {
@@ -232,3 +248,4 @@ export type ThemeSong = typeof themeSongs.$inferSelect;
 export type GameSession = typeof gameSessions.$inferSelect;
 export type SessionSong = typeof sessionSongs.$inferSelect;
 export type GameMatch = typeof gameMatches.$inferSelect;
+export type RateLimitBucket = typeof rateLimitBuckets.$inferSelect;

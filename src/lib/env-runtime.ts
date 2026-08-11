@@ -1,4 +1,5 @@
 import {
+  rateLimitEnvSchema,
   seedEnvSchema,
   serverEnvSchema,
   youtubeEnvSchema,
@@ -13,6 +14,12 @@ export function getServerEnv() {
   });
 
   return cachedServerEnv;
+}
+
+export function getRateLimitEnv() {
+  return rateLimitEnvSchema.parse({
+    RATE_LIMIT_KEY_SECRET: process.env.RATE_LIMIT_KEY_SECRET,
+  });
 }
 
 export function getSeedEnv() {

@@ -91,7 +91,7 @@ export function createPlaylistImportService(
       themeId: string;
       playlistInput: string;
       maxItems: number;
-      onCacheMiss?: () => void;
+      onCacheMiss?: () => Promise<void> | void;
     }): Promise<{ preview: PlaylistPreview; cacheHit: boolean }> {
       pruneCache();
       const playlistId = parseYouTubePlaylistId(input.playlistInput);
@@ -100,7 +100,7 @@ export function createPlaylistImportService(
       const cached = cachedId ? getCachedById(cachedId) : null;
       if (cached) return { preview: cached.preview, cacheHit: true };
 
-      input.onCacheMiss?.();
+      await input.onCacheMiss?.();
       if (!(await dependencies.findThemeSummary(input.themeId))) {
         throw new AppError("THEME_NOT_FOUND", "Tema não encontrado.", 404);
       }
@@ -247,7 +247,7 @@ export async function previewPlaylistForTheme(input: {
   adminUserId: string;
   themeId: string;
   playlistInput: string;
-  onCacheMiss?: () => void;
+  onCacheMiss?: () => Promise<void> | void;
 }) {
   return playlistImportService.preview({
     ...input,

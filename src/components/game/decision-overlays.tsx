@@ -114,6 +114,67 @@ export function DecisionConfirmation({
   );
 }
 
+export function AbandonConfirmation({
+  open,
+  busy,
+  errorMessage,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean;
+  busy: boolean;
+  errorMessage: string | null;
+  onCancel(): void;
+  onConfirm(): void;
+}) {
+  return (
+    <Dialog.Root
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && !busy) onCancel();
+      }}
+      disablePointerDismissal
+    >
+      <Dialog.Portal>
+        <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm" />
+        <Dialog.Viewport className="fixed inset-0 z-50 grid place-items-center p-5">
+          <Dialog.Popup className="w-full max-w-sm rounded-2xl border border-white/12 bg-[#15101f] p-5 text-white shadow-2xl">
+            <Dialog.Title className="text-xl font-black">
+              Abandonar partida?
+            </Dialog.Title>
+            <Dialog.Description className="mt-2 text-sm leading-6 text-white/65">
+              O progresso atual será encerrado e esta partida não poderá ser
+              retomada. Você voltará para a página do tema.
+            </Dialog.Description>
+            {errorMessage ? (
+              <p
+                role="alert"
+                className="mt-3 rounded-xl border border-rose-300/20 bg-rose-300/10 p-3 text-sm text-rose-100"
+              >
+                {errorMessage}
+              </p>
+            ) : null}
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <Dialog.Close
+                render={<Button variant="secondary" />}
+                disabled={busy}
+              >
+                Continuar jogando
+              </Dialog.Close>
+              <Button type="button" onClick={onConfirm} disabled={busy}>
+                {busy && (
+                  <LoaderCircle className="animate-spin" aria-hidden="true" />
+                )}
+                {busy ? "Abandonando..." : "Abandonar partida"}
+              </Button>
+            </div>
+          </Dialog.Popup>
+        </Dialog.Viewport>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
 export function TiebreakReveal({
   reveal,
 }: {

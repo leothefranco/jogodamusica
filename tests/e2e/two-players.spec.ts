@@ -247,6 +247,9 @@ test("aproveita a largura do desktop com os players lado a lado", async ({
 }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/e2e-test/dois-players");
+  await expect
+    .poll(() => page.evaluate(() => window.__youtubeTest.playerVars.length))
+    .toBe(2);
 
   const [boxA, boxB] = await Promise.all([
     page.getByLabel("Player da música A").boundingBox(),
@@ -259,6 +262,61 @@ test("aproveita a largura do desktop com os players lado a lado", async ({
   expect(boxB!.width).toBeGreaterThan(400);
   expect(Math.abs(boxA!.y - boxB!.y)).toBeLessThan(2);
   expect(boxA!.x + boxA!.width).toBeLessThanOrEqual(boxB!.x);
+});
+
+test("exige confirmação acessível antes de abandonar a partida", async ({
+  page,
+}) => {
+  let abandonRequests = 0;
+  await page.route("**/api/games/*", async (route) => {
+    if (route.request().method() === "PATCH") {
+      abandonRequests += 1;
+      await route.fulfill({ status: 204 });
+      return;
+    }
+    await route.continue();
+  });
+  await page.goto("/e2e-test/dois-players");
+
+  const trigger = page.getByRole("button", {
+    name: "Abandonar partida e voltar ao tema",
+  });
+  await trigger.click();
+
+  const dialog = page.getByRole("dialog", { name: "Abandonar partida?" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText("não poderá ser retomada");
+  await expect(
+    dialog.getByRole("button", { name: "Continuar jogando" }),
+  ).toBeFocused();
+  expect(abandonRequests).toBe(0);
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(trigger).toBeFocused();
+  expect(abandonRequests).toBe(0);
+
+  await trigger.click();
+  await dialog.getByRole("button", { name: "Abandonar partida" }).click();
+  await expect.poll(() => abandonRequests).toBe(1);
+});
+
+test("mostra a falha de abandono dentro do diálogo", async ({ page }) => {
+  await page.route("**/api/games/*", (route) => route.fulfill({ status: 500 }));
+  await page.goto("/e2e-test/dois-players");
+  await page
+    .getByRole("button", { name: "Abandonar partida e voltar ao tema" })
+    .click();
+
+  const dialog = page.getByRole("dialog", { name: "Abandonar partida?" });
+  await dialog.getByRole("button", { name: "Abandonar partida" }).click();
+
+  await expect(dialog.getByRole("alert")).toContainText(
+    "Não foi possível abandonar a partida",
+  );
+  await expect(
+    dialog.getByRole("button", { name: "Abandonar partida" }),
+  ).toBeEnabled();
 });
 
 test("informa a conclusão enquanto abre o resultado final", async ({

@@ -8,7 +8,7 @@ import { createPlaylistImportHandler } from "@/app/api/admin/youtube/playlists/i
 describe("rotas administrativas do YouTube", () => {
   it("rejeita pesquisa de usuário sem perfil administrativo ativo", async () => {
     const handler = createYouTubeSearchHandler({
-      enforceRateLimit: () => undefined,
+      enforceRateLimit: async () => undefined,
       getAdminUser: async () => null,
       getEmbedData: async () => ({
         embedUrl: "",
@@ -29,7 +29,7 @@ describe("rotas administrativas do YouTube", () => {
 
   it("rejeita resolução de usuário sem perfil administrativo ativo", async () => {
     const handler = createYouTubeResolveHandler({
-      enforceRateLimit: () => undefined,
+      enforceRateLimit: async () => undefined,
       getAdminUser: async () => null,
       getEmbedData: async () => ({
         embedUrl: "",
@@ -55,7 +55,7 @@ describe("rotas administrativas do YouTube", () => {
 
   it("rejeita JSON malformado como erro de validação", async () => {
     const handler = createYouTubeResolveHandler({
-      enforceRateLimit: () => undefined,
+      enforceRateLimit: async () => undefined,
       getAdminUser: async () => ({
         userId: "10000000-0000-4000-8000-000000000010",
         email: "admin@example.com",
@@ -87,7 +87,7 @@ describe("rotas administrativas do YouTube", () => {
 
   it("entrega dados de incorporação da pesquisa pela fronteira do provedor", async () => {
     const handler = createYouTubeSearchHandler({
-      enforceRateLimit: () => undefined,
+      enforceRateLimit: async () => undefined,
       getAdminUser: async () => ({
         userId: "10000000-0000-4000-8000-000000000010",
         email: "admin@example.com",
@@ -128,7 +128,7 @@ describe("rotas administrativas do YouTube", () => {
   it("protege a prévia de playlist e aplica limite somente no cache miss", async () => {
     let rateLimits = 0;
     const handler = createPlaylistPreviewHandler({
-      enforceRateLimit: () => {
+      enforceRateLimit: async () => {
         rateLimits += 1;
       },
       getAdminUser: async () => ({
@@ -138,7 +138,7 @@ describe("rotas administrativas do YouTube", () => {
         role: "admin",
       }),
       previewPlaylistForTheme: async (input) => {
-        input.onCacheMiss?.();
+        await input.onCacheMiss?.();
         return {
           cacheHit: false,
           preview: {
@@ -173,7 +173,7 @@ describe("rotas administrativas do YouTube", () => {
 
   it("valida os IDs selecionados antes de confirmar importação", async () => {
     const handler = createPlaylistImportHandler({
-      enforceRateLimit: () => undefined,
+      enforceRateLimit: async () => undefined,
       getAdminUser: async () => ({
         userId: "10000000-0000-4000-8000-000000000010",
         email: "admin@example.com",

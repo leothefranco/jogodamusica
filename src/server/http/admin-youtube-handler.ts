@@ -31,7 +31,7 @@ export function createAdminYouTubeHandler(
       }
 
       if (options) {
-        dependencies.enforceRateLimit(
+        await dependencies.enforceRateLimit(
           `${options.rateLimitKey}:${admin.userId}`,
           {
             limit: options.limit,

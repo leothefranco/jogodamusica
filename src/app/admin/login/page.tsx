@@ -63,8 +63,7 @@ export default function AdminLoginPage() {
             Acesse o painel
           </h2>
           <p className="mt-2 text-sm leading-6 text-white/48">
-            Entre com o usuário criado no Supabase e autorizado em{" "}
-            <code className="text-violet-200">admin_profiles</code>.
+            Entre com uma conta autorizada para administrar temas e músicas.
           </p>
 
           {!configured ? (
@@ -83,7 +82,7 @@ export default function AdminLoginPage() {
           <LoginForm configured={configured} />
 
           <p className="mt-6 text-center text-xs text-white/30">
-            Não há cadastro público neste MVP.
+            O acesso é concedido pela equipe responsável pelo catálogo.
           </p>
         </div>
       </section>

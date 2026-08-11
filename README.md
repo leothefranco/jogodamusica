@@ -54,6 +54,7 @@ NEXT_PUBLIC_SUPABASE_URL=https://SEU-PROJETO.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 DATABASE_URL=postgresql://...
+RATE_LIMIT_KEY_SECRET=gere-um-segredo-aleatorio-com-32-ou-mais-caracteres
 YOUTUBE_API_KEY=
 SEED_ADMIN_USER_ID=
 SEED_ADMIN_DISPLAY_NAME=Administrador
@@ -160,19 +161,27 @@ pessoais.
 
 ## Variáveis de ambiente
 
-| Variável                               | Exposição | Uso                               |
-| -------------------------------------- | --------- | --------------------------------- |
-| `NEXT_PUBLIC_APP_URL`                  | Pública   | URL canônica da aplicação         |
-| `NEXT_PUBLIC_SUPABASE_URL`             | Pública   | URL do projeto Supabase           |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Pública   | Chave preferida em projetos novos |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY`        | Pública   | Compatibilidade com chave legada  |
-| `DATABASE_URL`                         | Servidor  | Transaction Pooler PostgreSQL     |
-| `YOUTUBE_API_KEY`                      | Servidor  | YouTube Data API, na Fase 2       |
-| `YOUTUBE_PLAYLIST_IMPORT_MAX_ITEMS`    | Servidor  | Teto de posições por importação   |
-| `SEED_ADMIN_USER_ID`                   | Servidor  | UUID do primeiro usuário Auth     |
-| `SEED_ADMIN_DISPLAY_NAME`              | Servidor  | Nome exibido do administrador     |
+| Variável                               | Exposição | Uso                                |
+| -------------------------------------- | --------- | ---------------------------------- |
+| `NEXT_PUBLIC_APP_URL`                  | Pública   | URL canônica da aplicação          |
+| `NEXT_PUBLIC_SUPABASE_URL`             | Pública   | URL do projeto Supabase            |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Pública   | Chave preferida em projetos novos  |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY`        | Pública   | Compatibilidade com chave legada   |
+| `DATABASE_URL`                         | Servidor  | Transaction Pooler PostgreSQL      |
+| `RATE_LIMIT_KEY_SECRET`                | Servidor  | HMAC dos identificadores de limite |
+| `YOUTUBE_API_KEY`                      | Servidor  | YouTube Data API, na Fase 2        |
+| `YOUTUBE_PLAYLIST_IMPORT_MAX_ITEMS`    | Servidor  | Teto de posições por importação    |
+| `SEED_ADMIN_USER_ID`                   | Servidor  | UUID do primeiro usuário Auth      |
+| `SEED_ADMIN_DISPLAY_NAME`              | Servidor  | Nome exibido do administrador      |
 
 Somente variáveis prefixadas com `NEXT_PUBLIC_` podem chegar ao navegador.
+
+Use um valor aleatório exclusivo por ambiente em `RATE_LIMIT_KEY_SECRET`, com
+pelo menos 32 caracteres. Trocar esse segredo reinicia logicamente os contadores.
+Os limites públicos usam o IP normalizado pela infraestrutura da Vercel; se ele
+não estiver disponível, a cota compartilhada `unknown` aplica uma política
+fail-closed. Monitore 429 nessa chave para detectar configuração incorreta do
+proxy.
 
 `SEED_ADMIN_USER_ID` e `SEED_ADMIN_DISPLAY_NAME` são usados somente na execução
 controlada do seed. Eles não precisam permanecer configurados no runtime da
@@ -338,8 +347,8 @@ confirmação revalida os vídeos no YouTube.
 - **Tema não publica:** confirme se existem pelo menos quatro músicas ativas e
   reproduzíveis.
 
-Em 26 de julho de 2026, `npm audit --omit=dev` também sinaliza avisos upstream
-em `postcss` e `sharp`, incluídos pelo Next.js 16.2.11. A correção automática
-oferecida exige downgrade incompatível para Next.js 9 e, por isso, não foi
-aplicada. Atualize para uma versão estável corrigida do Next.js assim que ela
-estiver disponível e repita a bateria de qualidade.
+Em 11 de agosto de 2026, o projeto foi atualizado para Next.js 16.3.0 e React
+19.2.8. `npm audit --omit=dev` passou sem vulnerabilidades; o audit completo
+ainda relata quatro vulnerabilidades moderadas no `esbuild` transitivo de
+`drizzle-kit`, usado apenas em desenvolvimento. A correção automática proposta
+é incompatível e não deve ser aplicada com `--force` sem uma migração testada.

@@ -62,6 +62,7 @@ podem apontar para o mesmo Supabase.
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Chave QA                     | Chave Production             | Preferida em projetos novos      |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY`        | Somente se necessário        | Somente se necessário        | Compatibilidade legada           |
 | `DATABASE_URL`                         | Pooler QA                    | Pooler Production            | Segredo exclusivo do servidor    |
+| `RATE_LIMIT_KEY_SECRET`                | Segredo aleatório de QA      | Segredo aleatório exclusivo  | Mínimo de 32 caracteres          |
 | `YOUTUBE_API_KEY`                      | Chave de QA restrita         | Chave de produção restrita   | Segredo exclusivo do servidor    |
 | `YOUTUBE_PLAYLIST_IMPORT_MAX_ITEMS`    | `200`                        | `200`                        | Ajustar apenas com justificativa |
 
@@ -71,6 +72,7 @@ operador do seed. Não precisam permanecer no runtime da Vercel.
 - [ ] Inscrição pública por e-mail está desativada nos dois Supabase.
 - [ ] URLs e chaves públicas pertencem ao ambiente correto.
 - [ ] `DATABASE_URL` usa o Transaction Pooler e TLS.
+- [ ] `RATE_LIMIT_KEY_SECRET` é diferente entre QA e produção e tem ao menos 32 caracteres.
 - [ ] A chave YouTube está restrita à YouTube Data API v3.
 - [ ] Nenhum segredo usa o prefixo `NEXT_PUBLIC_`.
 - [ ] RLS está habilitado em todas as tabelas do schema `public`; no modelo atual,

@@ -1,7 +1,15 @@
 "use client";
 
 import { Download, Share2, X } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
+
+import {
+  getInstallPromptDismissedUntil,
+  PWA_INSTALL_DISMISS_KEY,
+  PWA_INSTALL_DISMISS_MS,
+  shouldOfferPwaInstall,
+} from "@/lib/pwa-install";
 
 type BeforeInstallPromptEvent = Event & {
   prompt(): Promise<void>;
@@ -30,9 +38,20 @@ function getIOSInstallInstructionsSnapshot() {
 }
 
 export function PwaManager() {
+  const pathname = usePathname();
+  const [now] = useState(Date.now);
   const [installPrompt, setInstallPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissedUntil, setDismissedUntil] = useState<number | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      return getInstallPromptDismissedUntil(
+        window.localStorage.getItem(PWA_INSTALL_DISMISS_KEY),
+      );
+    } catch {
+      return null;
+    }
+  });
   const showIOSInstructions = useSyncExternalStore(
     subscribeToDisplayMode,
     getIOSInstallInstructionsSnapshot,
@@ -68,8 +87,29 @@ export function PwaManager() {
     };
   }, []);
 
-  if (dismissed || isStandalone() || (!installPrompt && !showIOSInstructions)) {
+  if (
+    !shouldOfferPwaInstall({
+      pathname,
+      dismissedUntil,
+      now,
+    }) ||
+    isStandalone() ||
+    (!installPrompt && !showIOSInstructions)
+  ) {
     return null;
+  }
+
+  function dismiss() {
+    const nextDismissedUntil = Date.now() + PWA_INSTALL_DISMISS_MS;
+    try {
+      window.localStorage.setItem(
+        PWA_INSTALL_DISMISS_KEY,
+        String(nextDismissedUntil),
+      );
+    } catch {
+      // The in-memory state still hides the prompt for the current visit.
+    }
+    setDismissedUntil(nextDismissedUntil);
   }
 
   async function install() {
@@ -110,7 +150,7 @@ export function PwaManager() {
       </div>
       <button
         type="button"
-        onClick={() => setDismissed(true)}
+        onClick={dismiss}
         aria-label="Fechar instrução de instalação"
         className="grid size-11 shrink-0 place-items-center rounded-lg text-white/55 outline-none hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-violet-300"
       >

@@ -25,6 +25,7 @@ import { YouTubeSongManager } from "@/components/admin/youtube-song-manager";
 import { SupportedGameModes } from "@/components/admin/supported-game-modes";
 import { Button } from "@/components/ui/button";
 import { AppError } from "@/lib/errors";
+import { countLabel } from "@/lib/language";
 import { getThemeEditor } from "@/server/services/theme-content-service";
 
 export default async function EditThemePage({
@@ -73,7 +74,11 @@ export default async function EditThemePage({
               {theme.isActive ? "Publicado" : "Rascunho"}
             </span>
             <span className="text-xs text-white/35">
-              {theme.activeSongCount} música(s) ativa(s)
+              {countLabel(
+                theme.activeSongCount,
+                "música ativa",
+                "músicas ativas",
+              )}
             </span>
           </div>
           <h1 className="mt-4 text-4xl font-black tracking-[-0.04em] sm:text-5xl">
@@ -147,8 +152,13 @@ export default async function EditThemePage({
         <div className="mt-7 flex gap-3 rounded-xl border border-amber-300/18 bg-amber-300/7 px-4 py-4 text-sm text-amber-100">
           <CircleAlert className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
           <p>
-            Faltam {publishability.missingSongCount} música(s) ativa(s) para
-            atingir o mínimo de quatro e publicar o tema.
+            Faltam{" "}
+            {countLabel(
+              publishability.missingSongCount,
+              "música ativa",
+              "músicas ativas",
+            )}{" "}
+            para atingir o mínimo de quatro e publicar o tema.
           </p>
         </div>
       ) : null}
@@ -189,7 +199,8 @@ export default async function EditThemePage({
         <div>
           <h2 className="text-xl font-black">Músicas do tema</h2>
           <p className="mt-2 text-sm text-white/42">
-            {songs.length} associada(s), {theme.activeSongCount} ativa(s).
+            {countLabel(songs.length, "associada", "associadas")},{" "}
+            {countLabel(theme.activeSongCount, "ativa", "ativas")}.
           </p>
         </div>
 

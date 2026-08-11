@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   parsePublicSupabaseEnv,
+  rateLimitEnvSchema,
   seedEnvSchema,
   serverEnvSchema,
   youtubeEnvSchema,
@@ -35,6 +36,17 @@ describe("environment schemas", () => {
     expect(() =>
       serverEnvSchema.parse({ DATABASE_URL: "https://example.com" }),
     ).toThrow();
+  });
+
+  it("exige um segredo forte para anonimizar chaves de rate limit", () => {
+    expect(() =>
+      rateLimitEnvSchema.parse({ RATE_LIMIT_KEY_SECRET: "curto" }),
+    ).toThrow();
+    expect(
+      rateLimitEnvSchema.parse({
+        RATE_LIMIT_KEY_SECRET: "segredo-com-pelo-menos-32-caracteres-seguros",
+      }).RATE_LIMIT_KEY_SECRET,
+    ).toBe("segredo-com-pelo-menos-32-caracteres-seguros");
   });
 
   it("aplica o nome padrão do administrador do seed", () => {

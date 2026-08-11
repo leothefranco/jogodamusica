@@ -11,6 +11,7 @@ import {
   validatePreviewWindow,
 } from "@/domain/music/content-validation";
 import { AppError } from "@/lib/errors";
+import { countLabel } from "@/lib/language";
 import { createYouTubeProvider } from "@/server/providers/youtube/youtube-provider";
 import {
   deleteThemeRecord,
@@ -179,7 +180,7 @@ export function createThemeContentService(
           if (!publishability.canPublish) {
             throw new AppError(
               "THEME_NOT_PLAYABLE",
-              `Adicione mais ${publishability.missingSongCount} música(s) ativa(s) antes de publicar.`,
+              `Adicione mais ${countLabel(publishability.missingSongCount, "música ativa", "músicas ativas")} antes de publicar.`,
               409,
             );
           }
