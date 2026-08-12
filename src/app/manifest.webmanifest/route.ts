@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 import { siteConfig } from "@/lib/site";
 
-export default function manifest(): MetadataRoute.Manifest {
+export function createPublicManifest(): MetadataRoute.Manifest {
   return {
     name: siteConfig.name,
     short_name: siteConfig.shortName,
@@ -27,4 +27,13 @@ export default function manifest(): MetadataRoute.Manifest {
       },
     ],
   };
+}
+
+export function GET() {
+  return Response.json(createPublicManifest(), {
+    headers: {
+      "Cache-Control": "public, max-age=0, must-revalidate",
+      "Content-Type": "application/manifest+json; charset=utf-8",
+    },
+  });
 }

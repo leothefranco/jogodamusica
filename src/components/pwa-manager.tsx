@@ -39,6 +39,7 @@ function getIOSInstallInstructionsSnapshot() {
 
 export function PwaManager() {
   const pathname = usePathname();
+  const isAdmin = pathname.startsWith("/admin");
   const [now] = useState(Date.now);
   const [installPrompt, setInstallPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
@@ -121,10 +122,20 @@ export function PwaManager() {
 
   return (
     <aside
-      aria-label="Instalar aplicativo"
-      className="fixed right-3 bottom-3 left-3 z-50 mx-auto flex max-w-xl items-start gap-3 rounded-2xl border border-violet-300/25 bg-[#11101d]/95 p-4 text-sm text-white shadow-2xl backdrop-blur sm:right-5 sm:bottom-5 sm:left-auto"
+      aria-label={
+        isAdmin ? "Instalar aplicativo administrativo" : "Instalar aplicativo"
+      }
+      className={`fixed right-3 bottom-3 left-3 z-50 mx-auto flex max-w-xl items-start gap-3 rounded-2xl border bg-[#11101d]/95 p-4 text-sm text-white shadow-2xl backdrop-blur sm:right-5 sm:bottom-5 sm:left-auto ${
+        isAdmin ? "border-emerald-300/25" : "border-violet-300/25"
+      }`}
     >
-      <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-violet-300/10 text-violet-200">
+      <span
+        className={`grid size-10 shrink-0 place-items-center rounded-xl ${
+          isAdmin
+            ? "bg-emerald-300/10 text-emerald-200"
+            : "bg-violet-300/10 text-violet-200"
+        }`}
+      >
         {showIOSInstructions ? (
           <Share2 aria-hidden="true" />
         ) : (
@@ -132,7 +143,9 @@ export function PwaManager() {
         )}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="font-bold">Instale o Jogo da Música</p>
+        <p className="font-bold">
+          Instale o {isAdmin ? "Jogo da Música Admin" : "Jogo da Música"}
+        </p>
         {showIOSInstructions ? (
           <p className="mt-1 leading-5 text-white/60">
             No Safari, toque em Compartilhar e depois em “Adicionar à Tela de
@@ -142,7 +155,11 @@ export function PwaManager() {
           <button
             type="button"
             onClick={() => void install()}
-            className="mt-2 min-h-11 rounded-lg bg-violet-300 px-4 font-bold text-[#160d25] outline-none hover:bg-violet-200 focus-visible:ring-2 focus-visible:ring-white"
+            className={`mt-2 min-h-11 rounded-lg px-4 font-bold outline-none focus-visible:ring-2 focus-visible:ring-white ${
+              isAdmin
+                ? "bg-emerald-300 text-[#052e24] hover:bg-emerald-200"
+                : "bg-violet-300 text-[#160d25] hover:bg-violet-200"
+            }`}
           >
             Instalar aplicativo
           </button>
@@ -152,7 +169,11 @@ export function PwaManager() {
         type="button"
         onClick={dismiss}
         aria-label="Fechar instrução de instalação"
-        className="grid size-11 shrink-0 place-items-center rounded-lg text-white/55 outline-none hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-violet-300"
+        className={`grid size-11 shrink-0 place-items-center rounded-lg text-white/55 outline-none hover:bg-white/10 hover:text-white focus-visible:ring-2 ${
+          isAdmin
+            ? "focus-visible:ring-emerald-300"
+            : "focus-visible:ring-violet-300"
+        }`}
       >
         <X aria-hidden="true" />
       </button>
