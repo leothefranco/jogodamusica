@@ -8,6 +8,10 @@ const theme = {
   slug: "classicos-da-festa",
   description: "Músicas para cantar junto.",
   coverUrl: null,
+  thumbnailUrls: [
+    "https://i.ytimg.com/vi/primeira/hqdefault.jpg",
+    "https://i.ytimg.com/vi/segunda/hqdefault.jpg",
+  ],
   activeSongCount: 10,
 };
 

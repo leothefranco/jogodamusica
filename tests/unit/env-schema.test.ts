@@ -55,17 +55,17 @@ describe("environment schemas", () => {
     );
   });
 
-  it("aplica o teto padrão de 200 posições por playlist", () => {
+  it("aplica o teto máximo de 1.000 posições por playlist", () => {
     expect(
       youtubeEnvSchema.parse({ YOUTUBE_API_KEY: "key" })
         .YOUTUBE_PLAYLIST_IMPORT_MAX_ITEMS,
-    ).toBe(200);
+    ).toBe(1_000);
   });
 
   it("lê o teto da playlist sem exigir a chave do YouTube", () => {
     expect(
       youtubePlaylistImportEnvSchema.parse({})
         .YOUTUBE_PLAYLIST_IMPORT_MAX_ITEMS,
-    ).toBe(200);
+    ).toBe(1_000);
   });
 });

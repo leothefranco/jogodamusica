@@ -110,6 +110,56 @@
   mask-image: linear-gradient(to bottom, black, transparent 82%);
 }
 
+.theme-thumbnail-stack {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      circle at 30% 20%,
+      rgb(167 139 250 / 0.34),
+      transparent 34%
+    ),
+    linear-gradient(145deg, #241543, #0d1823);
+}
+
+.theme-thumbnail-stack::after {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  content: "";
+  background: linear-gradient(to top, rgb(8 8 15 / 0.32), transparent 45%);
+}
+
+.theme-thumbnail-card {
+  position: absolute;
+  top: 50%;
+  left: calc(6% + var(--thumbnail-index) * 10%);
+  width: 64%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.24);
+  border-radius: 0.9rem;
+  background: #11111d;
+  box-shadow: 0 18px 35px rgb(0 0 0 / 0.48);
+  transform: translateY(-50%)
+    rotate(calc((var(--thumbnail-index) - 1.5) * 3deg));
+  transform-origin: center bottom;
+  transition:
+    transform 220ms ease,
+    filter 220ms ease,
+    box-shadow 220ms ease;
+  z-index: calc(var(--thumbnail-index) + 1);
+}
+
+.theme-thumbnail-card:hover {
+  z-index: 15;
+  filter: brightness(1.12) saturate(1.08);
+  box-shadow: 0 24px 46px rgb(0 0 0 / 0.62);
+  transform: translateY(calc(-50% - 0.7rem)) scale(1.08) rotate(0deg);
+}
+
 .wave-bar {
   animation: wave-pulse 1.7s ease-in-out infinite alternate;
   transform-origin: bottom;
@@ -243,5 +293,9 @@
 
   .wave-bar {
     animation: none;
+  }
+
+  .theme-thumbnail-card {
+    transition: none;
   }
 }

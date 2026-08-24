@@ -70,7 +70,7 @@ npm run db:migrate
 npm run db:seed
 ```
 
-O seed é idempotente: mantém um tema demonstrativo inativo e atualiza o perfil
+O seed é idempotente: não cria temas e atualiza o perfil
 administrativo informado sem criar ou armazenar senhas.
 
 ## Configurar YouTube Data API
@@ -86,7 +86,7 @@ administrativo informado sem criar ou armazenar senhas.
 
 ```env
 YOUTUBE_API_KEY=sua-chave-local
-YOUTUBE_PLAYLIST_IMPORT_MAX_ITEMS=200
+YOUTUBE_PLAYLIST_IMPORT_MAX_ITEMS=1000
 ```
 
 6. Reinicie `npm run dev` depois de alterar a variável.
@@ -277,7 +277,7 @@ módulos exclusivos do servidor.
   personalizações independentes quando o mesmo vídeo é reutilizado.
 - Publicação exige no mínimo quatro músicas ativas e reproduzíveis.
 - Prévia de playlist percorre páginas e valida vídeos em lotes, com teto padrão
-  de 200 posições, cache de 15 minutos e limite por administrador.
+  de 1.000 posições, cache de 15 minutos e limite por administrador.
 - Confirmação de playlist revalida dados confiáveis e grava associações em uma
   única transação, preservando ajustes existentes.
 - Modalidades suportadas são derivadas da quantidade de músicas ativas.

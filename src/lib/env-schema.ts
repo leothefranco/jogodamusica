@@ -27,7 +27,7 @@ export const youtubePlaylistImportEnvSchema = z.object({
     .int()
     .min(1)
     .max(1_000)
-    .default(200),
+    .default(1_000),
 });
 
 export const youtubeEnvSchema = youtubePlaylistImportEnvSchema.extend({

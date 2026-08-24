@@ -1,6 +1,6 @@
 import { closeDatabaseConnection, getDatabase } from "@/db/runtime";
-import { adminProfiles, themes } from "@/db/schema";
-import { demoThemeSeed, seedDatabase, type AdminSeed } from "@/db/seed-service";
+import { adminProfiles } from "@/db/schema";
+import { seedDatabase, type AdminSeed } from "@/db/seed-service";
 import { getSeedEnv } from "@/lib/env-runtime";
 
 process.loadEnvFile(".env.local");
@@ -20,20 +20,6 @@ async function main() {
   await database.transaction(async (transaction) => {
     await seedDatabase(
       {
-        async upsertTheme(theme) {
-          await transaction
-            .insert(themes)
-            .values(theme)
-            .onConflictDoUpdate({
-              target: themes.slug,
-              set: {
-                name: demoThemeSeed.name,
-                description: demoThemeSeed.description,
-                isActive: false,
-                updatedAt: new Date(),
-              },
-            });
-        },
         async upsertAdmin(adminSeed) {
           await transaction
             .insert(adminProfiles)
@@ -54,7 +40,6 @@ async function main() {
   });
 
   console.log("Seed concluído.");
-  console.log(`Tema garantido: ${demoThemeSeed.name}`);
   console.log(
     admin
       ? `Administrador garantido: ${admin.displayName}`

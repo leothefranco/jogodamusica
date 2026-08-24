@@ -11,7 +11,7 @@ tamanhos de partida o catálogo ativo suporta.
 ## Solution
 
 O administrador informa uma playlist pública ou não listada do YouTube em uma
-página dedicada do tema. O sistema percorre até 200 posições, revalida os vídeos
+página dedicada do tema. O sistema percorre até 1.000 posições, revalida os vídeos
 em lotes, apresenta uma prévia classificando cada item e permite confirmar os
 itens elegíveis selecionados. A importação preserva associações existentes e
 atualiza as modalidades de rodadas suportadas pelo catálogo.
@@ -26,7 +26,7 @@ atualiza as modalidades de rodadas suportadas pelo catálogo.
    inexistentes ou inacessíveis.
 4. Como administrador, quero que todas as páginas da playlist sejam percorridas
    até o teto operacional, para não receber apenas os primeiros resultados.
-5. Como administrador, quero saber quando a playlist excede 200 posições, para
+5. Como administrador, quero saber quando a playlist excede 1.000 posições, para
    entender que a prévia é parcial.
 6. Como administrador, quero ver quantas posições, vídeos únicos e duplicatas
    foram encontrados.
@@ -78,7 +78,7 @@ atualiza as modalidades de rodadas suportadas pelo catálogo.
 ## Implementation Decisions
 
 - A importação ocorre em uma página dedicada dentro do tema.
-- O teto padrão é configurável e vale 200 posições da playlist, contando
+- O teto padrão é configurável e vale 1.000 posições da playlist, contando
   duplicatas.
 - O teto produz uma prévia parcial explícita; falhas externas de paginação
   invalidam toda a prévia.

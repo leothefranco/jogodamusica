@@ -55,16 +55,16 @@ abaixo deve imprimir, copiar para issues ou versionar valores secretos.
 Configure estes nomes no painel da Vercel. Valores de Preview e Production não
 podem apontar para o mesmo Supabase.
 
-| Variável                               | Preview                      | Production                   | Observação                       |
-| -------------------------------------- | ---------------------------- | ---------------------------- | -------------------------------- |
-| `NEXT_PUBLIC_APP_URL`                  | URL estável do Preview de QA | URL `vercel.app` de produção | Pública e canônica               |
-| `NEXT_PUBLIC_SUPABASE_URL`             | Projeto QA                   | Projeto Production           | Pública por definição            |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Chave QA                     | Chave Production             | Preferida em projetos novos      |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY`        | Somente se necessário        | Somente se necessário        | Compatibilidade legada           |
-| `DATABASE_URL`                         | Pooler QA                    | Pooler Production            | Segredo exclusivo do servidor    |
-| `RATE_LIMIT_KEY_SECRET`                | Segredo aleatório de QA      | Segredo aleatório exclusivo  | Mínimo de 32 caracteres          |
-| `YOUTUBE_API_KEY`                      | Chave de QA restrita         | Chave de produção restrita   | Segredo exclusivo do servidor    |
-| `YOUTUBE_PLAYLIST_IMPORT_MAX_ITEMS`    | `200`                        | `200`                        | Ajustar apenas com justificativa |
+| Variável                               | Preview                      | Production                   | Observação                      |
+| -------------------------------------- | ---------------------------- | ---------------------------- | ------------------------------- |
+| `NEXT_PUBLIC_APP_URL`                  | URL estável do Preview de QA | URL `vercel.app` de produção | Pública e canônica              |
+| `NEXT_PUBLIC_SUPABASE_URL`             | Projeto QA                   | Projeto Production           | Pública por definição           |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Chave QA                     | Chave Production             | Preferida em projetos novos     |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY`        | Somente se necessário        | Somente se necessário        | Compatibilidade legada          |
+| `DATABASE_URL`                         | Pooler QA                    | Pooler Production            | Segredo exclusivo do servidor   |
+| `RATE_LIMIT_KEY_SECRET`                | Segredo aleatório de QA      | Segredo aleatório exclusivo  | Mínimo de 32 caracteres         |
+| `YOUTUBE_API_KEY`                      | Chave de QA restrita         | Chave de produção restrita   | Segredo exclusivo do servidor   |
+| `YOUTUBE_PLAYLIST_IMPORT_MAX_ITEMS`    | `1000`                       | `1000`                       | Teto máximo aceito pelo sistema |
 
 `SEED_ADMIN_USER_ID` e `SEED_ADMIN_DISPLAY_NAME` são variáveis temporárias do
 operador do seed. Não precisam permanecer no runtime da Vercel.
@@ -109,7 +109,7 @@ npm run db:seed
 - [ ] As migrações terminaram sem erro e a tabela de histórico foi conferida.
 - [ ] O usuário Auth não foi criado por inscrição pública.
 - [ ] `admin_profiles` contém o UUID correto e está ativo.
-- [ ] O tema demonstrativo continua inativo.
+- [ ] Nenhum tema é criado automaticamente pelo seed.
 - [ ] As variáveis temporárias foram removidas da sessão do terminal.
 
 ## 5. Staging, promoção e smoke test

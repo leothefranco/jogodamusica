@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { StartGameForm } from "@/components/game/start-game-form";
+import { ThemeThumbnailStack } from "@/components/theme-thumbnail-stack";
 import { getPublicTheme } from "@/server/services/public-theme-service";
 
 type ThemePageProps = {
@@ -49,20 +50,11 @@ export default async function ThemePage({ params }: ThemePageProps) {
                 "Escolha o tamanho da chave e descubra a campeã deste tema."}
             </p>
 
-            <div
-              className="mt-8 aspect-[16/9] max-w-2xl overflow-hidden rounded-3xl border border-white/10 bg-[radial-gradient(circle_at_30%_20%,rgba(167,139,250,.32),transparent_34%),linear-gradient(145deg,#241543,#0d1823)]"
-              aria-hidden="true"
-            >
-              {theme.coverUrl ? (
-                // The URL is validated as HTTP(S) in the administrative flow.
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={theme.coverUrl}
-                  alt=""
-                  className="h-full w-full object-cover opacity-80"
-                />
-              ) : null}
-            </div>
+            <ThemeThumbnailStack
+              thumbnailUrls={theme.thumbnailUrls}
+              fallbackCoverUrl={theme.coverUrl}
+              className="mt-8 aspect-[16/9] max-w-2xl rounded-3xl border border-white/10"
+            />
           </div>
 
           <StartGameForm

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, count, eq } from "drizzle-orm";
+import { and, asc, count, eq, sql } from "drizzle-orm";
 import { connection } from "next/server";
 
 import { getDatabase } from "@/db";
@@ -12,6 +12,7 @@ export type PlayableThemeRecord = {
   slug: string;
   description: string | null;
   coverUrl: string | null;
+  thumbnailUrls: string[];
   activeSongCount: number;
 };
 
@@ -21,6 +22,15 @@ const selection = {
   slug: themes.slug,
   description: themes.description,
   coverUrl: themes.coverUrl,
+  thumbnailUrls: sql<string[]>`
+    coalesce(
+      (array_agg(
+        ${songs.thumbnailUrl}
+        order by ${themeSongs.displayOrder} asc nulls last, ${themeSongs.createdAt} asc
+      ))[1:4],
+      array[]::text[]
+    )
+  `,
   activeSongCount: count(themeSongs.songId).mapWith(Number),
 };
 

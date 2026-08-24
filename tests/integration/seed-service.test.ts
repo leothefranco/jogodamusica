@@ -1,20 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  demoThemeSeed,
   seedDatabase,
   type AdminSeed,
   type SeedAdapter,
 } from "@/db/seed-service";
 
 describe("seedDatabase", () => {
-  it("é idempotente para tema e administrador", async () => {
-    const themes = new Map<string, typeof demoThemeSeed>();
+  it("é idempotente para o administrador", async () => {
     const admins = new Map<string, AdminSeed>();
     const adapter: SeedAdapter = {
-      async upsertTheme(theme) {
-        themes.set(theme.slug, theme);
-      },
       async upsertAdmin(admin) {
         admins.set(admin.userId, admin);
       },
@@ -29,17 +24,12 @@ describe("seedDatabase", () => {
     await seedDatabase(adapter, admin);
     await seedDatabase(adapter, admin);
 
-    expect([...themes.values()]).toEqual([demoThemeSeed]);
     expect([...admins.values()]).toEqual([admin]);
   });
 
-  it("permite preparar apenas o tema antes do primeiro usuário Auth", async () => {
-    let themeCalls = 0;
+  it("não cria registros antes do primeiro usuário Auth", async () => {
     let adminCalls = 0;
     const adapter: SeedAdapter = {
-      async upsertTheme() {
-        themeCalls += 1;
-      },
       async upsertAdmin() {
         adminCalls += 1;
       },
@@ -47,7 +37,6 @@ describe("seedDatabase", () => {
 
     await seedDatabase(adapter, null);
 
-    expect(themeCalls).toBe(1);
     expect(adminCalls).toBe(0);
   });
 });

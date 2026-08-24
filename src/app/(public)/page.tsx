@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+import { ThemeThumbnailStack } from "@/components/theme-thumbnail-stack";
 import { buttonVariants } from "@/components/ui/button";
 import { countLabel } from "@/lib/language";
 import { cn } from "@/lib/utils";
@@ -155,17 +156,11 @@ export default async function HomePage() {
                   href={`/tema/${theme.slug}`}
                   className="group overflow-hidden rounded-3xl border border-white/10 bg-[#0e0e19] transition outline-none hover:-translate-y-1 hover:border-violet-300/35 focus-visible:ring-2 focus-visible:ring-violet-300 motion-reduce:transform-none"
                 >
-                  <div className="aspect-[16/9] overflow-hidden bg-[radial-gradient(circle_at_25%_20%,rgba(167,139,250,.4),transparent_35%),linear-gradient(145deg,#28194b,#101827)]">
-                    {theme.coverUrl ? (
-                      // The administrative flow validates this as an HTTP(S) URL.
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={theme.coverUrl}
-                        alt=""
-                        className="h-full w-full object-cover opacity-80 transition duration-300 group-hover:scale-[1.03] motion-reduce:transform-none"
-                      />
-                    ) : null}
-                  </div>
+                  <ThemeThumbnailStack
+                    thumbnailUrls={theme.thumbnailUrls}
+                    fallbackCoverUrl={theme.coverUrl}
+                    className="aspect-[16/9]"
+                  />
                   <div className="p-5">
                     <h3 className="text-xl font-bold">{theme.name}</h3>
                     <p className="mt-2 line-clamp-2 text-sm leading-6 text-white/50">
