@@ -41,13 +41,19 @@ function validationState(
   };
 }
 
-function themeInputFromFormData(formData: FormData) {
+function themeInputFromFormData(formData: FormData, coverUrl: string | null) {
   return themeInputSchema.safeParse({
     name: formData.get("name"),
     slug: formData.get("slug"),
     description: formData.get("description"),
-    coverUrl: formData.get("coverUrl"),
+    coverUrl,
   });
+}
+
+function currentCoverUrl(formData: FormData) {
+  if (formData.get("removeCover") === "on") return null;
+  const value = formData.get("coverUrl");
+  return typeof value === "string" ? value : null;
 }
 
 export async function createThemeAction(
@@ -55,7 +61,7 @@ export async function createThemeAction(
   formData: FormData,
 ): Promise<ContentActionState> {
   await requireAdmin();
-  const parsed = themeInputFromFormData(formData);
+  const parsed = themeInputFromFormData(formData, null);
   if (!parsed.success) {
     return validationState(
       "Revise os campos do tema.",
@@ -81,7 +87,7 @@ export async function updateThemeAction(
   formData: FormData,
 ): Promise<ContentActionState> {
   await requireAdmin();
-  const parsed = themeInputFromFormData(formData);
+  const parsed = themeInputFromFormData(formData, currentCoverUrl(formData));
   if (!parsed.success) {
     return validationState(
       "Revise os campos do tema.",
@@ -95,6 +101,8 @@ export async function updateThemeAction(
     return errorState(error);
   }
 
+  revalidatePath("/");
+  revalidatePath(`/tema/${parsed.data.slug}`);
   revalidatePath("/admin");
   revalidatePath("/admin/temas");
   revalidatePath(`/admin/temas/${themeId}`);
