@@ -16,6 +16,7 @@ export type ManagedThemeCoverUpload = {
 export type ManagedThemeCoverMetadata = {
   contentType: string | null;
   size: number | null;
+  signatureBytes: Uint8Array;
 };
 
 const extensionByContentType = {
@@ -90,8 +91,16 @@ export function validateManagedThemeCoverMetadata(
           metadata.contentType as keyof typeof extensionByContentType
         ]
       : null;
+  const signature = supportedSignatures.find(
+    ({ contentType }) => contentType === metadata.contentType,
+  );
 
-  if (!expectedExtension || expectedExtension !== extension) {
+  if (
+    !expectedExtension ||
+    expectedExtension !== extension ||
+    !(metadata.signatureBytes instanceof Uint8Array) ||
+    !signature?.matches(metadata.signatureBytes)
+  ) {
     throw new AppError(
       "INVALID_THEME_COVER_METADATA",
       "O tipo da capa enviada não é permitido.",

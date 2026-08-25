@@ -2,6 +2,7 @@
 
 import { useActionState, useRef, useState } from "react";
 import { LoaderCircle, Save } from "lucide-react";
+import { unstable_rethrow } from "next/navigation";
 
 import {
   initialContentActionState,
@@ -30,6 +31,85 @@ type ThemeFormProps = {
   submitLabel: string;
   uploadCover?: (file: File) => Promise<ManagedThemeCoverUpload>;
 };
+
+type CachedThemeCoverUpload = {
+  file: File;
+  upload: ManagedThemeCoverUpload;
+};
+
+export async function submitThemeForm({
+  action,
+  cachedUpload,
+  formData,
+  mode,
+  previousState,
+  selectedFile,
+  uploadCover,
+}: {
+  action: ThemeFormProps["action"];
+  cachedUpload: CachedThemeCoverUpload | null;
+  formData: FormData;
+  mode: ThemeFormProps["mode"];
+  previousState: ContentActionState;
+  selectedFile: File | null;
+  uploadCover: NonNullable<ThemeFormProps["uploadCover"]>;
+}): Promise<{
+  state: ContentActionState;
+  cachedUpload: CachedThemeCoverUpload | null;
+}> {
+  const coverFile = formData.get("coverFile");
+  let nextCachedUpload = cachedUpload;
+
+  try {
+    if (coverFile instanceof File && coverFile.size > 0) {
+      const file = selectedFile ?? coverFile;
+      const upload =
+        cachedUpload?.file === file
+          ? cachedUpload.upload
+          : await uploadCover(file);
+      nextCachedUpload = { file, upload };
+      applyThemeCoverUploadToFormData(mode, formData, upload);
+    } else if (mode === "create") {
+      formData.delete("coverReference");
+    }
+    formData.delete("coverFile");
+  } catch (error) {
+    const appError = toAppError(error);
+    return {
+      state: {
+        status: "error",
+        message: appError.message,
+        fieldErrors: appError.fieldErrors,
+      },
+      cachedUpload: nextCachedUpload,
+    };
+  }
+
+  try {
+    const state = await action(previousState, formData);
+    if (
+      state.coverReferenceStatus === "removed" ||
+      state.coverReferenceStatus === "already-absent" ||
+      state.coverReferenceStatus === "rejected" ||
+      state.coverReferenceStatus === "preserved-in-use"
+    ) {
+      nextCachedUpload = null;
+    }
+    return { state, cachedUpload: nextCachedUpload };
+  } catch (error) {
+    unstable_rethrow(error);
+    return {
+      state: {
+        status: "error",
+        message: "Falha recuperável de transporte. Tente novamente.",
+        fieldErrors: null,
+        coverReferenceStatus:
+          mode === "create" && nextCachedUpload ? "reusable" : undefined,
+      },
+      cachedUpload: nextCachedUpload,
+    };
+  }
+}
 
 export function applyThemeCoverUploadToFormData(
   mode: ThemeFormProps["mode"],
@@ -62,10 +142,7 @@ export function ThemeForm({
   submitLabel,
   uploadCover = uploadThemeCover,
 }: ThemeFormProps) {
-  const cachedUpload = useRef<{
-    file: File;
-    upload: ManagedThemeCoverUpload;
-  } | null>(null);
+  const cachedUpload = useRef<CachedThemeCoverUpload | null>(null);
   const selectedCoverFile = useRef<File | null>(null);
   const submissionLocked = useRef(false);
   const [submissionInFlight, setSubmissionInFlight] = useState(false);
@@ -74,44 +151,18 @@ export function ThemeForm({
     previousState: ContentActionState,
     formData: FormData,
   ) {
-    const coverFile = formData.get("coverFile");
-
     try {
-      if (coverFile instanceof File && coverFile.size > 0) {
-        const selectedFile = selectedCoverFile.current ?? coverFile;
-        const upload =
-          cachedUpload.current?.file === selectedFile
-            ? cachedUpload.current.upload
-            : await uploadCover(coverFile);
-        cachedUpload.current = { file: selectedFile, upload };
-
-        applyThemeCoverUploadToFormData(mode, formData, upload);
-      } else if (mode === "create") {
-        formData.delete("coverReference");
-      }
-      formData.delete("coverFile");
-    } catch (error) {
-      const appError = toAppError(error);
-      submissionLocked.current = false;
-      setSubmissionInFlight(false);
-      return {
-        status: "error" as const,
-        message: appError.message,
-        fieldErrors: appError.fieldErrors,
-      };
-    }
-
-    try {
-      const result = await action(previousState, formData);
-      if (
-        result.coverReferenceStatus === "removed" ||
-        result.coverReferenceStatus === "already-absent" ||
-        result.coverReferenceStatus === "rejected" ||
-        result.coverReferenceStatus === "preserved-in-use"
-      ) {
-        cachedUpload.current = null;
-      }
-      return result;
+      const result = await submitThemeForm({
+        action,
+        cachedUpload: cachedUpload.current,
+        formData,
+        mode,
+        previousState,
+        selectedFile: selectedCoverFile.current,
+        uploadCover,
+      });
+      cachedUpload.current = result.cachedUpload;
+      return result.state;
     } finally {
       submissionLocked.current = false;
       setSubmissionInFlight(false);

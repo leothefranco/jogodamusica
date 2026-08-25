@@ -8,15 +8,22 @@ import {
 } from "@/components/admin/content-action-state";
 import { ThemeForm } from "@/components/admin/theme-form";
 
-export function ThemeFormFixture() {
+export function ThemeFormFixture({
+  uploadFails = false,
+}: {
+  uploadFails?: boolean;
+}) {
   const [uploadCount, setUploadCount] = useState(0);
   const [actionCount, setActionCount] = useState(0);
+  const [workflowCount, setWorkflowCount] = useState(0);
+  const [repositoryCount, setRepositoryCount] = useState(0);
   const [created, setCreated] = useState(false);
   const actionCountRef = useRef(0);
 
   async function uploadCover() {
     setUploadCount((count) => count + 1);
     await new Promise((resolve) => setTimeout(resolve, 350));
+    if (uploadFails) throw new Error("Falha real no upload.");
     return {
       reference: {
         bucket: "theme-covers" as const,
@@ -32,14 +39,13 @@ export function ThemeFormFixture() {
     setActionCount(actionCountRef.current);
 
     if (actionCountRef.current === 1) {
-      return {
-        status: "error",
-        message: "Falha recuperável de transporte.",
-        fieldErrors: null,
-        coverReferenceStatus: "reusable",
-      };
+      await Promise.reject(
+        new DOMException("Conexão interrompida.", "AbortError"),
+      );
     }
 
+    setWorkflowCount((count) => count + 1);
+    setRepositoryCount((count) => count + 1);
     window.history.pushState({}, "", "/e2e-test/theme-form?created=1");
     setCreated(true);
     return initialContentActionState;
@@ -49,6 +55,8 @@ export function ThemeFormFixture() {
     <main className="mx-auto max-w-2xl p-8">
       <span data-testid="upload-count">{uploadCount}</span>
       <span data-testid="action-count">{actionCount}</span>
+      <span data-testid="workflow-count">{workflowCount}</span>
+      <span data-testid="repository-count">{repositoryCount}</span>
       {created ? (
         <p role="status">Tema criado</p>
       ) : (

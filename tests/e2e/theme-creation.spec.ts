@@ -35,4 +35,30 @@ test("bloqueia envio duplicado, recupera erro e reutiliza a referência no retry
   await expect(page.getByRole("status")).toHaveText("Tema criado");
   await expect(page.getByTestId("upload-count")).toHaveText("1");
   await expect(page.getByTestId("action-count")).toHaveText("2");
+  await expect(page.getByTestId("workflow-count")).toHaveText("1");
+  await expect(page.getByTestId("repository-count")).toHaveText("1");
+});
+
+test("upload rejeitado não chama action, workflow ou repositório", async ({
+  page,
+}) => {
+  await page.setExtraHTTPHeaders({ "x-e2e-test": "theme-form" });
+  await page.goto("/e2e-test/theme-form?uploadFailure=1");
+
+  await page.getByLabel("Nome").fill("Clássicos");
+  await page.getByLabel("Slug").fill("classicos");
+  await page.getByLabel("Imagem de capa").setInputFiles({
+    name: "capa.jpg",
+    mimeType: "image/jpeg",
+    buffer: Buffer.from([0xff, 0xd8, 0xff, 0xdb]),
+  });
+  await page.locator('button[type="submit"]').click();
+
+  await expect(page.locator('form [role="alert"]')).toContainText(
+    "Não foi possível concluir a operação.",
+  );
+  await expect(page.getByTestId("upload-count")).toHaveText("1");
+  await expect(page.getByTestId("action-count")).toHaveText("0");
+  await expect(page.getByTestId("workflow-count")).toHaveText("0");
+  await expect(page.getByTestId("repository-count")).toHaveText("0");
 });

@@ -10,6 +10,11 @@ const coverReference = {
 };
 const canonicalCoverUrl =
   "https://project.supabase.co/storage/v1/object/public/theme-covers/10000000-0000-4000-8000-000000000001/30000000-0000-4000-8000-000000000003.jpg";
+const validJpegMetadata = {
+  contentType: "image/jpeg",
+  size: 4,
+  signatureBytes: Uint8Array.from([0xff, 0xd8, 0xff, 0xdb]),
+};
 
 const admin = {
   userId: "10000000-0000-4000-8000-000000000001",
@@ -29,9 +34,17 @@ function validFormData() {
 type WorkflowDependencies = Parameters<typeof createThemeCreationWorkflow>[0];
 
 function createWorkflow(
-  dependencies: Omit<WorkflowDependencies, "withCoverUrlLock"> &
-    Partial<Pick<WorkflowDependencies, "withCoverUrlLock">>,
+  dependencies: Omit<
+    WorkflowDependencies,
+    "withCoverOperationLock" | "withCoverUrlLock"
+  > &
+    Partial<
+      Pick<WorkflowDependencies, "withCoverOperationLock" | "withCoverUrlLock">
+    >,
 ) {
+  const withCoverOperationLock =
+    dependencies.withCoverOperationLock ??
+    (<T>(_coverUrl: string, operation: () => Promise<T>) => operation());
   const withCoverUrlLock =
     dependencies.withCoverUrlLock ??
     (<T>(
@@ -41,6 +54,7 @@ function createWorkflow(
 
   return createThemeCreationWorkflow({
     ...dependencies,
+    withCoverOperationLock,
     withCoverUrlLock,
   });
 }
@@ -180,7 +194,7 @@ describe("criação de tema", () => {
     const storage = {
       inspect: vi.fn(async () => {
         callOrder.push("inspect");
-        return { contentType: "image/jpeg", size: 4 };
+        return validJpegMetadata;
       }),
       getPublicUrl: vi.fn(() => {
         callOrder.push("canonical-url");
@@ -215,7 +229,7 @@ describe("criação de tema", () => {
       canonicalCoverUrl,
       expect.any(Function),
     );
-    expect(callOrder).toEqual(["canonical-url", "lock", "inspect"]);
+    expect(callOrder).toEqual(["canonical-url", "inspect", "lock"]);
     expect(repository.insert).toHaveBeenCalledWith({
       name: "Clássicos",
       slug: "classicos",
@@ -258,10 +272,7 @@ describe("criação de tema", () => {
 
   it("compensa a capa confiável quando os campos do tema são inválidos", async () => {
     const storage = {
-      inspect: vi.fn().mockResolvedValue({
-        contentType: "image/jpeg",
-        size: 4,
-      }),
+      inspect: vi.fn().mockResolvedValue(validJpegMetadata),
       getPublicUrl: vi.fn().mockReturnValue(canonicalCoverUrl),
       remove: vi.fn().mockResolvedValue("removed" as const),
     };
@@ -283,9 +294,97 @@ describe("criação de tema", () => {
     expect(repository.insert).not.toHaveBeenCalled();
   });
 
+  it("rejeita e compensa uma assinatura inválida antes de persistir", async () => {
+    const storage = {
+      inspect: vi.fn().mockResolvedValue({
+        contentType: "image/jpeg",
+        size: 4,
+        signatureBytes: Uint8Array.from([0x4d, 0x5a, 0x90, 0x00]),
+      }),
+      getPublicUrl: vi.fn().mockReturnValue(canonicalCoverUrl),
+      remove: vi.fn().mockResolvedValue("removed" as const),
+    };
+    const repository = {
+      findBySlug: vi.fn(),
+      insert: vi.fn(),
+      isCoverUrlReferenced: vi.fn().mockResolvedValue(false),
+    };
+    const formData = validFormData();
+    formData.set("coverReference", JSON.stringify(coverReference));
+    const createTheme = createWorkflow({ repository, storage });
+
+    await expect(createTheme(admin, formData)).rejects.toMatchObject({
+      cleanupStatus: "removed",
+      code: "INVALID_THEME_COVER_METADATA",
+    });
+    expect(repository.insert).not.toHaveBeenCalled();
+    expect(storage.remove).toHaveBeenCalledWith(coverReference);
+  });
+
+  it("não executa inspect ou remove enquanto a transação do banco está aberta", async () => {
+    let databaseTransactionOpen = false;
+    const originalError = new AppError(
+      "THEME_DATABASE_FAILED",
+      "O tema não foi salvo.",
+      500,
+    );
+    const storage = {
+      inspect: vi.fn(async () => {
+        expect(databaseTransactionOpen).toBe(false);
+        return {
+          contentType: "image/jpeg",
+          size: 4,
+          signatureBytes: Uint8Array.from([0xff, 0xd8, 0xff, 0xdb]),
+        };
+      }),
+      getPublicUrl: vi.fn().mockReturnValue(canonicalCoverUrl),
+      remove: vi.fn(async () => {
+        expect(databaseTransactionOpen).toBe(false);
+        return "removed" as const;
+      }),
+    };
+    const repository = {
+      findBySlug: vi.fn().mockResolvedValue(null),
+      insert: vi.fn().mockRejectedValue(originalError),
+      isCoverUrlReferenced: vi.fn().mockResolvedValue(false),
+    };
+    const withCoverUrlLock: WorkflowDependencies["withCoverUrlLock"] = async (
+      _coverUrl,
+      operation,
+    ) => {
+      databaseTransactionOpen = true;
+      try {
+        return await operation(repository);
+      } finally {
+        databaseTransactionOpen = false;
+      }
+    };
+    const formData = validFormData();
+    formData.set("coverReference", JSON.stringify(coverReference));
+    const createTheme = createWorkflow({
+      repository,
+      storage,
+      withCoverUrlLock,
+    });
+
+    await expect(createTheme(admin, formData)).rejects.toMatchObject({
+      cleanupStatus: "removed",
+      code: "THEME_DATABASE_FAILED",
+    });
+    expect(storage.inspect).toHaveBeenCalledOnce();
+    expect(storage.remove).toHaveBeenCalledOnce();
+  });
+
   it.each([
-    ["MIME", { contentType: "image/gif", size: 4 }],
-    ["tamanho", { contentType: "image/jpeg", size: 0 }],
+    [
+      "MIME",
+      {
+        contentType: "image/gif",
+        size: 4,
+        signatureBytes: Uint8Array.from([0x47, 0x49, 0x46]),
+      },
+    ],
+    ["tamanho", { ...validJpegMetadata, size: 0 }],
   ])(
     "compensa a capa existente quando seus metadados falham por %s",
     async (_label, metadata) => {
@@ -314,10 +413,7 @@ describe("criação de tema", () => {
 
   it("reconhece o retry idêntico depois que a resposta de criação se perde", async () => {
     const storage = {
-      inspect: vi.fn().mockResolvedValue({
-        contentType: "image/jpeg",
-        size: 4,
-      }),
+      inspect: vi.fn().mockResolvedValue(validJpegMetadata),
       getPublicUrl: vi.fn().mockReturnValue(canonicalCoverUrl),
       remove: vi.fn(),
     };
@@ -346,10 +442,7 @@ describe("criação de tema", () => {
 
   it("mantém conflito para payload divergente sem apagar a capa vencedora", async () => {
     const storage = {
-      inspect: vi.fn().mockResolvedValue({
-        contentType: "image/jpeg",
-        size: 4,
-      }),
+      inspect: vi.fn().mockResolvedValue(validJpegMetadata),
       getPublicUrl: vi.fn().mockReturnValue(canonicalCoverUrl),
       remove: vi.fn(),
     };
@@ -389,10 +482,7 @@ describe("criação de tema", () => {
     let storedTheme: StoredTheme | null = null;
     let insertedThemeCount = 0;
     const storage = {
-      inspect: vi.fn().mockResolvedValue({
-        contentType: "image/jpeg",
-        size: 4,
-      }),
+      inspect: vi.fn().mockResolvedValue(validJpegMetadata),
       getPublicUrl: vi.fn().mockReturnValue(canonicalCoverUrl),
       remove: vi.fn(),
     };
@@ -412,27 +502,25 @@ describe("criação de tema", () => {
     };
     let lockQueue = Promise.resolve();
     const lockedCoverUrls: string[] = [];
-    const withCoverUrlLock: WorkflowDependencies["withCoverUrlLock"] = async (
-      coverUrl,
-      operation,
-    ) => {
-      lockedCoverUrls.push(coverUrl);
-      const previous = lockQueue;
-      let release = () => {};
-      lockQueue = new Promise<void>((resolve) => {
-        release = resolve;
-      });
-      await previous;
-      try {
-        return await operation(repository);
-      } finally {
-        release();
-      }
-    };
+    const withCoverOperationLock: WorkflowDependencies["withCoverOperationLock"] =
+      async (coverUrl, operation) => {
+        lockedCoverUrls.push(coverUrl);
+        const previous = lockQueue;
+        let release = () => {};
+        lockQueue = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        await previous;
+        try {
+          return await operation();
+        } finally {
+          release();
+        }
+      };
     const createTheme = createWorkflow({
       repository,
       storage,
-      withCoverUrlLock,
+      withCoverOperationLock,
     });
     const first = validFormData();
     first.set("coverReference", JSON.stringify(coverReference));
@@ -470,10 +558,7 @@ describe("criação de tema", () => {
     };
     let storedTheme: StoredTheme | null = null;
     const storage = {
-      inspect: vi.fn().mockResolvedValue({
-        contentType: "image/jpeg",
-        size: 4,
-      }),
+      inspect: vi.fn().mockResolvedValue(validJpegMetadata),
       getPublicUrl: vi.fn().mockReturnValue(canonicalCoverUrl),
       remove: vi.fn(),
     };
@@ -490,26 +575,24 @@ describe("criação de tema", () => {
       isCoverUrlReferenced: vi.fn(async () => Boolean(storedTheme)),
     };
     let lockQueue = Promise.resolve();
-    const withCoverUrlLock: WorkflowDependencies["withCoverUrlLock"] = async (
-      _coverUrl,
-      operation,
-    ) => {
-      const previous = lockQueue;
-      let release = () => {};
-      lockQueue = new Promise<void>((resolve) => {
-        release = resolve;
-      });
-      await previous;
-      try {
-        return await operation(repository);
-      } finally {
-        release();
-      }
-    };
+    const withCoverOperationLock: WorkflowDependencies["withCoverOperationLock"] =
+      async (_coverUrl, operation) => {
+        const previous = lockQueue;
+        let release = () => {};
+        lockQueue = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        await previous;
+        try {
+          return await operation();
+        } finally {
+          release();
+        }
+      };
     const createTheme = createWorkflow({
       repository,
       storage,
-      withCoverUrlLock,
+      withCoverOperationLock,
     });
     const winner = validFormData();
     winner.set("coverReference", JSON.stringify(coverReference));
@@ -549,10 +632,7 @@ describe("criação de tema", () => {
       500,
     );
     const storage = {
-      inspect: vi.fn().mockResolvedValue({
-        contentType: "image/jpeg",
-        size: 4,
-      }),
+      inspect: vi.fn().mockResolvedValue(validJpegMetadata),
       getPublicUrl: vi.fn().mockReturnValue(canonicalCoverUrl),
       remove: vi.fn(),
     };
@@ -606,10 +686,7 @@ describe("criação de tema", () => {
       409,
     );
     const storage = {
-      inspect: vi.fn().mockResolvedValue({
-        contentType: "image/jpeg",
-        size: 4,
-      }),
+      inspect: vi.fn().mockResolvedValue(validJpegMetadata),
       getPublicUrl: vi.fn().mockReturnValue(canonicalCoverUrl),
       remove: vi
         .fn()
@@ -646,10 +723,7 @@ describe("criação de tema", () => {
       500,
     );
     const storage = {
-      inspect: vi.fn().mockResolvedValue({
-        contentType: "image/jpeg",
-        size: 4,
-      }),
+      inspect: vi.fn().mockResolvedValue(validJpegMetadata),
       getPublicUrl: vi.fn().mockReturnValue(canonicalCoverUrl),
       remove: vi.fn().mockResolvedValue("already-absent" as const),
     };
@@ -677,10 +751,7 @@ describe("criação de tema", () => {
       500,
     );
     const storage = {
-      inspect: vi.fn().mockResolvedValue({
-        contentType: "image/jpeg",
-        size: 4,
-      }),
+      inspect: vi.fn().mockResolvedValue(validJpegMetadata),
       getPublicUrl: vi.fn().mockReturnValue(canonicalCoverUrl),
       remove: vi.fn(),
     };

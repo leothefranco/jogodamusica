@@ -9,6 +9,7 @@ import {
 } from "@/domain/music/theme-cover";
 import { AppError, fieldErrorsFromZod, toAppError } from "@/lib/errors";
 import { parseThemeFormData } from "@/server/services/theme-form-data";
+import { withThemeCoverOperationLock } from "@/server/services/theme-cover-operation-lock";
 import {
   findThemeBySlug,
   insertTheme,
@@ -49,6 +50,10 @@ type ThemeCoverStorage = {
 type CreateThemeCreationWorkflowDependencies = {
   repository: ThemeCreationRepository;
   storage: ThemeCoverStorage;
+  withCoverOperationLock<T>(
+    coverUrl: string,
+    operation: () => Promise<T>,
+  ): Promise<T>;
   withCoverUrlLock<T>(
     coverUrl: string,
     operation: (repository: ThemeCreationRepository) => Promise<T>,
@@ -189,6 +194,7 @@ async function persistThemeCreation(
 export function createThemeCreationWorkflow({
   repository,
   storage,
+  withCoverOperationLock,
   withCoverUrlLock,
 }: CreateThemeCreationWorkflowDependencies) {
   return async function createTheme(
@@ -218,74 +224,66 @@ export function createThemeCreationWorkflow({
         admin.userId,
       );
       const coverUrl = await storage.getPublicUrl(reference);
-      let trustedReference = false;
-      let trustedValues: ThemeCreationValues | null = null;
 
-      try {
-        return await withCoverUrlLock(coverUrl, async (lockedRepository) => {
-          const metadata = await storage.inspect(reference);
-          trustedReference = true;
+      return withCoverOperationLock(coverUrl, async () => {
+        const metadata = await storage.inspect(reference);
+        let values: ThemeCreationValues;
+
+        try {
+          validateManagedThemeCoverMetadata(reference, metadata);
+          const input = themeInputFromFormData(formData, coverUrl);
+          values = {
+            ...input,
+            isActive: false,
+          };
+        } catch (error) {
+          throw await compensateTrustedCover(error, reference, coverUrl, {
+            repository,
+            storage,
+          });
+        }
+
+        try {
+          return await withCoverUrlLock(coverUrl, (lockedRepository) =>
+            persistThemeCreation(values, lockedRepository, true),
+          );
+        } catch (error) {
+          if (error instanceof ThemeCreationError) throw error;
 
           try {
-            validateManagedThemeCoverMetadata(reference, metadata);
-            const input = themeInputFromFormData(formData, coverUrl);
-            const values: ThemeCreationValues = {
-              ...input,
-              isActive: false,
-            };
-            trustedValues = values;
-            return await persistThemeCreation(values, lockedRepository, true);
-          } catch (error) {
-            if (error instanceof ThemeCreationError) throw error;
+            return await withCoverUrlLock(
+              coverUrl,
+              async (lockedRepository) => {
+                try {
+                  return await persistThemeCreation(
+                    values,
+                    lockedRepository,
+                    true,
+                  );
+                } catch (reconciliationError) {
+                  if (reconciliationError instanceof ThemeCreationError) {
+                    throw new ThemeCreationError(
+                      error,
+                      reconciliationError.cleanupStatus,
+                    );
+                  }
+
+                  throw reconciliationError;
+                }
+              },
+            );
+          } catch (recoveryError) {
+            if (recoveryError instanceof ThemeCreationError) {
+              throw recoveryError;
+            }
+
             throw await compensateTrustedCover(error, reference, coverUrl, {
-              repository: lockedRepository,
+              repository,
               storage,
             });
           }
-        });
-      } catch (error) {
-        if (
-          error instanceof ThemeCreationError ||
-          !trustedReference ||
-          !trustedValues
-        ) {
-          throw error;
         }
-        const reconciliationValues = trustedValues;
-
-        try {
-          return await withCoverUrlLock(coverUrl, async (lockedRepository) => {
-            try {
-              return await persistThemeCreation(
-                reconciliationValues,
-                lockedRepository,
-                true,
-              );
-            } catch (reconciliationError) {
-              if (reconciliationError instanceof ThemeCreationError) {
-                throw new ThemeCreationError(
-                  error,
-                  reconciliationError.cleanupStatus,
-                );
-              }
-
-              throw await compensateTrustedCover(error, reference, coverUrl, {
-                repository: lockedRepository,
-                storage,
-              });
-            }
-          });
-        } catch (recoveryError) {
-          if (recoveryError instanceof ThemeCreationError) {
-            throw recoveryError;
-          }
-
-          console.error("[theme-cover-compensation-lock-failed]", {
-            originalCode: toAppError(error).code,
-          });
-          throw new ThemeCreationError(error, "cleanup-failed");
-        }
-      }
+      });
     }
 
     const input = themeInputFromFormData(formData, null);
@@ -307,5 +305,6 @@ export const createThemeWithManagedCover = createThemeCreationWorkflow({
     isCoverUrlReferenced: isThemeCoverUrlReferenced,
   },
   storage: themeCoverStorage,
+  withCoverOperationLock: withThemeCoverOperationLock,
   withCoverUrlLock: withThemeCoverUrlLock,
 });

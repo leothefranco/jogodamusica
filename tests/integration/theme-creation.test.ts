@@ -79,7 +79,11 @@ test("formulário, upload, action, workflow e leitura pública compartilham a me
     storage: {
       inspect: async (reference) => {
         expect(reference.objectKey).toBe(objectKey);
-        return { contentType: "image/jpeg", size: file.size };
+        return {
+          contentType: "image/jpeg",
+          size: file.size,
+          signatureBytes: Uint8Array.from([0xff, 0xd8, 0xff, 0xdb]),
+        };
       },
       getPublicUrl: async (reference) => {
         expect(reference.objectKey).toBe(objectKey);
@@ -87,6 +91,7 @@ test("formulário, upload, action, workflow e leitura pública compartilham a me
       },
       remove: async () => "removed",
     },
+    withCoverOperationLock: async (_coverUrl, operation) => operation(),
     withCoverUrlLock: async (_coverUrl, operation) => operation(repository),
   });
   const action = createThemeActionAdapter({

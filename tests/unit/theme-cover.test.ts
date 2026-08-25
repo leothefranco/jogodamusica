@@ -83,10 +83,50 @@ describe("referência gerenciada de capa", () => {
   });
 
   it.each([
-    [{ contentType: "image/gif", size: 4 }, "tipo"],
-    [{ contentType: "image/png", size: 4 }, "extensão"],
-    [{ contentType: "image/jpeg", size: 5 * 1024 * 1024 + 1 }, "tamanho"],
+    [
+      {
+        contentType: "image/gif",
+        size: 4,
+        signatureBytes: Uint8Array.from([0x47, 0x49, 0x46]),
+      },
+      "tipo",
+    ],
+    [
+      {
+        contentType: "image/png",
+        size: 4,
+        signatureBytes: Uint8Array.from([
+          0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+        ]),
+      },
+      "extensão",
+    ],
+    [
+      {
+        contentType: "image/jpeg",
+        size: 5 * 1024 * 1024 + 1,
+        signatureBytes: Uint8Array.from([0xff, 0xd8, 0xff]),
+      },
+      "tamanho",
+    ],
   ])("rejeita metadados incompatíveis por %s", (metadata) => {
+    expect(() =>
+      validateManagedThemeCoverMetadata(
+        { bucket: "theme-covers", objectKey: validObjectKey },
+        metadata,
+      ),
+    ).toThrowError(
+      expect.objectContaining({ code: "INVALID_THEME_COVER_METADATA" }),
+    );
+  });
+
+  it("rejeita bytes arbitrários mesmo quando MIME, extensão e tamanho são válidos", () => {
+    const metadata = {
+      contentType: "image/jpeg",
+      size: 4,
+      signatureBytes: Uint8Array.from([0x4d, 0x5a, 0x90, 0x00]),
+    };
+
     expect(() =>
       validateManagedThemeCoverMetadata(
         { bucket: "theme-covers", objectKey: validObjectKey },

@@ -14,11 +14,15 @@ type StorageOperationError = {
 };
 
 type ThemeCoverBucketClient = {
-  getPublicUrl(path: string): { data: { publicUrl: string } };
-  info(path: string): Promise<{
-    data: { contentType?: string; size?: number } | null;
+  download(
+    path: string,
+    options: Record<string, never>,
+    parameters: { cache: "no-store"; signal: AbortSignal },
+  ): Promise<{
+    data: Blob | null;
     error: StorageOperationError | null;
   }>;
+  getPublicUrl(path: string): { data: { publicUrl: string } };
   remove(paths: string[]): Promise<{
     data: Array<{ name?: string }> | null;
     error: StorageOperationError | null;
@@ -33,24 +37,55 @@ type ThemeCoverStorageClient = {
 
 type ThemeCoverStorageDependencies = {
   createClient(): Promise<ThemeCoverStorageClient>;
+  inspectionTimeoutMs?: number;
 };
 
 function isMissingObject(error: StorageOperationError | null) {
-  const status = Number(error?.statusCode ?? error?.status);
-  return status === 404 || error?.code === "not_found";
+  if (!error) return false;
+
+  if (Number(error.status) === 404 || Number(error.statusCode) === 404) {
+    return true;
+  }
+
+  return [error.code, error.statusCode].some((value) => {
+    if (typeof value !== "string") return false;
+    const normalized = value.toLowerCase().replace(/[^a-z0-9]/g, "");
+    return normalized === "notfound" || normalized === "nosuchkey";
+  });
 }
 
 export function createThemeCoverStorage({
   createClient,
+  inspectionTimeoutMs = 10_000,
 }: ThemeCoverStorageDependencies) {
   return {
     async inspect(
       reference: ManagedThemeCoverReference,
     ): Promise<ManagedThemeCoverMetadata> {
       const client = await createClient();
-      const { data, error } = await client.storage
-        .from(reference.bucket)
-        .info(reference.objectKey);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), inspectionTimeoutMs);
+      let data: Blob | null;
+      let error: StorageOperationError | null;
+
+      try {
+        ({ data, error } = await client.storage
+          .from(reference.bucket)
+          .download(
+            reference.objectKey,
+            {},
+            { cache: "no-store", signal: controller.signal },
+          ));
+      } catch {
+        throw new AppError(
+          "THEME_COVER_INSPECTION_FAILED",
+          "Não foi possível validar a capa enviada.",
+          502,
+          { coverFile: ["Tente novamente."] },
+        );
+      } finally {
+        clearTimeout(timeout);
+      }
 
       if (error || !data) {
         if (isMissingObject(error)) {
@@ -71,8 +106,9 @@ export function createThemeCoverStorage({
       }
 
       return {
-        contentType: data.contentType ?? null,
-        size: data.size ?? null,
+        contentType: data.type || null,
+        size: data.size,
+        signatureBytes: new Uint8Array(await data.slice(0, 12).arrayBuffer()),
       };
     },
 
