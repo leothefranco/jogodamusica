@@ -1,16 +1,44 @@
+import { redactDiagnostic } from "@/server/observability/redaction";
+
 export type FieldErrors = Record<string, string[]>;
 
-function redactDiagnostic(value: string) {
-  return value
-    .replace(
-      /\b(password|passwd|senha|secret|token|api[_-]?key|authorization)\b(\s*[:=]\s*)([^\s,;]+)/gi,
-      "$1$2[REDACTED]",
-    )
-    .replace(/\bBearer\s+[^\s,;]+/gi, "Bearer [REDACTED]")
-    .replace(
-      /\b(postgres(?:ql)?):\/\/[^\s/@]+:[^\s/@]+@/gi,
-      "$1://[REDACTED]@",
-    );
+const safeServerErrorMessage = "Não foi possível concluir a operação.";
+
+export type ServerFailureReport = {
+  correlationId: string;
+  errorCode: string;
+  status: number;
+  failureClass: "expected_app_error" | "unexpected_error";
+};
+
+type Failure = {
+  error: unknown;
+  correlationId: string;
+  diagnosticLogged: boolean;
+  reported: boolean;
+};
+
+export type ErrorResponseContext = {
+  failure?: Failure;
+};
+
+export function createErrorResponseContext(): ErrorResponseContext {
+  return {};
+}
+
+function getFailure(error: unknown, context: ErrorResponseContext): Failure {
+  if (context.failure && Object.is(context.failure.error, error)) {
+    return context.failure;
+  }
+
+  const failure = {
+    error,
+    correlationId: crypto.randomUUID(),
+    diagnosticLogged: false,
+    reported: false,
+  };
+  context.failure = failure;
+  return failure;
 }
 
 function serializeErrorCause(cause: unknown, depth = 0): unknown {
@@ -18,7 +46,7 @@ function serializeErrorCause(cause: unknown, depth = 0): unknown {
   if (!(cause instanceof Error)) return { type: typeof cause };
 
   return {
-    name: cause.name,
+    name: redactDiagnostic(cause.name),
     message: redactDiagnostic(cause.message),
     ...(cause.cause === undefined
       ? {}
@@ -61,17 +89,36 @@ export function fieldErrorsFromZod(
   );
 }
 
-export function errorResponse(error: unknown) {
+export function errorResponse(
+  error: unknown,
+  options: {
+    correlateServerFailure?: boolean;
+    failureContext?: ErrorResponseContext;
+    reportFailure?(failure: ServerFailureReport): void;
+  } = {},
+) {
   const isUnexpected = !(error instanceof AppError);
   const appError = toAppError(error);
-  const requestId = isUnexpected ? crypto.randomUUID() : undefined;
+  const isServerFailure = appError.status >= 500 && appError.status <= 599;
+  const shouldCorrelate =
+    isServerFailure && (isUnexpected || options.correlateServerFailure);
+  const failure = shouldCorrelate
+    ? getFailure(error, options.failureContext ?? createErrorResponseContext())
+    : undefined;
+  const requestId = failure?.correlationId;
   const headers = new Headers(appError.responseHeaders);
 
   if (requestId) {
     headers.set("x-request-id", requestId);
+  }
+
+  if (requestId && isUnexpected && !failure.diagnosticLogged) {
+    failure.diagnosticLogged = true;
     console.error("[server-error]", {
       requestId,
-      name: error instanceof Error ? error.name : typeof error,
+      name: redactDiagnostic(
+        error instanceof Error ? error.name : typeof error,
+      ),
       ...(error instanceof Error
         ? {
             message: redactDiagnostic(error.message),
@@ -87,12 +134,36 @@ export function errorResponse(error: unknown) {
     });
   }
 
-  return Response.json(
-    {
-      error: {
+  if (requestId && options.reportFailure && !failure.reported) {
+    failure.reported = true;
+    try {
+      options.reportFailure({
+        correlationId: requestId,
+        errorCode: appError.code,
+        status: appError.status,
+        failureClass: isUnexpected ? "unexpected_error" : "expected_app_error",
+      });
+    } catch {
+      // Reporting is best effort and cannot alter the public response.
+    }
+  }
+
+  const responseError = shouldCorrelate
+    ? {
+        code: appError.code,
+        message: safeServerErrorMessage,
+        fieldErrors: null,
+      }
+    : {
         code: appError.code,
         message: appError.message,
         fieldErrors: appError.fieldErrors,
+      };
+
+  return Response.json(
+    {
+      error: {
+        ...responseError,
         ...(requestId ? { requestId } : {}),
       },
     },
