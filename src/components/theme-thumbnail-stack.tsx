@@ -17,7 +17,15 @@ export function ThemeThumbnailStack({
 
   return (
     <div className={cn("theme-thumbnail-stack", className)} aria-hidden="true">
-      {visibleThumbnails.length ? (
+      {fallbackCoverUrl ? (
+        // A capa administrativa é validada como URL HTTP(S).
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={fallbackCoverUrl}
+          alt=""
+          className="h-full w-full object-cover"
+        />
+      ) : visibleThumbnails.length ? (
         visibleThumbnails.map((thumbnailUrl, index) => (
           <span
             key={`${thumbnailUrl}-${index}`}
@@ -33,14 +41,6 @@ export function ThemeThumbnailStack({
             />
           </span>
         ))
-      ) : fallbackCoverUrl ? (
-        // A capa administrativa é validada como URL HTTP(S).
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={fallbackCoverUrl}
-          alt=""
-          className="h-full w-full object-cover opacity-80"
-        />
       ) : null}
     </div>
   );

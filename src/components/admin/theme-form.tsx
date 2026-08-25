@@ -9,6 +9,8 @@ import {
 } from "@/components/admin/content-action-state";
 import { adminInputClassName } from "@/components/admin/form-styles";
 import { Button } from "@/components/ui/button";
+import { toAppError } from "@/lib/errors";
+import { uploadThemeCover } from "@/lib/supabase/theme-cover-upload";
 
 type ThemeFormValues = {
   name: string;
@@ -36,8 +38,32 @@ function slugify(value: string) {
 }
 
 export function ThemeForm({ action, defaults, submitLabel }: ThemeFormProps) {
+  async function uploadCoverBeforeSubmit(
+    previousState: ContentActionState,
+    formData: FormData,
+  ) {
+    const coverFile = formData.get("coverFile");
+
+    try {
+      if (coverFile instanceof File && coverFile.size > 0) {
+        formData.set("coverUrl", await uploadThemeCover(coverFile));
+        formData.delete("removeCover");
+      }
+      formData.delete("coverFile");
+    } catch (error) {
+      const appError = toAppError(error);
+      return {
+        status: "error" as const,
+        message: appError.message,
+        fieldErrors: appError.fieldErrors,
+      };
+    }
+
+    return action(previousState, formData);
+  }
+
   const [state, formAction, pending] = useActionState(
-    action,
+    uploadCoverBeforeSubmit,
     initialContentActionState,
   );
   const [name, setName] = useState(defaults?.name ?? "");
@@ -105,18 +131,43 @@ export function ThemeForm({ action, defaults, submitLabel }: ThemeFormProps) {
         <FieldError errors={state.fieldErrors?.description} />
       </label>
 
-      <label className="grid gap-2 text-sm font-semibold">
-        URL da imagem de capa
+      <div className="grid gap-3 text-sm font-semibold">
+        Imagem de capa
+        <input name="coverUrl" type="hidden" value={defaults?.coverUrl ?? ""} />
+        {defaults?.coverUrl ? (
+          <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+            {/* A URL já foi validada antes de ser persistida. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={defaults.coverUrl}
+              alt="Capa atual do tema"
+              className="aspect-[16/9] w-full object-cover"
+            />
+          </div>
+        ) : null}
         <input
-          name="coverUrl"
-          type="url"
-          defaultValue={defaults?.coverUrl}
-          placeholder="https://..."
-          className={adminInputClassName}
-          aria-invalid={Boolean(state.fieldErrors?.coverUrl)}
+          name="coverFile"
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className={`${adminInputClassName} file:mr-4 file:rounded-lg file:border-0 file:bg-violet-300 file:px-3 file:py-2 file:text-xs file:font-bold file:text-[#130d22]`}
+          aria-invalid={Boolean(state.fieldErrors?.coverFile)}
         />
-        <FieldError errors={state.fieldErrors?.coverUrl} />
-      </label>
+        <span className="text-xs leading-5 font-normal text-white/38">
+          JPEG, PNG ou WebP, com até 5 MB. A imagem enviada substitui os cards
+          de miniaturas.
+        </span>
+        <FieldError errors={state.fieldErrors?.coverFile} />
+        {defaults?.coverUrl ? (
+          <label className="flex min-h-11 items-center gap-3 rounded-xl border border-white/8 bg-black/15 px-4 text-sm font-semibold">
+            <input
+              type="checkbox"
+              name="removeCover"
+              className="size-4 accent-violet-400"
+            />
+            Remover a capa atual e voltar aos cards
+          </label>
+        ) : null}
+      </div>
 
       <Button
         type="submit"
