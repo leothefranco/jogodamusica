@@ -56,6 +56,11 @@ Autoridade não é herdada por delegação. O gerente transfere somente uma auto
 que a invocação concedeu explicitamente ao agente destinatário; ausência no brief
 significa `não autorizado`.
 
+Quando o usuário autorizar explicitamente a sucessão do PM, aplique **Sucessão da
+sessão do PM**. Pedir progresso autônomo sem essa autorização não permite criar ou
+forkar uma tarefa visível. A sucessão preserva o escopo operacional e não concede
+novas permissões de código, release ou produção.
+
 O limite aprovado é de **dois tickets em andamento**:
 
 ```text
@@ -317,13 +322,16 @@ setup verificável e não há dois agentes escritores no mesmo checkout.
 
 ### 7. Acompanhar e recalcular
 
-O modo padrão é **one-shot**: depois do dispatch, dos handshakes disponíveis e do
-registro dos IDs, entregue o relatório e encerre sem polling.
+**One-shot** delimita uma rodada, não a vida da sessão. Depois do dispatch, dos
+handshakes disponíveis e do registro dos IDs, entregue o relatório e encerre sem
+polling. Uma rodada posterior reutiliza a mesma sessão persistente.
 
-Somente quando a invocação pedir monitoramento, use espera orientada a evento e
-limitada. Não repita consulta depois de resposta sem mudança. Envie follow-up
-somente diante de evidência nova; a repetição do mesmo blocker ou defeito encerra
-a rodada e exige decisão.
+Quando a invocação pedir progresso autônomo, um supervisor externo pode reativar a
+sessão depois de um evento útil: tarefa concluída ou pedindo atenção, mudança em PR,
+check, revisão ou blocker, vaga real no WIP ou divergência nova no ledger. O PM
+continua executando rodadas delimitadas; o supervisor encerra silenciosamente
+quando o estado não mudou. Esperas dentro da rodada são orientadas a evento e
+limitadas. Uma resposta sem mudança encerra a espera.
 
 Ao receber conclusão ou blocker:
 
@@ -346,6 +354,53 @@ para o mesmo desenvolvedor a partir dos findings do reviewer.
 
 **Concluído quando:** o ledger reflete o estado vivo, resultados possuem evidência
 e a próxima ação não depende de uma suposição implícita.
+
+#### Sucessão da sessão do PM
+
+O PM atual permanece canônico enquanto sua tarefa aceitar reativação. Encerrar uma
+rodada, atingir o limite de WIP ou sofrer compactação de contexto preserva a mesma
+sessão e não abre sucessão.
+
+Criar ou forkar uma tarefa sucessora exige uma mensagem do usuário ou da tarefa
+chamadora que registre `sucessão de PM autorizada`. A autorização permite uma única
+tentativa por PM canônico. Falha de criação consome a tentativa e volta ao usuário;
+não abra um segundo candidato.
+
+O PM inicia a sucessão quando o usuário ordenar handoff. O supervisor pode iniciá-la
+quando o estado vivo marcar a tarefa como arquivada/terminal ou duas entregas de
+follow-up falharem, com uma nova listagem da tarefa entre elas. Erro de uma consulta,
+ociosidade, contexto compactado ou dificuldade para reconstruir o ledger pedem nova
+leitura das fontes; isoladamente, não são gatilhos de sucessão.
+
+1. Suspenda novos dispatches e reconcilie tarefas, PRs, branches, worktrees, WIP e
+   blockers.
+2. Prepare um handoff autocontido com runbooks, baseline, ledger/DAG, IDs e hosts
+   das tarefas, ownership, PRs e SHAs, checks, autoridades, itens `parked` e o
+   próximo gatilho.
+3. Registre `successor_attempted = true` antes da chamada. Prefira um fork da tarefa
+   canônica no mesmo diretório; se indisponível, crie uma tarefa no mesmo projeto.
+   Preserve o modelo configurado e nomeie-a
+   `PM autônomo — Jogo da Música — continuação <n>`.
+4. Envie o handoff no prompt do sucessor junto com `PARKED_NO_DISPATCH`. Uma criação
+   `setup_pending` já é o único candidato; aguarde seu desfecho.
+5. Obtenha o handshake do candidato: ID/host, runbooks lidos, estado reconstruído e
+   confirmação de que permanece estacionado.
+6. Arquive o PM anterior e confirme seu estado vivo. Até essa confirmação, o
+   candidato continua sem autoridade de dispatch.
+7. Envie ao sucessor `PM_CANONICO=<thread-id>` e repita a tabela de autoridade
+   concedida. Registre o mesmo marcador no relatório anterior para o supervisor.
+
+Um sucessor só pode tentar outra sucessão depois de concluir ao menos uma rodada de
+reconciliação e diante de um novo gatilho independente. A mesma falha não atravessa
+gerações. Se surgirem dois candidatos ou o PM anterior não puder ser arquivado,
+mantenha os candidatos em `PARKED_NO_DISPATCH` e peça decisão humana.
+
+O sucessor recebe fatos pelo handoff. A autoridade só passa pela mensagem explícita
+da etapa 7; título, parentesco da tarefa e recência não transferem permissões.
+
+**Concluído quando:** há exatamente um PM canônico capaz de reconstruir o ledger,
+o anterior está arquivado, todos os demais candidatos estão estacionados e o
+supervisor consegue identificar o ID canônico pelo marcador explícito.
 
 ### 8. Integrar
 
