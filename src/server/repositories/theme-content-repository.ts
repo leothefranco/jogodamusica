@@ -18,6 +18,24 @@ type ThemeContentDatabase = Pick<
   "delete" | "insert" | "select" | "update"
 >;
 
+type ThemeCreationDatabase = Pick<
+  ReturnType<typeof getDatabase>,
+  "execute" | "insert" | "select"
+>;
+
+export type LockedThemeCreationRepository = {
+  findBySlug(slug: string): Promise<{
+    id: string;
+    name: string;
+    slug: string;
+    description: string | null;
+    coverUrl: string | null;
+    isActive: boolean;
+  } | null>;
+  insert(values: NewTheme): Promise<string | null>;
+  isCoverUrlReferenced(coverUrl: string): Promise<boolean>;
+};
+
 export type ThemeSummary = {
   id: string;
   name: string;
@@ -289,13 +307,95 @@ export async function listThemeSongs(
     );
 }
 
-export async function insertTheme(values: NewTheme): Promise<string> {
-  const [theme] = await getDatabase()
+async function insertThemeUsing(
+  database: ThemeCreationDatabase,
+  values: NewTheme,
+): Promise<string> {
+  const [theme] = await database
     .insert(themes)
     .values(values)
     .returning({ id: themes.id });
 
   return theme.id;
+}
+
+async function insertThemeIfSlugAvailableUsing(
+  database: ThemeCreationDatabase,
+  values: NewTheme,
+): Promise<string | null> {
+  const [theme] = await database
+    .insert(themes)
+    .values(values)
+    .onConflictDoNothing({ target: themes.slug })
+    .returning({ id: themes.id });
+
+  return theme?.id ?? null;
+}
+
+async function findThemeBySlugUsing(
+  database: ThemeCreationDatabase,
+  slug: string,
+) {
+  const [theme] = await database
+    .select({
+      id: themes.id,
+      name: themes.name,
+      slug: themes.slug,
+      description: themes.description,
+      coverUrl: themes.coverUrl,
+      isActive: themes.isActive,
+    })
+    .from(themes)
+    .where(eq(themes.slug, slug))
+    .limit(1);
+
+  return theme ?? null;
+}
+
+async function isThemeCoverUrlReferencedUsing(
+  database: ThemeCreationDatabase,
+  coverUrl: string,
+) {
+  const [theme] = await database
+    .select({ id: themes.id })
+    .from(themes)
+    .where(eq(themes.coverUrl, coverUrl))
+    .limit(1);
+
+  return Boolean(theme);
+}
+
+export async function insertTheme(values: NewTheme): Promise<string> {
+  return insertThemeUsing(getDatabase(), values);
+}
+
+export async function findThemeBySlug(slug: string) {
+  return findThemeBySlugUsing(getDatabase(), slug);
+}
+
+export async function isThemeCoverUrlReferenced(coverUrl: string) {
+  return isThemeCoverUrlReferencedUsing(getDatabase(), coverUrl);
+}
+
+export async function withThemeCoverUrlLock<T>(
+  coverUrl: string,
+  operation: (repository: LockedThemeCreationRepository) => Promise<T>,
+): Promise<T> {
+  return getDatabase().transaction(async (transaction) => {
+    await transaction.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${coverUrl}, 0::bigint))`,
+    );
+
+    return operation({
+      findBySlug: (slug) => findThemeBySlugUsing(transaction, slug),
+      insert: (values) =>
+        transaction.transaction((savepoint) =>
+          insertThemeIfSlugAvailableUsing(savepoint, values),
+        ),
+      isCoverUrlReferenced: (url) =>
+        isThemeCoverUrlReferencedUsing(transaction, url),
+    });
+  });
 }
 
 export async function updateThemeRecord(

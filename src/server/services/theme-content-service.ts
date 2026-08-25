@@ -18,7 +18,6 @@ import {
   findThemeSong,
   findThemeSongByProviderContentId,
   findThemeSummary,
-  insertTheme,
   listThemeSongs,
   listThemeSummaries,
   removeThemeSongRecord,
@@ -43,7 +42,6 @@ type ThemeContentServiceDependencies = {
   findThemeSong: typeof findThemeSong;
   findThemeSummary: typeof findThemeSummary;
   findThemeSongByProviderContentId: typeof findThemeSongByProviderContentId;
-  insertTheme: typeof insertTheme;
   musicProvider: MusicProvider;
   removeThemeSongRecord: typeof removeThemeSongRecord;
   setThemeActiveRecord: typeof setThemeActiveRecord;
@@ -91,39 +89,40 @@ export async function getAdminThemes() {
   return listThemeSummaries();
 }
 
-export async function getThemeEditor(themeId: string) {
-  const theme = await findThemeSummary(themeId);
-  if (!theme) {
-    throw new AppError("THEME_NOT_FOUND", "Tema não encontrado.", 404);
-  }
+type ThemeEditorServiceDependencies = {
+  findThemeSummary: typeof findThemeSummary;
+  getEmbedData: MusicProvider["getEmbedData"];
+  listThemeSongs: typeof listThemeSongs;
+};
 
-  const themeSongItems = await listThemeSongs(themeId);
-  const songs = await Promise.all(
-    themeSongItems.map(async (song) => ({
-      ...song,
-      ...(await musicProvider.getEmbedData(song.providerContentId)),
-    })),
-  );
-  const publishability = getThemePublishability(theme.activeSongCount);
-
-  return { theme, songs, publishability };
-}
-
-export async function createTheme(input: ThemeInput) {
-  try {
-    return await insertTheme({ ...input, isActive: false });
-  } catch (error) {
-    if (postgresCode(error) === "23505") {
-      throw new AppError(
-        "THEME_SLUG_CONFLICT",
-        "Já existe um tema com este slug.",
-        409,
-        { slug: ["Escolha outro slug."] },
-      );
+export function createThemeEditorService(
+  dependencies: ThemeEditorServiceDependencies,
+) {
+  return async function getThemeEditor(themeId: string) {
+    const theme = await dependencies.findThemeSummary(themeId);
+    if (!theme) {
+      throw new AppError("THEME_NOT_FOUND", "Tema não encontrado.", 404);
     }
-    throw error;
-  }
+
+    const themeSongItems = await dependencies.listThemeSongs(themeId);
+    const songs = await Promise.all(
+      themeSongItems.map(async (song) => ({
+        ...song,
+        ...(await dependencies.getEmbedData(song.providerContentId)),
+      })),
+    );
+    const publishability = getThemePublishability(theme.activeSongCount);
+
+    return { theme, songs, publishability };
+  };
 }
+
+export const getThemeEditor = createThemeEditorService({
+  findThemeSummary,
+  getEmbedData: (providerContentId) =>
+    musicProvider.getEmbedData(providerContentId),
+  listThemeSongs,
+});
 
 export function createThemeContentService(
   dependencies: ThemeContentServiceDependencies,
@@ -308,7 +307,6 @@ const themeContentService = createThemeContentService({
   findThemeSong,
   findThemeSummary,
   findThemeSongByProviderContentId,
-  insertTheme,
   musicProvider,
   removeThemeSongRecord,
   setThemeActiveRecord,

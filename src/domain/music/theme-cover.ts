@@ -1,6 +1,119 @@
 import { AppError } from "@/lib/errors";
 
+export const themeCoverBucket = "theme-covers";
 export const themeCoverMaxBytes = 5 * 1024 * 1024;
+
+export type ManagedThemeCoverReference = {
+  bucket: typeof themeCoverBucket;
+  objectKey: string;
+};
+
+export type ManagedThemeCoverUpload = {
+  reference: ManagedThemeCoverReference;
+  publicUrl: string;
+};
+
+export type ManagedThemeCoverMetadata = {
+  contentType: string | null;
+  size: number | null;
+};
+
+const extensionByContentType = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+} as const;
+
+function invalidManagedReference(message: string): never {
+  throw new AppError("INVALID_THEME_COVER_REFERENCE", message, 400, {
+    coverFile: [message],
+  });
+}
+
+export function parseManagedThemeCoverReference(
+  value: FormDataEntryValue,
+  userId: string,
+): ManagedThemeCoverReference {
+  if (typeof value !== "string") {
+    return invalidManagedReference("A referência da capa é inválida.");
+  }
+
+  let candidate: unknown;
+  try {
+    candidate = JSON.parse(value);
+  } catch {
+    return invalidManagedReference("A referência da capa é inválida.");
+  }
+
+  if (
+    typeof candidate !== "object" ||
+    candidate === null ||
+    !("bucket" in candidate) ||
+    candidate.bucket !== themeCoverBucket ||
+    !("objectKey" in candidate) ||
+    typeof candidate.objectKey !== "string"
+  ) {
+    return invalidManagedReference("A referência da capa é inválida.");
+  }
+
+  const [prefix, fileName, extraSegment] = candidate.objectKey.split("/");
+  const managedFilePattern =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(?:jpg|png|webp)$/;
+
+  if (
+    prefix !== userId ||
+    !fileName ||
+    extraSegment !== undefined ||
+    !managedFilePattern.test(fileName)
+  ) {
+    return invalidManagedReference(
+      "A referência da capa não pertence à sua sessão.",
+    );
+  }
+
+  return {
+    bucket: themeCoverBucket,
+    objectKey: candidate.objectKey,
+  };
+}
+
+export function validateManagedThemeCoverMetadata(
+  reference: ManagedThemeCoverReference,
+  metadata: ManagedThemeCoverMetadata,
+) {
+  const extension = reference.objectKey.slice(
+    reference.objectKey.lastIndexOf(".") + 1,
+  );
+  const expectedExtension =
+    metadata.contentType && metadata.contentType in extensionByContentType
+      ? extensionByContentType[
+          metadata.contentType as keyof typeof extensionByContentType
+        ]
+      : null;
+
+  if (!expectedExtension || expectedExtension !== extension) {
+    throw new AppError(
+      "INVALID_THEME_COVER_METADATA",
+      "O tipo da capa enviada não é permitido.",
+      400,
+      { coverFile: ["Envie uma imagem JPEG, PNG ou WebP válida."] },
+    );
+  }
+
+  if (
+    metadata.size === null ||
+    !Number.isSafeInteger(metadata.size) ||
+    metadata.size <= 0 ||
+    metadata.size > themeCoverMaxBytes
+  ) {
+    throw new AppError(
+      "INVALID_THEME_COVER_METADATA",
+      "O tamanho da capa enviada não é permitido.",
+      400,
+      { coverFile: ["Envie uma imagem de até 5 MB."] },
+    );
+  }
+}
 
 const supportedSignatures = [
   {

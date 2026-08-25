@@ -172,6 +172,7 @@ export default async function EditThemePage({
           <div className="mt-7">
             <ThemeForm
               action={updateAction}
+              mode="edit"
               submitLabel="Salvar alterações"
               defaults={{
                 name: theme.name,

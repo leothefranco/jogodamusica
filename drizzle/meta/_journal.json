@@ -57,6 +57,13 @@
       "when": 1787619780000,
       "tag": "0007_theme_cover_storage",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787674839193,
+      "tag": "0008_theme_cover_reference_policies",
+      "breakpoints": true
     }
   ]
 }
