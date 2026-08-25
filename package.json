@@ -12,7 +12,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typegen": "next typegen",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "npm run typegen && tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "db:generate": "drizzle-kit generate",
