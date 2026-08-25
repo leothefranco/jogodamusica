@@ -1,55 +1,7 @@
-import { z } from "zod";
-
-import type { MusicProvider } from "@/domain/music/provider";
-import { AppError, fieldErrorsFromZod } from "@/lib/errors";
 import { getAdminUser } from "@/server/auth/session";
-import {
-  createAdminYouTubeHandler,
-  readJsonBody,
-} from "@/server/http/admin-youtube-handler";
+import { createYouTubeResolveHandler } from "@/server/http/admin-youtube-route-handlers";
 import { createYouTubeProvider } from "@/server/providers/youtube/youtube-provider";
 import { enforceRateLimit } from "@/server/services/rate-limit";
-
-const resolveInputSchema = z.object({
-  input: z.string().trim().min(1).max(500),
-});
-
-type YouTubeResolveHandlerDependencies = {
-  enforceRateLimit: typeof enforceRateLimit;
-  getAdminUser: typeof getAdminUser;
-  getEmbedData: MusicProvider["getEmbedData"];
-  resolve: MusicProvider["resolve"];
-};
-
-export function createYouTubeResolveHandler(
-  dependencies: YouTubeResolveHandlerDependencies,
-) {
-  return createAdminYouTubeHandler(
-    dependencies,
-    { rateLimitKey: "youtube-resolve", limit: 20 },
-    async (request) => {
-      const payload = await readJsonBody(
-        request,
-        "Revise a URL ou o ID informado.",
-      );
-
-      const parsed = resolveInputSchema.safeParse(payload);
-      if (!parsed.success) {
-        throw new AppError(
-          "VALIDATION_ERROR",
-          "Revise a URL ou o ID informado.",
-          400,
-          fieldErrorsFromZod(parsed.error.flatten().fieldErrors),
-        );
-      }
-
-      const track = await dependencies.resolve(parsed.data.input);
-      const embed = await dependencies.getEmbedData(track.providerContentId);
-
-      return Response.json({ data: { ...track, ...embed } });
-    },
-  );
-}
 
 const provider = createYouTubeProvider();
 
