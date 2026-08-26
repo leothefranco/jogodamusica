@@ -83,7 +83,12 @@ export type ThemeSummary = {
 };
 
 function themeCoverClaimLockKey(input: ThemeCoverClaimKey) {
-  return `${input.bucket}\u0000${input.objectKey}\u0000${input.ownerId}`;
+  return JSON.stringify([
+    "theme-cover-claim-v1",
+    input.bucket,
+    input.objectKey,
+    input.ownerId,
+  ]);
 }
 
 function assertTrustedThemeCoverClaimInput(input: ThemeCoverClaimKey) {

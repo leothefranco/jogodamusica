@@ -113,18 +113,38 @@ export class ThemeCreationError extends AppError {
 }
 
 function creationPayloadHash(formData: FormData) {
-  const value = (field: "name" | "slug" | "description") => {
+  const parsed = parseThemeFormData(formData, null);
+  const requiredText = (field: "name" | "slug") => {
     const raw = formData.get(field);
-    return typeof raw === "string" ? ["text", raw] : ["non-text"];
+    return typeof raw === "string"
+      ? (["text", raw.trim()] as const)
+      : (["non-text"] as const);
+  };
+  const optionalText = (field: "description") => {
+    const raw = formData.get(field);
+    if (typeof raw !== "string") return ["non-text"] as const;
+
+    const normalized = raw.trim();
+    return normalized === ""
+      ? (["null"] as const)
+      : (["text", normalized] as const);
   };
 
   return createHash("sha256")
     .update(
       JSON.stringify({
-        version: 1,
-        name: value("name"),
-        slug: value("slug"),
-        description: value("description"),
+        version: 2,
+        fields: parsed.success
+          ? {
+              name: parsed.data.name,
+              slug: parsed.data.slug,
+              description: parsed.data.description,
+            }
+          : {
+              name: requiredText("name"),
+              slug: requiredText("slug"),
+              description: optionalText("description"),
+            },
       }),
     )
     .digest("hex");
@@ -404,6 +424,10 @@ export function createThemeCreationWorkflow({
             isActive: false,
           };
         } catch (error) {
+          if (toAppError(error).code === "THEME_COVER_INSPECTION_FAILED") {
+            throw error;
+          }
+
           throw await compensateTrustedCover(
             error,
             reference,

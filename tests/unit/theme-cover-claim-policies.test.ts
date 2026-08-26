@@ -12,6 +12,41 @@ function normalizedFile(path: string) {
   return readFileSync(path, "utf8").toLowerCase().replace(/\s+/g, " ");
 }
 
+function statementContaining(migration: string, marker: string) {
+  const statement = migration
+    .split("--> statement-breakpoint")
+    .find((candidate) => candidate.includes(marker));
+  expect(statement, `statement contendo ${marker}`).toBeDefined();
+  return statement!;
+}
+
+function evaluateOwnClaimPolicy(
+  statement: string,
+  context: {
+    authenticated: boolean;
+    activeAdmin: boolean;
+    ownBucket: boolean;
+    ownOwner: boolean;
+    ownPrefix: boolean;
+  },
+) {
+  expect(statement).toContain("to authenticated");
+  expect(statement).toContain('(select "private"."is_active_admin"())');
+  expect(statement).toContain('"owner_id" = (select "auth"."uid"())');
+  expect(statement).toContain("\"bucket\" = 'theme-covers'");
+  expect(statement).toContain(
+    'split_part("object_key", \'/\', 1) = (select "auth"."uid"())::text',
+  );
+
+  return (
+    context.authenticated &&
+    context.activeAdmin &&
+    context.ownBucket &&
+    context.ownOwner &&
+    context.ownPrefix
+  );
+}
+
 describe("estado durável da capa de Tema", () => {
   it("é uma migration aditiva e mantém themes.cover_url compatível", () => {
     expect(existsSync(migrationPath)).toBe(true);
@@ -68,7 +103,7 @@ describe("estado durável da capa de Tema", () => {
     expect(migration).toContain(
       'create policy "active admins can inspect own theme cover claims"',
     );
-    expect(migration).toContain('"private"."is_active_admin"()');
+    expect(migration).toContain('(select "private"."is_active_admin"())');
     expect(migration).toContain('"owner_id" = (select "auth"."uid"())');
     expect(migration).toContain("\"bucket\" = 'theme-covers'");
     expect(migration).toContain(
@@ -88,7 +123,7 @@ describe("estado durável da capa de Tema", () => {
 
     expect(deletePolicy).toBeDefined();
     expect(deletePolicy).toContain("\"bucket_id\" = 'theme-covers'");
-    expect(deletePolicy).toContain('"private"."is_active_admin"()');
+    expect(deletePolicy).toContain('(select "private"."is_active_admin"())');
     expect(deletePolicy).toContain(
       '("storage"."foldername"("name"))[1] = (select "auth"."uid"())::text',
     );
@@ -105,4 +140,52 @@ describe("estado durável da capa de Tema", () => {
       '"claim"."owner_id" = (select "auth"."uid"())',
     );
   });
+
+  it("usa initplan nas duas policies sem chamada direta por linha", () => {
+    const migration = normalizedFile(migrationPath);
+    const initplanCall = '(select "private"."is_active_admin"())';
+
+    expect(
+      migration.match(/\(select "private"\."is_active_admin"\(\)\)/g),
+    ).toHaveLength(2);
+    expect(migration.replaceAll(initplanCall, "")).not.toContain(
+      '"private"."is_active_admin"()',
+    );
+  });
+
+  it.each([
+    ["admin ativo na própria claim", true, true, true, true, true, true],
+    ["usuário não autenticado", false, true, true, true, true, false],
+    ["admin inativo", true, false, true, true, true, false],
+    ["bucket alheio", true, true, false, true, true, false],
+    ["owner alheio", true, true, true, false, true, false],
+    ["prefixo alheio", true, true, true, true, false, false],
+  ] as const)(
+    "a policy RLS de SELECT decide %s",
+    (
+      _scenario,
+      authenticated,
+      activeAdmin,
+      ownBucket,
+      ownOwner,
+      ownPrefix,
+      allowed,
+    ) => {
+      const migration = normalizedFile(migrationPath);
+      const policy = statementContaining(
+        migration,
+        'create policy "active admins can inspect own theme cover claims"',
+      );
+
+      expect(
+        evaluateOwnClaimPolicy(policy, {
+          authenticated,
+          activeAdmin,
+          ownBucket,
+          ownOwner,
+          ownPrefix,
+        }),
+      ).toBe(allowed);
+    },
+  );
 });

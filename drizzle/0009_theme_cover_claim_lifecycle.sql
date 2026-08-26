@@ -39,7 +39,7 @@ ON "public"."theme_cover_claims"
 FOR SELECT
 TO authenticated
 USING (
-	"private"."is_active_admin"()
+	(SELECT "private"."is_active_admin"())
 	AND "owner_id" = (SELECT "auth"."uid"())
 	AND "bucket" = 'theme-covers'
 	AND split_part("object_key", '/', 1) = (SELECT "auth"."uid"())::text
@@ -51,7 +51,7 @@ FOR DELETE
 TO authenticated
 USING (
 	"bucket_id" = 'theme-covers'
-	AND "private"."is_active_admin"()
+	AND (SELECT "private"."is_active_admin"())
 	AND ("storage"."foldername"("name"))[1] = (SELECT "auth"."uid"())::text
 	AND "owner_id" = (SELECT "auth"."uid"())::text
 	AND NOT EXISTS (

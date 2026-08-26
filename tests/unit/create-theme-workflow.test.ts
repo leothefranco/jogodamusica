@@ -450,6 +450,68 @@ describe("criação de tema", () => {
     expect(storage.remove).toHaveBeenCalledOnce();
   });
 
+  it("preserva claim e upload quando o inspect falha de modo inconclusivo e permite retry", async () => {
+    const inspectionError = new AppError(
+      "THEME_COVER_INSPECTION_FAILED",
+      "Não foi possível validar a capa enviada.",
+      502,
+    );
+    const storage = {
+      inspect: vi
+        .fn()
+        .mockRejectedValueOnce(inspectionError)
+        .mockResolvedValueOnce(validJpegMetadata),
+      getPublicUrl: vi.fn().mockReturnValue(canonicalCoverUrl),
+      remove: vi.fn(),
+    };
+    const repository = {
+      findBySlug: vi.fn().mockResolvedValue(null),
+      insert: vi.fn().mockResolvedValue("20000000-0000-4000-8000-000000000002"),
+      isCoverUrlReferenced: vi.fn(),
+    };
+    const prepareCleanup = vi.fn();
+    const finalizeCleanup = vi.fn();
+    let claimedPayloadHash: string | null = null;
+    const acquire = vi.fn(
+      async (
+        input: Parameters<WorkflowDependencies["coverClaims"]["acquire"]>[0],
+      ) => {
+        claimedPayloadHash ??= input.payloadHash;
+        return claimedPayloadHash === input.payloadHash
+          ? { status: "claimed" as const, claim: { ...input, epoch: 1 } }
+          : { status: "conflict" as const };
+      },
+    );
+    const coverClaims: WorkflowDependencies["coverClaims"] = {
+      acquire,
+      withPersistence: (_claim, operation) => operation(repository),
+      prepareCleanup,
+      finalizeCleanup,
+    };
+    const formData = validFormData();
+    formData.set("coverReference", JSON.stringify(coverReference));
+    const createTheme = createWorkflow({ repository, storage, coverClaims });
+
+    const firstAttemptError = await createTheme(admin, formData).catch(
+      (error: unknown) => error,
+    );
+
+    expect(firstAttemptError).toBe(inspectionError);
+    expect(prepareCleanup).not.toHaveBeenCalled();
+    expect(finalizeCleanup).not.toHaveBeenCalled();
+    expect(storage.remove).not.toHaveBeenCalled();
+    expect(repository.insert).not.toHaveBeenCalled();
+
+    await expect(createTheme(admin, formData)).resolves.toEqual({
+      idempotent: false,
+      themeId: "20000000-0000-4000-8000-000000000002",
+    });
+    expect(acquire).toHaveBeenCalledTimes(2);
+    expect(storage.inspect).toHaveBeenCalledTimes(2);
+    expect(prepareCleanup).not.toHaveBeenCalled();
+    expect(storage.remove).not.toHaveBeenCalled();
+  });
+
   it.each([
     [
       "MIME",
@@ -876,6 +938,72 @@ describe("criação de tema", () => {
     expect(storage.remove).not.toHaveBeenCalled();
     expect(prepareCleanup).not.toHaveBeenCalled();
     expect(finalizeCleanup).not.toHaveBeenCalled();
+  });
+
+  it("trata como o mesmo payload raws distintos com campos persistidos iguais", async () => {
+    const storage = {
+      inspect: vi.fn().mockResolvedValue(validJpegMetadata),
+      getPublicUrl: vi.fn().mockReturnValue(canonicalCoverUrl),
+      remove: vi.fn(),
+    };
+    const repository = {
+      findBySlug: vi.fn().mockResolvedValue(null),
+      insert: vi.fn().mockResolvedValue("20000000-0000-4000-8000-000000000002"),
+      isCoverUrlReferenced: vi.fn(),
+    };
+    let activePayloadHash: string | null = null;
+    const acquire = vi.fn(
+      async (
+        input: Parameters<WorkflowDependencies["coverClaims"]["acquire"]>[0],
+      ) => {
+        if (activePayloadHash === null) activePayloadHash = input.payloadHash;
+        return activePayloadHash === input.payloadHash
+          ? { status: "claimed" as const, claim: { ...input, epoch: 1 } }
+          : { status: "conflict" as const };
+      },
+    );
+    const coverClaims: WorkflowDependencies["coverClaims"] = {
+      acquire,
+      withPersistence: (_claim, operation) => operation(repository),
+      prepareCleanup: vi.fn(),
+      finalizeCleanup: vi.fn(),
+    };
+    const raw = validFormData();
+    raw.set("coverReference", JSON.stringify(coverReference));
+    const normalized = new FormData();
+    normalized.set("name", "Clássicos");
+    normalized.set("slug", "  classicos  ");
+    normalized.set("description", "   ");
+    normalized.set("coverReference", JSON.stringify(coverReference));
+    const createTheme = createWorkflow({ repository, storage, coverClaims });
+
+    await expect(createTheme(admin, raw)).resolves.toMatchObject({
+      themeId: "20000000-0000-4000-8000-000000000002",
+    });
+    await expect(createTheme(admin, normalized)).resolves.toMatchObject({
+      themeId: "20000000-0000-4000-8000-000000000002",
+    });
+
+    const [firstAcquisition, secondAcquisition] = acquire.mock.calls.map(
+      ([input]) => input,
+    );
+    expect(firstAcquisition.payloadHash).toBe(secondAcquisition.payloadHash);
+    expect(repository.insert).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        name: "Clássicos",
+        slug: "classicos",
+        description: null,
+      }),
+    );
+    expect(repository.insert).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        name: "Clássicos",
+        slug: "classicos",
+        description: null,
+      }),
+    );
   });
 
   it("não persiste a capa que foi removida depois do inspect do criador", async () => {

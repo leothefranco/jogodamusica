@@ -58,6 +58,12 @@ function normalizedStatements() {
   );
 }
 
+function compiledStatements() {
+  return databaseMocks.execute.mock.calls.map(([query]) =>
+    dialect.sqlToQuery(query as SQL),
+  );
+}
+
 describe("repositório de claims duráveis de capa", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -93,6 +99,51 @@ describe("repositório de claims duráveis de capa", () => {
       expect.stringContaining("insert into public.theme_cover_claims"),
     ]);
     expect(normalizedStatements()[1]).toContain("for share nowait");
+
+    const advisoryKey = compiledStatements()[0].params[0];
+    expect(advisoryKey).toBe(
+      JSON.stringify([
+        "theme-cover-claim-v1",
+        key.bucket,
+        key.objectKey,
+        key.ownerId,
+      ]),
+    );
+    expect(advisoryKey).not.toContain("\u0000");
+    expect(JSON.parse(advisoryKey as string)).toEqual([
+      "theme-cover-claim-v1",
+      key.bucket,
+      key.objectKey,
+      key.ownerId,
+    ]);
+
+    const distinctKey = {
+      ...key,
+      objectKey:
+        "10000000-0000-4000-8000-000000000001/40000000-0000-4000-8000-000000000004.jpg",
+    };
+    databaseMocks.responses.push(
+      [{ acquired: true }],
+      [{ allowed: true }],
+      [],
+      [{ ...claimedRow, ...distinctKey, epoch: 1 }],
+    );
+
+    await acquireThemeCoverClaim(distinctKey);
+
+    const advisoryKeys = compiledStatements()
+      .filter(({ sql }) => sql.includes("pg_try_advisory_xact_lock"))
+      .map(({ params }) => params[0]);
+    expect(advisoryKeys).toHaveLength(2);
+    expect(new Set(advisoryKeys).size).toBe(2);
+    expect(advisoryKeys[1]).toBe(
+      JSON.stringify([
+        "theme-cover-claim-v1",
+        distinctKey.bucket,
+        distinctKey.objectKey,
+        distinctKey.ownerId,
+      ]),
+    );
   });
 
   it("falha imediatamente quando o advisory lock está ocupado", async () => {

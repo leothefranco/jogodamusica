@@ -40,6 +40,7 @@ const policyClauseEvaluators = new Map<
 >([
   ["\"bucket_id\" = 'theme-covers'", ({ ownBucket }) => ownBucket],
   ['"private"."is_active_admin"()', ({ activeAdmin }) => activeAdmin],
+  ['(select "private"."is_active_admin"())', ({ activeAdmin }) => activeAdmin],
   [
     '("storage"."foldername"("name"))[1] = (select "auth"."uid"())::text',
     ({ ownPrefix }) => ownPrefix,
