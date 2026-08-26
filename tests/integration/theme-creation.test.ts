@@ -74,10 +74,12 @@ test("formulário, upload, action, workflow e leitura pública compartilham a me
     },
     isCoverUrlReferenced: async () => Boolean(storedTheme?.coverUrl),
   };
+  const callOrder: string[] = [];
   const workflow = createThemeCreationWorkflow({
     repository,
     storage: {
       inspect: async (reference) => {
+        callOrder.push("inspect");
         expect(reference.objectKey).toBe(objectKey);
         return {
           contentType: "image/jpeg",
@@ -91,9 +93,27 @@ test("formulário, upload, action, workflow e leitura pública compartilham a me
       },
       remove: async () => "removed",
     },
-    withCoverCleanupLock: async (_coverUrl, operation) => operation(repository),
+    coverClaims: {
+      acquire: async (input) => {
+        callOrder.push("claim");
+        expect(input).toEqual(
+          expect.objectContaining({
+            bucket: "theme-covers",
+            objectKey,
+            ownerId: admin.userId,
+          }),
+        );
+        return { status: "claimed", claim: { ...input, epoch: 1 } };
+      },
+      withPersistence: async (_claim, operation) => {
+        callOrder.push("persist");
+        return operation(repository);
+      },
+      prepareCleanup: async () => ({ status: "preserved-in-use" }),
+      finalizeCleanup: async () => {},
+    },
+    withCoverCleanupSlot: async (operation) => operation(),
     withCoverOperationLock: async (_coverUrl, operation) => operation(),
-    withCoverUrlLock: async (_coverUrl, operation) => operation(repository),
   });
   const action = createThemeActionAdapter({
     authenticate: async () => admin,
@@ -109,6 +129,7 @@ test("formulário, upload, action, workflow e leitura pública compartilham a me
     contentType: "image/jpeg",
     upsert: false,
   });
+  expect(callOrder).toEqual(["claim", "inspect", "persist"]);
   expect(storedTheme?.coverUrl).toBe(canonicalCoverUrl);
 
   const playableTheme = {

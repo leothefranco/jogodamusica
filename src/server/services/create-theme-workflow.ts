@@ -1,5 +1,7 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
+
 import type { AdminUser } from "@/server/auth/authorization";
 import {
   parseManagedThemeCoverReference,
@@ -9,13 +11,21 @@ import {
 } from "@/domain/music/theme-cover";
 import { AppError, fieldErrorsFromZod, toAppError } from "@/lib/errors";
 import { parseThemeFormData } from "@/server/services/theme-form-data";
-import { withThemeCoverOperationLock } from "@/server/services/theme-cover-operation-lock";
 import {
+  withThemeCoverCleanupSlot,
+  withThemeCoverOperationLock,
+} from "@/server/services/theme-cover-operation-lock";
+import {
+  acquireThemeCoverClaim,
+  finalizeThemeCoverCleanup,
   findThemeBySlug,
   insertTheme,
   isThemeCoverUrlReferenced,
-  withThemeCoverCleanupLock,
-  withThemeCoverUrlLock,
+  prepareThemeCoverCleanup,
+  type ThemeCoverClaim,
+  type ThemeCoverClaimAcquisition,
+  type ThemeCoverCleanupClaim,
+  withThemeCoverClaimPersistence,
 } from "@/server/repositories/theme-content-repository";
 import { themeCoverStorage } from "@/server/storage/theme-cover-storage";
 
@@ -38,11 +48,6 @@ type ThemeCreationRepository = {
   isCoverUrlReferenced(coverUrl: string): Promise<boolean>;
 };
 
-type ThemeCoverCleanupRepository = Pick<
-  ThemeCreationRepository,
-  "isCoverUrlReferenced"
->;
-
 type ThemeCoverStorage = {
   inspect(
     reference: ManagedThemeCoverReference,
@@ -56,18 +61,36 @@ type ThemeCoverStorage = {
 type CreateThemeCreationWorkflowDependencies = {
   repository: ThemeCreationRepository;
   storage: ThemeCoverStorage;
-  withCoverCleanupLock<T>(
-    coverUrl: string,
-    operation: (repository: ThemeCoverCleanupRepository) => Promise<T>,
-  ): Promise<T>;
+  coverClaims: {
+    acquire(input: {
+      bucket: ManagedThemeCoverReference["bucket"];
+      objectKey: string;
+      actorId: string;
+      ownerId: string;
+      payloadHash: string;
+    }): Promise<ThemeCoverClaimAcquisition>;
+    withPersistence<T extends { themeId: string }>(
+      claim: ThemeCoverClaim,
+      operation: (repository: ThemeCreationRepository) => Promise<T>,
+    ): Promise<T>;
+    prepareCleanup(
+      claim: ThemeCoverClaim,
+      coverUrl: string,
+    ): Promise<
+      | { status: "preserved-in-use" }
+      | { status: "cleanup-ready"; claim: ThemeCoverCleanupClaim }
+      | { status: "already-absent" }
+    >;
+    finalizeCleanup(
+      claim: ThemeCoverCleanupClaim,
+      outcome: "deleted" | "delete-failed",
+    ): Promise<void>;
+  };
   withCoverOperationLock<T>(
     coverUrl: string,
     operation: () => Promise<T>,
   ): Promise<T>;
-  withCoverUrlLock<T>(
-    coverUrl: string,
-    operation: (repository: ThemeCreationRepository) => Promise<T>,
-  ): Promise<T>;
+  withCoverCleanupSlot<T>(operation: () => Promise<T>): Promise<T>;
 };
 
 export type ThemeCoverCleanupStatus =
@@ -89,37 +112,141 @@ export class ThemeCreationError extends AppError {
   }
 }
 
+function creationPayloadHash(formData: FormData) {
+  const value = (field: "name" | "slug" | "description") => {
+    const raw = formData.get(field);
+    return typeof raw === "string" ? ["text", raw] : ["non-text"];
+  };
+
+  return createHash("sha256")
+    .update(
+      JSON.stringify({
+        version: 1,
+        name: value("name"),
+        slug: value("slug"),
+        description: value("description"),
+      }),
+    )
+    .digest("hex");
+}
+
+function claimConflict() {
+  return new AppError(
+    "THEME_COVER_CLAIM_CONFLICT",
+    "Esta capa já está associada a outra tentativa de criação.",
+    409,
+    { coverFile: ["Envie uma nova capa para este tema."] },
+  );
+}
+
+function claimUnavailable() {
+  return new AppError(
+    "THEME_COVER_CLAIM_UNAVAILABLE",
+    "Esta capa não pode mais ser usada para criar o tema.",
+    409,
+    { coverFile: ["Envie a capa novamente e tente de novo."] },
+  );
+}
+
 async function compensateTrustedCover(
   error: unknown,
   reference: ManagedThemeCoverReference,
   coverUrl: string,
+  claim: ThemeCoverClaim,
   dependencies: Pick<
     CreateThemeCreationWorkflowDependencies,
-    "repository" | "storage" | "withCoverCleanupLock"
-  >,
+    "storage" | "withCoverCleanupSlot"
+  > & {
+    coverClaims: CreateThemeCreationWorkflowDependencies["coverClaims"];
+  },
 ): Promise<ThemeCreationError> {
   const original = toAppError(error);
 
   try {
-    if (await dependencies.repository.isCoverUrlReferenced(coverUrl)) {
-      return new ThemeCreationError(original, "preserved-in-use");
-    }
+    return await dependencies.withCoverCleanupSlot(async () => {
+      const cleanup = await dependencies.coverClaims.prepareCleanup(
+        claim,
+        coverUrl,
+      );
+      if (cleanup.status === "preserved-in-use") {
+        return new ThemeCreationError(original, "preserved-in-use");
+      }
+      if (cleanup.status === "already-absent") {
+        return new ThemeCreationError(original, "already-absent");
+      }
 
-    return await dependencies.withCoverCleanupLock(
-      coverUrl,
-      async (lockedRepository) => {
-        if (await lockedRepository.isCoverUrlReferenced(coverUrl)) {
-          return new ThemeCreationError(original, "preserved-in-use");
+      try {
+        const cleanupStatus = await dependencies.storage.remove(reference);
+        await dependencies.coverClaims.finalizeCleanup(
+          cleanup.claim,
+          "deleted",
+        );
+        return new ThemeCreationError(original, cleanupStatus);
+      } catch (cleanupError) {
+        try {
+          await dependencies.coverClaims.finalizeCleanup(
+            cleanup.claim,
+            "delete-failed",
+          );
+        } catch {
+          // The deleting tombstone remains recoverable by a later workflow call.
         }
 
-        const cleanupStatus = await dependencies.storage.remove(reference);
-        return new ThemeCreationError(original, cleanupStatus);
-      },
-    );
+        const cleanupFailure = toAppError(cleanupError);
+        console.error("[theme-cover-compensation-failed]", {
+          cleanupCode: cleanupFailure.code,
+          originalCode: original.code,
+        });
+        return new ThemeCreationError(original, "cleanup-failed");
+      }
+    });
   } catch (cleanupError) {
     const cleanup = toAppError(cleanupError);
     console.error("[theme-cover-compensation-failed]", {
       cleanupCode: cleanup.code,
+      originalCode: original.code,
+    });
+    return new ThemeCreationError(original, "cleanup-failed");
+  }
+}
+
+async function resumeTrustedCoverCleanup(
+  reference: ManagedThemeCoverReference,
+  claim: ThemeCoverCleanupClaim,
+  dependencies: Pick<
+    CreateThemeCreationWorkflowDependencies,
+    "storage" | "withCoverCleanupSlot"
+  > & {
+    coverClaims: CreateThemeCreationWorkflowDependencies["coverClaims"];
+  },
+) {
+  const original = claimUnavailable();
+  try {
+    return await dependencies.withCoverCleanupSlot(async () => {
+      try {
+        const cleanupStatus = await dependencies.storage.remove(reference);
+        await dependencies.coverClaims.finalizeCleanup(claim, "deleted");
+        return new ThemeCreationError(original, cleanupStatus);
+      } catch (cleanupError) {
+        try {
+          await dependencies.coverClaims.finalizeCleanup(
+            claim,
+            "delete-failed",
+          );
+        } catch {
+          // A later workflow call can reclaim the deleting lease.
+        }
+
+        console.error("[theme-cover-compensation-failed]", {
+          cleanupCode: toAppError(cleanupError).code,
+          originalCode: original.code,
+        });
+        return new ThemeCreationError(original, "cleanup-failed");
+      }
+    });
+  } catch (cleanupError) {
+    console.error("[theme-cover-compensation-failed]", {
+      cleanupCode: toAppError(cleanupError).code,
       originalCode: original.code,
     });
     return new ThemeCreationError(original, "cleanup-failed");
@@ -213,9 +340,9 @@ async function persistThemeCreation(
 export function createThemeCreationWorkflow({
   repository,
   storage,
-  withCoverCleanupLock,
+  coverClaims,
   withCoverOperationLock,
-  withCoverUrlLock,
+  withCoverCleanupSlot,
 }: CreateThemeCreationWorkflowDependencies) {
   return async function createTheme(
     admin: AdminUser,
@@ -246,34 +373,60 @@ export function createThemeCreationWorkflow({
       const coverUrl = await storage.getPublicUrl(reference);
 
       return withCoverOperationLock(coverUrl, async () => {
-        const metadata = await storage.inspect(reference);
+        const acquisition = await coverClaims.acquire({
+          bucket: reference.bucket,
+          objectKey: reference.objectKey,
+          actorId: admin.userId,
+          ownerId: admin.userId,
+          payloadHash: creationPayloadHash(formData),
+        });
+        if (acquisition.status === "conflict") throw claimConflict();
+        if (acquisition.status === "deleted") throw claimUnavailable();
+        if (acquisition.status === "cleanup-required") {
+          throw await resumeTrustedCoverCleanup(reference, acquisition.claim, {
+            coverClaims,
+            storage,
+            withCoverCleanupSlot,
+          });
+        }
+
+        const claim = acquisition.claim;
         let values: ThemeCreationValues;
 
         try {
-          validateManagedThemeCoverMetadata(reference, metadata);
+          if (acquisition.status !== "consumed") {
+            const metadata = await storage.inspect(reference);
+            validateManagedThemeCoverMetadata(reference, metadata);
+          }
           const input = themeInputFromFormData(formData, coverUrl);
           values = {
             ...input,
             isActive: false,
           };
         } catch (error) {
-          throw await compensateTrustedCover(error, reference, coverUrl, {
-            repository,
-            storage,
-            withCoverCleanupLock,
-          });
+          throw await compensateTrustedCover(
+            error,
+            reference,
+            coverUrl,
+            claim,
+            {
+              coverClaims,
+              storage,
+              withCoverCleanupSlot,
+            },
+          );
         }
 
         try {
-          return await withCoverUrlLock(coverUrl, (lockedRepository) =>
+          return await coverClaims.withPersistence(claim, (lockedRepository) =>
             persistThemeCreation(values, lockedRepository, true),
           );
         } catch (error) {
           if (error instanceof ThemeCreationError) throw error;
 
           try {
-            return await withCoverUrlLock(
-              coverUrl,
+            return await coverClaims.withPersistence(
+              claim,
               async (lockedRepository) => {
                 try {
                   return await persistThemeCreation(
@@ -298,11 +451,17 @@ export function createThemeCreationWorkflow({
               throw recoveryError;
             }
 
-            throw await compensateTrustedCover(error, reference, coverUrl, {
-              repository,
-              storage,
-              withCoverCleanupLock,
-            });
+            throw await compensateTrustedCover(
+              error,
+              reference,
+              coverUrl,
+              claim,
+              {
+                coverClaims,
+                storage,
+                withCoverCleanupSlot,
+              },
+            );
           }
         }
       });
@@ -327,7 +486,12 @@ export const createThemeWithManagedCover = createThemeCreationWorkflow({
     isCoverUrlReferenced: isThemeCoverUrlReferenced,
   },
   storage: themeCoverStorage,
-  withCoverCleanupLock: withThemeCoverCleanupLock,
+  coverClaims: {
+    acquire: acquireThemeCoverClaim,
+    withPersistence: withThemeCoverClaimPersistence,
+    prepareCleanup: prepareThemeCoverCleanup,
+    finalizeCleanup: finalizeThemeCoverCleanup,
+  },
+  withCoverCleanupSlot: withThemeCoverCleanupSlot,
   withCoverOperationLock: withThemeCoverOperationLock,
-  withCoverUrlLock: withThemeCoverUrlLock,
 });

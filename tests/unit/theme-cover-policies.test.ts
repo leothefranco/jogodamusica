@@ -31,6 +31,7 @@ type PolicyContext = {
   ownBucket: boolean;
   ownPrefix: boolean;
   ownObject: boolean;
+  protectedClaim?: boolean;
 };
 
 const policyClauseEvaluators = new Map<
@@ -59,11 +60,19 @@ function evaluatePolicy(policy: StoragePolicy, context: PolicyContext) {
   )?.[1];
   expect(condition, `predicado da policy ${policy.name}`).toBeDefined();
 
-  return condition!.split(" and ").every((clause) => {
+  const hasClaimGuard = condition!.includes(
+    'not exists ( select 1 from "public"."theme_cover_claims"',
+  );
+  const claimGuardIndex = condition!.indexOf(" and not exists");
+  const baseCondition =
+    claimGuardIndex >= 0 ? condition!.slice(0, claimGuardIndex) : condition!;
+  const baseAllowed = baseCondition.split(" and ").every((clause) => {
     const evaluateClause = policyClauseEvaluators.get(clause.trim());
     expect(evaluateClause, `cláusula reconhecida: ${clause}`).toBeDefined();
     return evaluateClause!(context);
   });
+
+  return baseAllowed && (!hasClaimGuard || !context.protectedClaim);
 }
 
 function finalStoragePolicies() {
@@ -237,6 +246,32 @@ describe("policies de capas de Tema", () => {
           }),
         ).toBe(allowed);
       }
+    },
+  );
+
+  it.each([
+    ["claimed", true, false],
+    ["consumed", true, false],
+    ["deleting", false, true],
+    ["delete_failed", false, true],
+    ["deleted", false, true],
+  ])(
+    "a policy de DELETE trata claim %s como proteção=%s",
+    (_status, protectedClaim, allowed) => {
+      const policy = [...finalStoragePolicies().values()].find(
+        ({ operation }) => operation === "delete",
+      );
+      expect(policy).toBeDefined();
+      expect(
+        evaluatePolicy(policy!, {
+          authenticated: true,
+          activeAdmin: true,
+          ownBucket: true,
+          ownPrefix: true,
+          ownObject: true,
+          protectedClaim,
+        }),
+      ).toBe(allowed);
     },
   );
 });
