@@ -1,11 +1,15 @@
 import "server-only";
 
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+
 import type {
   ManagedThemeCoverMetadata,
   ManagedThemeCoverReference,
 } from "@/domain/music/theme-cover";
 import { AppError } from "@/lib/errors";
-import { createClient } from "@/lib/supabase/server";
+import { getPublicSupabaseEnv } from "@/lib/public-env";
+import { createClient as createDefaultClient } from "@/lib/supabase/server";
 
 type StorageOperationError = {
   code?: string;
@@ -36,9 +40,28 @@ type ThemeCoverStorageClient = {
 };
 
 type ThemeCoverStorageDependencies = {
-  createClient(): Promise<ThemeCoverStorageClient>;
+  createClient(options?: {
+    fetch?: typeof fetch;
+  }): Promise<ThemeCoverStorageClient>;
+  cleanupTimeoutMs?: number;
+  fetchImplementation?: typeof fetch;
   inspectionTimeoutMs?: number;
 };
+
+function cleanupFailedError() {
+  return new AppError(
+    "THEME_COVER_CLEANUP_FAILED",
+    "Não foi possível remover a capa órfã.",
+    502,
+  );
+}
+
+function fetchWithAbortSignal(
+  fetchImplementation: typeof fetch,
+  signal: AbortSignal,
+): typeof fetch {
+  return (input, init) => fetchImplementation(input, { ...init, signal });
+}
 
 function isMissingObject(error: StorageOperationError | null) {
   if (!error) return false;
@@ -56,6 +79,8 @@ function isMissingObject(error: StorageOperationError | null) {
 
 export function createThemeCoverStorage({
   createClient,
+  cleanupTimeoutMs = 5_000,
+  fetchImplementation = fetch,
   inspectionTimeoutMs = 10_000,
 }: ThemeCoverStorageDependencies) {
   return {
@@ -122,18 +147,27 @@ export function createThemeCoverStorage({
     },
 
     async remove(reference: ManagedThemeCoverReference) {
-      const client = await createClient();
-      const { data, error } = await client.storage
-        .from(reference.bucket)
-        .remove([reference.objectKey]);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), cleanupTimeoutMs);
+      let data: Array<{ name?: string }> | null;
+      let error: StorageOperationError | null;
+
+      try {
+        const client = await createClient({
+          fetch: fetchWithAbortSignal(fetchImplementation, controller.signal),
+        });
+        ({ data, error } = await client.storage
+          .from(reference.bucket)
+          .remove([reference.objectKey]));
+      } catch {
+        throw cleanupFailedError();
+      } finally {
+        clearTimeout(timeout);
+      }
 
       if (error) {
         if (isMissingObject(error)) return "already-absent" as const;
-        throw new AppError(
-          "THEME_COVER_CLEANUP_FAILED",
-          "Não foi possível remover a capa órfã.",
-          502,
-        );
+        throw cleanupFailedError();
       }
 
       return data?.length ? ("removed" as const) : ("already-absent" as const);
@@ -141,6 +175,32 @@ export function createThemeCoverStorage({
   };
 }
 
+async function createThemeCoverClient(options?: { fetch?: typeof fetch }) {
+  if (!options?.fetch) {
+    return (await createDefaultClient()) as ThemeCoverStorageClient;
+  }
+
+  const cookieStore = await cookies();
+  const env = getPublicSupabaseEnv();
+  return createServerClient(env.url, env.publishableKey, {
+    global: { fetch: options.fetch },
+    cookies: {
+      getAll() {
+        return cookieStore.getAll();
+      },
+      setAll(cookiesToSet) {
+        try {
+          cookiesToSet.forEach(({ name, value, options: cookieOptions }) => {
+            cookieStore.set(name, value, cookieOptions);
+          });
+        } catch {
+          // Server Components cannot write cookies. The Proxy refreshes them.
+        }
+      },
+    },
+  }) as ThemeCoverStorageClient;
+}
+
 export const themeCoverStorage = createThemeCoverStorage({
-  createClient: async () => (await createClient()) as ThemeCoverStorageClient,
+  createClient: createThemeCoverClient,
 });

@@ -47,7 +47,10 @@ vi.mock("@/db", () => ({
   getDatabase: () => databaseMocks.database,
 }));
 
-import { withThemeCoverUrlLock } from "@/server/repositories/theme-content-repository";
+import {
+  withThemeCoverCleanupLock,
+  withThemeCoverUrlLock,
+} from "@/server/repositories/theme-content-repository";
 
 describe("repositório transacional da criação de Tema", () => {
   beforeEach(() => {
@@ -85,5 +88,61 @@ describe("repositório transacional da criação de Tema", () => {
     expect(databaseMocks.transaction.transaction).toHaveBeenCalledOnce();
     expect(databaseMocks.savepointReturning).toHaveBeenCalledOnce();
     expect(databaseMocks.referenceLimit).toHaveBeenCalledOnce();
+  });
+
+  it("mantém no máximo um cleanup com conexão por processo e libera após assentar", async () => {
+    databaseMocks.transaction.execute.mockResolvedValue([{ acquired: true }]);
+    let settleCleanup = () => {};
+    const cleanupMaySettle = new Promise<void>((resolve) => {
+      settleCleanup = resolve;
+    });
+    let markCleanupStarted = () => {};
+    const cleanupStarted = new Promise<void>((resolve) => {
+      markCleanupStarted = resolve;
+    });
+
+    const first = withThemeCoverCleanupLock(
+      "https://project.supabase.co/first.jpg",
+      async (repository) => {
+        await repository.isCoverUrlReferenced(
+          "https://project.supabase.co/first.jpg",
+        );
+        markCleanupStarted();
+        await cleanupMaySettle;
+        return "removed";
+      },
+    );
+    await cleanupStarted;
+
+    await expect(
+      withThemeCoverCleanupLock(
+        "https://project.supabase.co/second.jpg",
+        async () => "should-not-run",
+      ),
+    ).rejects.toMatchObject({ code: "THEME_COVER_CLEANUP_BUSY" });
+    expect(databaseMocks.database.transaction).toHaveBeenCalledOnce();
+
+    settleCleanup();
+    await expect(first).resolves.toBe("removed");
+    await expect(
+      withThemeCoverCleanupLock(
+        "https://project.supabase.co/third.jpg",
+        async () => "released",
+      ),
+    ).resolves.toBe("released");
+    expect(databaseMocks.database.transaction).toHaveBeenCalledTimes(2);
+  });
+
+  it("falha rápido sem executar cleanup quando o advisory lock está ocupado", async () => {
+    databaseMocks.transaction.execute.mockResolvedValue([{ acquired: false }]);
+    const cleanup = vi.fn();
+
+    await expect(
+      withThemeCoverCleanupLock(
+        "https://project.supabase.co/cover.jpg",
+        cleanup,
+      ),
+    ).rejects.toMatchObject({ code: "THEME_COVER_CLEANUP_BUSY" });
+    expect(cleanup).not.toHaveBeenCalled();
   });
 });

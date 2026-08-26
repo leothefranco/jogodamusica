@@ -91,6 +91,7 @@ test("formulário, upload, action, workflow e leitura pública compartilham a me
       },
       remove: async () => "removed",
     },
+    withCoverCleanupLock: async (_coverUrl, operation) => operation(repository),
     withCoverOperationLock: async (_coverUrl, operation) => operation(),
     withCoverUrlLock: async (_coverUrl, operation) => operation(repository),
   });

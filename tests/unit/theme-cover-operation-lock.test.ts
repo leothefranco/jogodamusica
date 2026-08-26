@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createThemeCoverOperationLock } from "@/server/services/theme-cover-operation-lock";
+import {
+  createThemeCoverCleanupSlot,
+  createThemeCoverOperationLock,
+} from "@/server/services/theme-cover-operation-lock";
 
 describe("lock lógico de operação da capa", () => {
   it("serializa a mesma capa e sempre libera depois de falha", async () => {
@@ -57,5 +60,24 @@ describe("lock lógico de operação da capa", () => {
     await first;
     await third;
     expect(thirdStarted).toBe(true);
+  });
+
+  it("libera o slot de cleanup somente depois de uma rejeição assentar", async () => {
+    const withCleanupSlot = createThemeCoverCleanupSlot();
+    let rejectCleanup: (error: Error) => void = () => {};
+    const cleanupMaySettle = new Promise<never>((_resolve, reject) => {
+      rejectCleanup = reject;
+    });
+    const first = withCleanupSlot(() => cleanupMaySettle);
+
+    await expect(
+      withCleanupSlot(async () => "should-not-run"),
+    ).rejects.toMatchObject({ code: "THEME_COVER_CLEANUP_BUSY" });
+
+    rejectCleanup(new Error("delete aborted"));
+    await expect(first).rejects.toThrow("delete aborted");
+    await expect(
+      withCleanupSlot(async () => "released-after-settle"),
+    ).resolves.toBe("released-after-settle");
   });
 });

@@ -14,6 +14,7 @@ import {
   findThemeBySlug,
   insertTheme,
   isThemeCoverUrlReferenced,
+  withThemeCoverCleanupLock,
   withThemeCoverUrlLock,
 } from "@/server/repositories/theme-content-repository";
 import { themeCoverStorage } from "@/server/storage/theme-cover-storage";
@@ -37,6 +38,11 @@ type ThemeCreationRepository = {
   isCoverUrlReferenced(coverUrl: string): Promise<boolean>;
 };
 
+type ThemeCoverCleanupRepository = Pick<
+  ThemeCreationRepository,
+  "isCoverUrlReferenced"
+>;
+
 type ThemeCoverStorage = {
   inspect(
     reference: ManagedThemeCoverReference,
@@ -50,6 +56,10 @@ type ThemeCoverStorage = {
 type CreateThemeCreationWorkflowDependencies = {
   repository: ThemeCreationRepository;
   storage: ThemeCoverStorage;
+  withCoverCleanupLock<T>(
+    coverUrl: string,
+    operation: (repository: ThemeCoverCleanupRepository) => Promise<T>,
+  ): Promise<T>;
   withCoverOperationLock<T>(
     coverUrl: string,
     operation: () => Promise<T>,
@@ -85,7 +95,7 @@ async function compensateTrustedCover(
   coverUrl: string,
   dependencies: Pick<
     CreateThemeCreationWorkflowDependencies,
-    "repository" | "storage"
+    "repository" | "storage" | "withCoverCleanupLock"
   >,
 ): Promise<ThemeCreationError> {
   const original = toAppError(error);
@@ -95,8 +105,17 @@ async function compensateTrustedCover(
       return new ThemeCreationError(original, "preserved-in-use");
     }
 
-    const cleanupStatus = await dependencies.storage.remove(reference);
-    return new ThemeCreationError(original, cleanupStatus);
+    return await dependencies.withCoverCleanupLock(
+      coverUrl,
+      async (lockedRepository) => {
+        if (await lockedRepository.isCoverUrlReferenced(coverUrl)) {
+          return new ThemeCreationError(original, "preserved-in-use");
+        }
+
+        const cleanupStatus = await dependencies.storage.remove(reference);
+        return new ThemeCreationError(original, cleanupStatus);
+      },
+    );
   } catch (cleanupError) {
     const cleanup = toAppError(cleanupError);
     console.error("[theme-cover-compensation-failed]", {
@@ -194,6 +213,7 @@ async function persistThemeCreation(
 export function createThemeCreationWorkflow({
   repository,
   storage,
+  withCoverCleanupLock,
   withCoverOperationLock,
   withCoverUrlLock,
 }: CreateThemeCreationWorkflowDependencies) {
@@ -240,6 +260,7 @@ export function createThemeCreationWorkflow({
           throw await compensateTrustedCover(error, reference, coverUrl, {
             repository,
             storage,
+            withCoverCleanupLock,
           });
         }
 
@@ -280,6 +301,7 @@ export function createThemeCreationWorkflow({
             throw await compensateTrustedCover(error, reference, coverUrl, {
               repository,
               storage,
+              withCoverCleanupLock,
             });
           }
         }
@@ -305,6 +327,7 @@ export const createThemeWithManagedCover = createThemeCreationWorkflow({
     isCoverUrlReferenced: isThemeCoverUrlReferenced,
   },
   storage: themeCoverStorage,
+  withCoverCleanupLock: withThemeCoverCleanupLock,
   withCoverOperationLock: withThemeCoverOperationLock,
   withCoverUrlLock: withThemeCoverUrlLock,
 });

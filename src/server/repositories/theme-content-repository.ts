@@ -12,6 +12,7 @@ import {
 } from "@/db/schema";
 import type { ResolvedPlaylistTrack } from "@/domain/music/provider";
 import { AppError } from "@/lib/errors";
+import { withThemeCoverCleanupSlot } from "@/server/services/theme-cover-operation-lock";
 
 type ThemeContentDatabase = Pick<
   ReturnType<typeof getDatabase>,
@@ -35,6 +36,11 @@ export type LockedThemeCreationRepository = {
   insert(values: NewTheme): Promise<string | null>;
   isCoverUrlReferenced(coverUrl: string): Promise<boolean>;
 };
+
+export type LockedThemeCoverCleanupRepository = Pick<
+  LockedThemeCreationRepository,
+  "isCoverUrlReferenced"
+>;
 
 export type ThemeSummary = {
   id: string;
@@ -396,6 +402,33 @@ export async function withThemeCoverUrlLock<T>(
         isThemeCoverUrlReferencedUsing(transaction, url),
     });
   });
+}
+
+export async function withThemeCoverCleanupLock<T>(
+  coverUrl: string,
+  operation: (repository: LockedThemeCoverCleanupRepository) => Promise<T>,
+): Promise<T> {
+  return withThemeCoverCleanupSlot(() =>
+    getDatabase().transaction(async (transaction) => {
+      const [lock] = await transaction.execute(
+        sql<{
+          acquired: boolean;
+        }>`select pg_try_advisory_xact_lock(hashtextextended(${coverUrl}, 0::bigint)) as acquired`,
+      );
+      if (!lock?.acquired) {
+        throw new AppError(
+          "THEME_COVER_CLEANUP_BUSY",
+          "Outra operação está usando esta capa. Tente novamente.",
+          409,
+        );
+      }
+
+      return operation({
+        isCoverUrlReferenced: (url) =>
+          isThemeCoverUrlReferencedUsing(transaction, url),
+      });
+    }),
+  );
 }
 
 export async function updateThemeRecord(

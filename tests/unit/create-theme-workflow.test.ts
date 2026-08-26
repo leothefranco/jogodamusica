@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { AppError } from "@/lib/errors";
 import { createThemeCreationWorkflow } from "@/server/services/create-theme-workflow";
+import { createThemeCoverOperationLock } from "@/server/services/theme-cover-operation-lock";
 
 const coverReference = {
   bucket: "theme-covers" as const,
@@ -36,12 +37,21 @@ type WorkflowDependencies = Parameters<typeof createThemeCreationWorkflow>[0];
 function createWorkflow(
   dependencies: Omit<
     WorkflowDependencies,
-    "withCoverOperationLock" | "withCoverUrlLock"
+    "withCoverCleanupLock" | "withCoverOperationLock" | "withCoverUrlLock"
   > &
     Partial<
-      Pick<WorkflowDependencies, "withCoverOperationLock" | "withCoverUrlLock">
+      Pick<
+        WorkflowDependencies,
+        "withCoverCleanupLock" | "withCoverOperationLock" | "withCoverUrlLock"
+      >
     >,
 ) {
+  const withCoverCleanupLock =
+    dependencies.withCoverCleanupLock ??
+    (<T>(
+      _coverUrl: string,
+      operation: (repository: WorkflowDependencies["repository"]) => Promise<T>,
+    ) => operation(dependencies.repository));
   const withCoverOperationLock =
     dependencies.withCoverOperationLock ??
     (<T>(_coverUrl: string, operation: () => Promise<T>) => operation());
@@ -54,9 +64,34 @@ function createWorkflow(
 
   return createThemeCreationWorkflow({
     ...dependencies,
+    withCoverCleanupLock,
     withCoverOperationLock,
     withCoverUrlLock,
   });
+}
+
+function createSharedCoverDatabaseLock(
+  repository: WorkflowDependencies["repository"],
+) {
+  let queue = Promise.resolve();
+
+  return async function withSharedCoverDatabaseLock<T>(
+    _coverUrl: string,
+    operation: (repository: WorkflowDependencies["repository"]) => Promise<T>,
+  ): Promise<T> {
+    const previous = queue;
+    let release = () => {};
+    queue = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await previous;
+
+    try {
+      return await operation(repository);
+    } finally {
+      release();
+    }
+  };
 }
 
 describe("criação de tema", () => {
@@ -500,27 +535,32 @@ describe("criação de tema", () => {
       }),
       isCoverUrlReferenced: vi.fn(async () => Boolean(storedTheme)),
     };
-    let lockQueue = Promise.resolve();
     const lockedCoverUrls: string[] = [];
-    const withCoverOperationLock: WorkflowDependencies["withCoverOperationLock"] =
-      async (coverUrl, operation) => {
-        lockedCoverUrls.push(coverUrl);
-        const previous = lockQueue;
-        let release = () => {};
-        lockQueue = new Promise<void>((resolve) => {
-          release = resolve;
-        });
-        await previous;
-        try {
-          return await operation();
-        } finally {
-          release();
-        }
-      };
-    const createTheme = createWorkflow({
+    const sharedDatabaseLock = createSharedCoverDatabaseLock(repository);
+    const withSharedDatabaseLock: WorkflowDependencies["withCoverUrlLock"] = (
+      coverUrl,
+      operation,
+    ) => {
+      lockedCoverUrls.push(coverUrl);
+      return sharedDatabaseLock(coverUrl, operation);
+    };
+    const createFirstTheme = createWorkflow({
       repository,
       storage,
-      withCoverOperationLock,
+      withCoverCleanupLock: withSharedDatabaseLock,
+      withCoverOperationLock: createThemeCoverOperationLock({
+        waitTimeoutMs: 1_000,
+      }),
+      withCoverUrlLock: withSharedDatabaseLock,
+    });
+    const createSecondTheme = createWorkflow({
+      repository,
+      storage,
+      withCoverCleanupLock: withSharedDatabaseLock,
+      withCoverOperationLock: createThemeCoverOperationLock({
+        waitTimeoutMs: 1_000,
+      }),
+      withCoverUrlLock: withSharedDatabaseLock,
     });
     const first = validFormData();
     first.set("coverReference", JSON.stringify(coverReference));
@@ -528,8 +568,8 @@ describe("criação de tema", () => {
     second.set("coverReference", JSON.stringify(coverReference));
 
     const results = await Promise.all([
-      createTheme(admin, first),
-      createTheme(admin, second),
+      createFirstTheme(admin, first),
+      createSecondTheme(admin, second),
     ]);
 
     expect(results).toEqual([
@@ -544,6 +584,81 @@ describe("criação de tema", () => {
     ]);
     expect(insertedThemeCount).toBe(1);
     expect(lockedCoverUrls).toEqual([canonicalCoverUrl, canonicalCoverUrl]);
+    expect(storage.remove).not.toHaveBeenCalled();
+  });
+
+  it("mantém conflito divergente entre instâncias sem apagar a capa vencedora", async () => {
+    type StoredTheme = {
+      id: string;
+      name: string;
+      slug: string;
+      description: string | null;
+      coverUrl: string | null;
+      isActive: boolean;
+    };
+    let storedTheme: StoredTheme | null = null;
+    const storage = {
+      inspect: vi.fn().mockResolvedValue(validJpegMetadata),
+      getPublicUrl: vi.fn().mockReturnValue(canonicalCoverUrl),
+      remove: vi.fn(),
+    };
+    const repository = {
+      findBySlug: vi.fn(async () => storedTheme),
+      insert: vi.fn(async (values: Omit<StoredTheme, "id">) => {
+        if (storedTheme) return null;
+        storedTheme = {
+          id: "20000000-0000-4000-8000-000000000002",
+          ...values,
+        };
+        return storedTheme.id;
+      }),
+      isCoverUrlReferenced: vi.fn(async () => Boolean(storedTheme)),
+    };
+    const withSharedCoverDatabaseLock =
+      createSharedCoverDatabaseLock(repository);
+    const createWinningTheme = createWorkflow({
+      repository,
+      storage,
+      withCoverCleanupLock: withSharedCoverDatabaseLock,
+      withCoverOperationLock: createThemeCoverOperationLock({
+        waitTimeoutMs: 1_000,
+      }),
+      withCoverUrlLock: withSharedCoverDatabaseLock,
+    });
+    const createDivergentTheme = createWorkflow({
+      repository,
+      storage,
+      withCoverCleanupLock: withSharedCoverDatabaseLock,
+      withCoverOperationLock: createThemeCoverOperationLock({
+        waitTimeoutMs: 1_000,
+      }),
+      withCoverUrlLock: withSharedCoverDatabaseLock,
+    });
+    const winner = validFormData();
+    winner.set("coverReference", JSON.stringify(coverReference));
+    const divergent = validFormData();
+    divergent.set("name", "Outro nome");
+    divergent.set("coverReference", JSON.stringify(coverReference));
+
+    const [winnerResult, divergentResult] = await Promise.allSettled([
+      createWinningTheme(admin, winner),
+      createDivergentTheme(admin, divergent),
+    ]);
+
+    expect(winnerResult).toMatchObject({
+      status: "fulfilled",
+      value: {
+        idempotent: false,
+        themeId: "20000000-0000-4000-8000-000000000002",
+      },
+    });
+    expect(divergentResult).toMatchObject({
+      status: "rejected",
+      reason: {
+        cleanupStatus: "preserved-in-use",
+        code: "THEME_SLUG_CONFLICT",
+      },
+    });
     expect(storage.remove).not.toHaveBeenCalled();
   });
 
@@ -625,6 +740,173 @@ describe("criação de tema", () => {
     expect(storage.remove).not.toHaveBeenCalled();
   });
 
+  it("revalida sob o lock distribuído quando outra instância vence após a leitura negativa", async () => {
+    type StoredTheme = {
+      id: string;
+      name: string;
+      slug: string;
+      description: string | null;
+      coverUrl: string | null;
+      isActive: boolean;
+    };
+    let storedTheme: StoredTheme | null = null;
+    let releaseStaleCheck = () => {};
+    const staleCheckMayReturn = new Promise<void>((resolve) => {
+      releaseStaleCheck = resolve;
+    });
+    let markStaleCheckStarted = () => {};
+    const staleCheckStarted = new Promise<void>((resolve) => {
+      markStaleCheckStarted = resolve;
+    });
+    const storage = {
+      inspect: vi.fn().mockResolvedValue(validJpegMetadata),
+      getPublicUrl: vi.fn().mockReturnValue(canonicalCoverUrl),
+      remove: vi.fn().mockResolvedValue("removed" as const),
+    };
+    const repository = {
+      findBySlug: vi.fn(async () => storedTheme),
+      insert: vi.fn(async (values: Omit<StoredTheme, "id">) => {
+        storedTheme = {
+          id: "20000000-0000-4000-8000-000000000002",
+          ...values,
+        };
+        return storedTheme.id;
+      }),
+      isCoverUrlReferenced: vi
+        .fn()
+        .mockImplementationOnce(async () => {
+          markStaleCheckStarted();
+          await staleCheckMayReturn;
+          return false;
+        })
+        .mockImplementation(async () => Boolean(storedTheme)),
+    };
+    const withSharedCoverDatabaseLock =
+      createSharedCoverDatabaseLock(repository);
+    const createFailedTheme = createWorkflow({
+      repository,
+      storage,
+      withCoverCleanupLock: withSharedCoverDatabaseLock,
+      withCoverOperationLock: createThemeCoverOperationLock({
+        waitTimeoutMs: 1_000,
+      }),
+      withCoverUrlLock: withSharedCoverDatabaseLock,
+    });
+    const createWinningTheme = createWorkflow({
+      repository,
+      storage,
+      withCoverCleanupLock: withSharedCoverDatabaseLock,
+      withCoverOperationLock: createThemeCoverOperationLock({
+        waitTimeoutMs: 1_000,
+      }),
+      withCoverUrlLock: withSharedCoverDatabaseLock,
+    });
+    const failedContender = validFormData();
+    failedContender.set("name", "");
+    failedContender.set("coverReference", JSON.stringify(coverReference));
+    const winner = validFormData();
+    winner.set("coverReference", JSON.stringify(coverReference));
+
+    const failedResult = createFailedTheme(admin, failedContender);
+    await staleCheckStarted;
+    await expect(createWinningTheme(admin, winner)).resolves.toEqual({
+      idempotent: false,
+      themeId: "20000000-0000-4000-8000-000000000002",
+    });
+    releaseStaleCheck();
+
+    await expect(failedResult).rejects.toMatchObject({
+      cleanupStatus: "preserved-in-use",
+      code: "INVALID_THEME",
+    });
+    expect(repository.isCoverUrlReferenced).toHaveBeenCalledTimes(2);
+    expect(storage.remove).not.toHaveBeenCalled();
+  });
+
+  it("não permite commit entre a rechecagem distribuída e o DELETE assentado", async () => {
+    type StoredTheme = {
+      id: string;
+      name: string;
+      slug: string;
+      description: string | null;
+      coverUrl: string | null;
+      isActive: boolean;
+    };
+    let storedTheme: StoredTheme | null = null;
+    let releaseRemove = () => {};
+    const removeMaySettle = new Promise<void>((resolve) => {
+      releaseRemove = resolve;
+    });
+    let markRemoveStarted = () => {};
+    const removeStarted = new Promise<void>((resolve) => {
+      markRemoveStarted = resolve;
+    });
+    const storage = {
+      inspect: vi.fn().mockResolvedValue(validJpegMetadata),
+      getPublicUrl: vi.fn().mockReturnValue(canonicalCoverUrl),
+      remove: vi.fn(async () => {
+        expect(storedTheme).toBeNull();
+        markRemoveStarted();
+        await removeMaySettle;
+        expect(storedTheme).toBeNull();
+        return "removed" as const;
+      }),
+    };
+    const repository = {
+      findBySlug: vi.fn(async () => storedTheme),
+      insert: vi.fn(async (values: Omit<StoredTheme, "id">) => {
+        storedTheme = {
+          id: "20000000-0000-4000-8000-000000000002",
+          ...values,
+        };
+        return storedTheme.id;
+      }),
+      isCoverUrlReferenced: vi.fn(async () => Boolean(storedTheme)),
+    };
+    const withSharedCoverDatabaseLock =
+      createSharedCoverDatabaseLock(repository);
+    const createFailedTheme = createWorkflow({
+      repository,
+      storage,
+      withCoverCleanupLock: withSharedCoverDatabaseLock,
+      withCoverOperationLock: createThemeCoverOperationLock({
+        waitTimeoutMs: 1_000,
+      }),
+      withCoverUrlLock: withSharedCoverDatabaseLock,
+    });
+    const createWinningTheme = createWorkflow({
+      repository,
+      storage,
+      withCoverCleanupLock: withSharedCoverDatabaseLock,
+      withCoverOperationLock: createThemeCoverOperationLock({
+        waitTimeoutMs: 1_000,
+      }),
+      withCoverUrlLock: withSharedCoverDatabaseLock,
+    });
+    const failedContender = validFormData();
+    failedContender.set("name", "");
+    failedContender.set("coverReference", JSON.stringify(coverReference));
+    const winner = validFormData();
+    winner.set("coverReference", JSON.stringify(coverReference));
+
+    const failedResult = createFailedTheme(admin, failedContender);
+    await removeStarted;
+    const winningResult = createWinningTheme(admin, winner);
+    await Promise.resolve();
+    expect(repository.insert).not.toHaveBeenCalled();
+
+    releaseRemove();
+    await expect(failedResult).rejects.toMatchObject({
+      cleanupStatus: "removed",
+      code: "INVALID_THEME",
+    });
+    await expect(winningResult).resolves.toEqual({
+      idempotent: false,
+      themeId: "20000000-0000-4000-8000-000000000002",
+    });
+    expect(storage.remove).toHaveBeenCalledOnce();
+  });
+
   it("reconcilia como sucesso idempotente um commit que venceu sem resposta", async () => {
     const commitError = new AppError(
       "THEME_DATABASE_COMMIT_FAILED",
@@ -679,7 +961,7 @@ describe("criação de tema", () => {
     expect(storage.remove).not.toHaveBeenCalled();
   });
 
-  it("preserva o erro original quando a compensação falha", async () => {
+  it("preserva o erro original quando o DELETE do cleanup expira", async () => {
     const originalError = new AppError(
       "THEME_RULE_REJECTED",
       "O tema não atende à regra.",
@@ -691,9 +973,15 @@ describe("criação de tema", () => {
       remove: vi
         .fn()
         .mockRejectedValue(
-          new AppError("THEME_COVER_CLEANUP_FAILED", "Falha externa.", 502),
+          new AppError(
+            "THEME_COVER_CLEANUP_FAILED",
+            "O DELETE foi abortado por timeout.",
+            502,
+          ),
         ),
     };
+    const withCoverCleanupLock: WorkflowDependencies["withCoverCleanupLock"] =
+      vi.fn(async (_coverUrl, operation) => operation(repository));
     const repository = {
       findBySlug: vi.fn().mockResolvedValue(null),
       insert: vi.fn().mockRejectedValue(originalError),
@@ -702,7 +990,11 @@ describe("criação de tema", () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
     const formData = validFormData();
     formData.set("coverReference", JSON.stringify(coverReference));
-    const createTheme = createWorkflow({ repository, storage });
+    const createTheme = createWorkflow({
+      repository,
+      storage,
+      withCoverCleanupLock,
+    });
 
     await expect(createTheme(admin, formData)).rejects.toMatchObject({
       cleanupStatus: "cleanup-failed",
@@ -713,6 +1005,7 @@ describe("criação de tema", () => {
       cleanupCode: "THEME_COVER_CLEANUP_FAILED",
       originalCode: "THEME_RULE_REJECTED",
     });
+    expect(withCoverCleanupLock).toHaveBeenCalledOnce();
     log.mockRestore();
   });
 

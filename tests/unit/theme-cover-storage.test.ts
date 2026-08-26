@@ -126,4 +126,63 @@ describe("adapter servidor de capa no Storage", () => {
     await expect(storage.remove(reference)).resolves.toBe("already-absent");
     expect(remove).toHaveBeenCalledWith([reference.objectKey]);
   });
+
+  it("aborta o fetch autenticado do DELETE e só assenta após o transporte", async () => {
+    vi.useFakeTimers();
+    let observedSignal: AbortSignal | undefined;
+    let transportSettled = false;
+    const transport = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        observedSignal = init?.signal ?? undefined;
+        await new Promise<never>((_resolve, reject) => {
+          observedSignal?.addEventListener(
+            "abort",
+            () => {
+              transportSettled = true;
+              reject(observedSignal?.reason);
+            },
+            { once: true },
+          );
+        });
+        return new Response();
+      },
+    );
+    const createClient = vi.fn(async (options?: { fetch?: typeof fetch }) => ({
+      storage: {
+        from: () => ({
+          download: vi.fn(),
+          getPublicUrl: vi.fn(),
+          remove: async () => {
+            await options?.fetch?.("https://project.supabase.co/delete", {
+              method: "DELETE",
+            });
+            return { data: [{ name: reference.objectKey }], error: null };
+          },
+        }),
+      },
+    }));
+    const storage = createThemeCoverStorage({
+      createClient,
+      cleanupTimeoutMs: 25,
+      fetchImplementation: transport as typeof fetch,
+    });
+
+    try {
+      const cleanup = storage.remove(reference);
+      const cleanupResult = expect(cleanup).rejects.toMatchObject({
+        code: "THEME_COVER_CLEANUP_FAILED",
+      });
+      await vi.advanceTimersByTimeAsync(25);
+
+      await cleanupResult;
+      expect(createClient).toHaveBeenCalledWith({
+        fetch: expect.any(Function),
+      });
+      expect(transport).toHaveBeenCalledOnce();
+      expect(observedSignal?.aborted).toBe(true);
+      expect(transportSettled).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

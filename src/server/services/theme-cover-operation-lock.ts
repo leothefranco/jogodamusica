@@ -77,3 +77,30 @@ export function createThemeCoverOperationLock({
 export const withThemeCoverOperationLock = createThemeCoverOperationLock({
   waitTimeoutMs: 15_000,
 });
+
+function cleanupBusyError() {
+  return new AppError(
+    "THEME_COVER_CLEANUP_BUSY",
+    "Outra compensação de capa está em andamento. Tente novamente.",
+    409,
+  );
+}
+
+export function createThemeCoverCleanupSlot() {
+  let active = false;
+
+  return async function withThemeCoverCleanupSlot<T>(
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    if (active) throw cleanupBusyError();
+    active = true;
+
+    try {
+      return await operation();
+    } finally {
+      active = false;
+    }
+  };
+}
+
+export const withThemeCoverCleanupSlot = createThemeCoverCleanupSlot();
