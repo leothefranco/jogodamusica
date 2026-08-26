@@ -20,30 +20,97 @@ function statementContaining(migration: string, marker: string) {
   return statement!;
 }
 
+type ClaimPolicyContext = {
+  authenticated: boolean;
+  activeAdmin: boolean;
+  ownBucket: boolean;
+  ownOwner: boolean;
+  ownPrefix: boolean;
+};
+
+const claimClauseEvaluators = new Map<
+  string,
+  (context: ClaimPolicyContext) => boolean
+>([
+  ['(select "private"."is_active_admin"())', ({ activeAdmin }) => activeAdmin],
+  ['"owner_id" = (select "auth"."uid"())', ({ ownOwner }) => ownOwner],
+  ["\"bucket\" = 'theme-covers'", ({ ownBucket }) => ownBucket],
+  [
+    'split_part("object_key", \'/\', 1) = (select "auth"."uid"())::text',
+    ({ ownPrefix }) => ownPrefix,
+  ],
+]);
+
+function topLevelConjunction(expression: string) {
+  const clauses: string[] = [];
+  let clauseStart = 0;
+  let depth = 0;
+  let quote: '"' | "'" | null = null;
+
+  for (let index = 0; index < expression.length; index += 1) {
+    const character = expression[index];
+    if (quote) {
+      if (character === quote) {
+        if (expression[index + 1] === quote) index += 1;
+        else quote = null;
+      }
+      continue;
+    }
+
+    if (character === '"' || character === "'") {
+      quote = character;
+      continue;
+    }
+    if (character === "(") {
+      depth += 1;
+      continue;
+    }
+    if (character === ")") {
+      depth -= 1;
+      if (depth < 0) throw new Error("Predicado RLS com parênteses inválidos.");
+      continue;
+    }
+    if (depth === 0 && expression.startsWith(" or ", index)) {
+      throw new Error("Operador RLS desconhecido: OR.");
+    }
+    if (depth === 0 && expression.startsWith(" and ", index)) {
+      clauses.push(expression.slice(clauseStart, index).trim());
+      index += " and ".length - 1;
+      clauseStart = index + 1;
+    }
+  }
+
+  if (quote || depth !== 0) throw new Error("Predicado RLS incompleto.");
+  clauses.push(expression.slice(clauseStart).trim());
+  return clauses;
+}
+
 function evaluateOwnClaimPolicy(
   statement: string,
-  context: {
-    authenticated: boolean;
-    activeAdmin: boolean;
-    ownBucket: boolean;
-    ownOwner: boolean;
-    ownPrefix: boolean;
-  },
+  context: ClaimPolicyContext,
 ) {
-  expect(statement).toContain("to authenticated");
-  expect(statement).toContain('(select "private"."is_active_admin"())');
-  expect(statement).toContain('"owner_id" = (select "auth"."uid"())');
-  expect(statement).toContain("\"bucket\" = 'theme-covers'");
-  expect(statement).toContain(
-    'split_part("object_key", \'/\', 1) = (select "auth"."uid"())::text',
-  );
+  const policy = statement.match(/\bto ([a-z_, ]+) using \((.*)\)\s*;?\s*$/);
+  if (!policy || policy[1].trim() !== "authenticated") {
+    throw new Error("Role da policy RLS desconhecida.");
+  }
+
+  const clauses = topLevelConjunction(policy[2]);
+  if (clauses.length !== claimClauseEvaluators.size) {
+    throw new Error("Quantidade inesperada de requisitos RLS.");
+  }
+
+  const seen = new Set<string>();
+  const evaluators = clauses.map((clause) => {
+    const evaluateClause = claimClauseEvaluators.get(clause);
+    if (!evaluateClause || seen.has(clause)) {
+      throw new Error(`Cláusula RLS desconhecida ou duplicada: ${clause}`);
+    }
+    seen.add(clause);
+    return evaluateClause;
+  });
 
   return (
-    context.authenticated &&
-    context.activeAdmin &&
-    context.ownBucket &&
-    context.ownOwner &&
-    context.ownPrefix
+    context.authenticated && evaluators.every((evaluate) => evaluate(context))
   );
 }
 
@@ -188,4 +255,66 @@ describe("estado durável da capa de Tema", () => {
       ).toBe(allowed);
     },
   );
+
+  it.each([
+    [
+      "role authenticated alterada",
+      (statement: string) => statement.replace("to authenticated", "to anon"),
+    ],
+    [
+      "operador OR permissivo",
+      (statement: string) => statement.replace("using ( ", "using ( true or "),
+    ],
+    [
+      "cláusula extra",
+      (statement: string) => statement.replace("using ( ", "using ( true and "),
+    ],
+    [
+      "requisito de admin removido",
+      (statement: string) =>
+        statement.replace('(select "private"."is_active_admin"()) and ', ""),
+    ],
+    [
+      "requisito de owner removido",
+      (statement: string) =>
+        statement.replace('"owner_id" = (select "auth"."uid"()) and ', ""),
+    ],
+    [
+      "requisito de bucket removido",
+      (statement: string) =>
+        statement.replace("\"bucket\" = 'theme-covers' and ", ""),
+    ],
+    [
+      "requisito de prefixo removido",
+      (statement: string) =>
+        statement.replace(
+          ' and split_part("object_key", \'/\', 1) = (select "auth"."uid"())::text',
+          "",
+        ),
+    ],
+    [
+      "operador de owner alterado",
+      (statement: string) =>
+        statement.replace(
+          '"owner_id" = (select "auth"."uid"())',
+          '"owner_id" <> (select "auth"."uid"())',
+        ),
+    ],
+  ] as const)("rejeita policy com %s", (_scenario, mutate) => {
+    const migration = normalizedFile(migrationPath);
+    const policy = statementContaining(
+      migration,
+      'create policy "active admins can inspect own theme cover claims"',
+    );
+
+    expect(() =>
+      evaluateOwnClaimPolicy(mutate(policy), {
+        authenticated: true,
+        activeAdmin: true,
+        ownBucket: true,
+        ownOwner: true,
+        ownPrefix: true,
+      }),
+    ).toThrow();
+  });
 });

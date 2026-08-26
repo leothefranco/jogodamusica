@@ -903,12 +903,21 @@ export async function themeHasSessions(themeId: string) {
 }
 
 export async function deleteThemeRecord(themeId: string) {
-  const [deleted] = await getDatabase()
-    .delete(themes)
-    .where(eq(themes.id, themeId))
-    .returning({ id: themes.id });
+  return getDatabase().transaction(async (transaction) => {
+    await transaction.execute(sql`
+      select bucket, object_key, owner_id
+      from public.theme_cover_claims
+      where theme_id = ${themeId}::uuid
+      order by bucket, object_key, owner_id
+      for update
+    `);
+    const [deleted] = await transaction
+      .delete(themes)
+      .where(eq(themes.id, themeId))
+      .returning({ id: themes.id });
 
-  return deleted?.id ?? null;
+    return deleted?.id ?? null;
+  });
 }
 
 export async function upsertSongAndAssociation(
