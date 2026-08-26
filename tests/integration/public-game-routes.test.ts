@@ -16,11 +16,23 @@ const rateLimitService = vi.hoisted(() => ({
 const observability = vi.hoisted(() => ({
   reportObservabilityEvent: vi.fn(),
 }));
+const publicGamePage = vi.hoisted(() => ({
+  getPublicGamePageState: vi.fn(),
+}));
+const resultShareCard = vi.hoisted(() => ({
+  createResultShareCard: vi.fn(),
+}));
+const resultStoryImage = vi.hoisted(() => ({
+  createResultStoryImage: vi.fn(),
+}));
 
 vi.mock("@/server/services/game-service", () => gameService);
 vi.mock("@/server/services/public-theme-service", () => publicThemeService);
 vi.mock("@/server/services/rate-limit", () => rateLimitService);
 vi.mock("@/server/observability/reporter", () => observability);
+vi.mock("@/app/(public)/game-page-state", () => publicGamePage);
+vi.mock("@/domain/game/result-share-card", () => resultShareCard);
+vi.mock("@/components/game/result-story-image", () => resultStoryImage);
 
 import { GET as getThemes } from "@/app/api/themes/route";
 import { POST as createGame } from "@/app/api/games/route";
@@ -30,6 +42,7 @@ import {
 } from "@/app/api/games/[sessionId]/route";
 import { POST as reportPlayerError } from "@/app/api/games/[sessionId]/player-errors/route";
 import { POST as decide } from "@/app/api/games/[sessionId]/matches/[matchId]/decision/route";
+import { GET as getResultImage } from "@/app/api/resultados/[sessionId]/imagem/route";
 import { AppError } from "@/lib/errors";
 import { createInMemoryObservabilityExporter } from "@/server/observability/exporters";
 import type { ObservabilityEventInput } from "@/server/observability/reporter";
@@ -326,7 +339,6 @@ describe("contratos públicos de partida", () => {
       environment: "local",
       now: () => new Date("2026-08-25T14:00:00.000Z"),
       exporter: {
-        rawRetentionDays: 7,
         export() {
           throw new Error("exporter indisponível");
         },
@@ -439,6 +451,156 @@ describe("contratos públicos de partida", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ themes });
+  });
+
+  it.each([
+    [
+      "AppError 5xx",
+      new AppError(
+        "INVALID_BRACKET_STATE",
+        "Detalhe interno token=segredo",
+        503,
+      ),
+      503,
+      "INVALID_BRACKET_STATE",
+      "expected_app_error",
+    ],
+    [
+      "exceção inesperada",
+      new Error("Falha inesperada token=segredo"),
+      500,
+      "INTERNAL_ERROR",
+      "unexpected_error",
+    ],
+  ] as const)(
+    "correlaciona %s no catálogo público de temas",
+    async (_scenario, failure, status, errorCode, failureClass) => {
+      publicThemeService.getPublicThemes.mockRejectedValue(failure);
+
+      const response = await getThemes();
+      const body = await response.json();
+      const requestId = response.headers.get("x-request-id");
+
+      expect(response.status).toBe(status);
+      expect(requestId).toMatch(/^[0-9a-f-]{36}$/);
+      expect(body.error.requestId).toBe(requestId);
+      expect(observability.reportObservabilityEvent).toHaveBeenCalledOnce();
+      expect(observability.reportObservabilityEvent).toHaveBeenCalledWith({
+        eventName: "request_failed",
+        correlationId: requestId,
+        payload: {
+          surface: "theme_catalog",
+          errorCode,
+          status,
+          failureClass,
+        },
+      });
+    },
+  );
+
+  it("preserva 4xx no catálogo público de temas sem emitir evento", async () => {
+    publicThemeService.getPublicThemes.mockRejectedValue(
+      new AppError("THEMES_UNAVAILABLE", "Catálogo indisponível.", 409),
+    );
+
+    const response = await getThemes();
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "THEMES_UNAVAILABLE", message: "Catálogo indisponível." },
+    });
+    expect(response.headers.get("x-request-id")).toBeNull();
+    expect(observability.reportObservabilityEvent).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      "AppError 5xx",
+      new AppError(
+        "INVALID_BRACKET_STATE",
+        "Detalhe interno token=segredo",
+        503,
+      ),
+      503,
+      "INVALID_BRACKET_STATE",
+      "expected_app_error",
+    ],
+    [
+      "exceção inesperada",
+      new Error("Falha inesperada token=segredo"),
+      500,
+      "INTERNAL_ERROR",
+      "unexpected_error",
+    ],
+  ] as const)(
+    "correlaciona %s na imagem pública de resultado",
+    async (_scenario, failure, status, errorCode, failureClass) => {
+      publicGamePage.getPublicGamePageState.mockRejectedValue(failure);
+
+      const response = await getResultImage(
+        new Request(`http://localhost/api/resultados/${sessionId}/imagem`),
+        { params: Promise.resolve({ sessionId }) },
+      );
+      const body = await response.json();
+      const requestId = response.headers.get("x-request-id");
+
+      expect(response.status).toBe(status);
+      expect(requestId).toMatch(/^[0-9a-f-]{36}$/);
+      expect(body.error.requestId).toBe(requestId);
+      expect(observability.reportObservabilityEvent).toHaveBeenCalledOnce();
+      expect(observability.reportObservabilityEvent).toHaveBeenCalledWith({
+        eventName: "request_failed",
+        correlationId: requestId,
+        payload: {
+          surface: "game_result_image",
+          errorCode,
+          status,
+          failureClass,
+        },
+      });
+    },
+  );
+
+  it("preserva o envelope 4xx quando o resultado ainda não está disponível", async () => {
+    publicGamePage.getPublicGamePageState.mockResolvedValue(gameState);
+    resultShareCard.createResultShareCard.mockReturnValue(null);
+
+    const response = await getResultImage(
+      new Request(`http://localhost/api/resultados/${sessionId}/imagem`),
+      { params: Promise.resolve({ sessionId }) },
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: "GAME_RESULT_NOT_READY",
+        message: "O resultado ainda não está disponível.",
+        fieldErrors: null,
+      },
+    });
+    expect(response.headers.get("x-request-id")).toBeNull();
+    expect(observability.reportObservabilityEvent).not.toHaveBeenCalled();
+  });
+
+  it("preserva AppError 4xx na imagem pública sem emitir evento", async () => {
+    publicGamePage.getPublicGamePageState.mockRejectedValue(
+      new AppError("GAME_SESSION_NOT_FOUND", "Partida não encontrada.", 404),
+    );
+
+    const response = await getResultImage(
+      new Request(`http://localhost/api/resultados/${sessionId}/imagem`),
+      { params: Promise.resolve({ sessionId }) },
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: "GAME_SESSION_NOT_FOUND",
+        message: "Partida não encontrada.",
+      },
+    });
+    expect(response.headers.get("x-request-id")).toBeNull();
+    expect(observability.reportObservabilityEvent).not.toHaveBeenCalled();
   });
 
   it("rejeita payload inválido com erro estruturado", async () => {

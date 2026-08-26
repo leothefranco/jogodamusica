@@ -1,5 +1,66 @@
 import { z } from "zod";
 
+export const observabilityEnvironmentSchema = z.enum([
+  "local",
+  "preview",
+  "production",
+]);
+export const releaseCommitSchema = z.string().regex(/^[0-9a-f]{7,64}$/);
+export const rawRetentionDaysSchema = z.coerce.number().int().min(1).max(30);
+
+const observabilityEnvironmentInputSchema = z
+  .object({
+    OBSERVABILITY_ENVIRONMENT: observabilityEnvironmentSchema.optional(),
+    OBSERVABILITY_EXPORTER: z
+      .enum(["structured", "none"])
+      .default("structured"),
+    OBSERVABILITY_RAW_RETENTION_DAYS: rawRetentionDaysSchema.default(30),
+    RELEASE_COMMIT: z.union([releaseCommitSchema, z.literal("")]).optional(),
+    VERCEL_ENV: z.enum(["production", "preview", "development"]).optional(),
+    NODE_ENV: z.enum(["production", "development", "test"]).optional(),
+  })
+  .strict();
+
+export type ObservabilityEnvironmentInput = {
+  OBSERVABILITY_ENVIRONMENT?: string;
+  OBSERVABILITY_EXPORTER?: string;
+  OBSERVABILITY_RAW_RETENTION_DAYS?: string;
+  RELEASE_COMMIT?: string;
+  VERCEL_ENV?: string;
+  NODE_ENV?: string;
+};
+
+export type ObservabilityConfig = {
+  environment: z.infer<typeof observabilityEnvironmentSchema>;
+  exporter: "structured" | "none";
+  rawRetentionDays: number;
+  releaseCommit?: string;
+};
+
+function inferObservabilityEnvironment(
+  input: z.infer<typeof observabilityEnvironmentInputSchema>,
+): ObservabilityConfig["environment"] {
+  if (input.OBSERVABILITY_ENVIRONMENT) {
+    return input.OBSERVABILITY_ENVIRONMENT;
+  }
+  if (input.VERCEL_ENV === "preview") return "preview";
+  if (input.VERCEL_ENV === "production") return "production";
+  if (input.NODE_ENV === "production") return "production";
+  return "local";
+}
+
+export function parseObservabilityConfig(
+  input: ObservabilityEnvironmentInput,
+): ObservabilityConfig {
+  const parsed = observabilityEnvironmentInputSchema.parse(input);
+  return {
+    environment: inferObservabilityEnvironment(parsed),
+    exporter: parsed.OBSERVABILITY_EXPORTER,
+    rawRetentionDays: parsed.OBSERVABILITY_RAW_RETENTION_DAYS,
+    ...(parsed.RELEASE_COMMIT ? { releaseCommit: parsed.RELEASE_COMMIT } : {}),
+  };
+}
+
 const publicSupabaseInputSchema = z.object({
   url: z.string().url(),
   publishableKey: z.string().min(1),

@@ -1,12 +1,55 @@
 import {
+  parseObservabilityConfig,
   rateLimitEnvSchema,
   seedEnvSchema,
   serverEnvSchema,
   youtubeEnvSchema,
   youtubePlaylistImportEnvSchema,
+  type ObservabilityEnvironmentInput,
 } from "@/lib/env-schema";
+import { z } from "zod";
 
 let cachedServerEnv: ReturnType<typeof serverEnvSchema.parse> | undefined;
+
+type ObservabilityConfigDiagnostic = (
+  message: "[observability-config-error]",
+  details: {
+    code: "INVALID_OBSERVABILITY_CONFIG";
+    fields: string[];
+  },
+) => void;
+
+export function getObservabilityEnv(
+  input: ObservabilityEnvironmentInput = {
+    OBSERVABILITY_ENVIRONMENT: process.env.OBSERVABILITY_ENVIRONMENT,
+    OBSERVABILITY_EXPORTER: process.env.OBSERVABILITY_EXPORTER,
+    OBSERVABILITY_RAW_RETENTION_DAYS:
+      process.env.OBSERVABILITY_RAW_RETENTION_DAYS,
+    RELEASE_COMMIT: process.env.RELEASE_COMMIT,
+    VERCEL_ENV: process.env.VERCEL_ENV,
+    NODE_ENV: process.env.NODE_ENV,
+  },
+  reportDiagnostic: ObservabilityConfigDiagnostic = (message, details) =>
+    console.error(message, details),
+) {
+  try {
+    return parseObservabilityConfig(input);
+  } catch (error) {
+    const fields =
+      error instanceof z.ZodError
+        ? [
+            ...new Set(
+              error.issues.map((issue) => String(issue.path[0] ?? "unknown")),
+            ),
+          ].sort()
+        : ["unknown"];
+    reportDiagnostic("[observability-config-error]", {
+      code: "INVALID_OBSERVABILITY_CONFIG",
+      fields,
+    });
+    throw new Error("Configuração de observabilidade inválida.");
+  }
+}
 
 export function getServerEnv() {
   cachedServerEnv ??= serverEnvSchema.parse({

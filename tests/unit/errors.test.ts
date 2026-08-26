@@ -47,6 +47,34 @@ describe("respostas de erro", () => {
     expect(JSON.stringify(log.mock.calls)).not.toContain("causa-secreta");
   });
 
+  it("redige chaves compostas no diagnóstico do console", () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const sentinels = [
+      "sentinela-youtube-console",
+      "sentinela-rate-console",
+      "sentinela-client-console",
+      "sentinela-access-console",
+    ];
+    const failure = new Error(
+      [
+        `YOUTUBE_API_KEY=${sentinels[0]}`,
+        `RATE_LIMIT_KEY_SECRET=${sentinels[1]}`,
+        `client_secret=${sentinels[2]}`,
+        `accessToken=${sentinels[3]}`,
+      ].join(" | "),
+    );
+
+    errorResponse(failure);
+
+    const serializedLog = JSON.stringify(log.mock.calls);
+    for (const sentinel of sentinels) {
+      expect(serializedLog).not.toContain(sentinel);
+    }
+    expect(serializedLog.match(/\[REDACTED\]/g)?.length).toBeGreaterThanOrEqual(
+      sentinels.length,
+    );
+  });
+
   it("não registra erros operacionais esperados", () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const response = errorResponse(new AppError("NOT_FOUND", "Ausente.", 404));

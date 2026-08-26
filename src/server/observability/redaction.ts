@@ -1,5 +1,31 @@
-const sensitiveKeyPattern =
-  /^(?:authorization|capability|cookie|password|passwd|secret|senha|token|api[_-]?key)$/i;
+const sensitiveKeySegments = new Set([
+  "authorization",
+  "capability",
+  "cookie",
+  "password",
+  "passwd",
+  "secret",
+  "senha",
+  "token",
+]);
+
+function getKeySegments(key: string): string[] {
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
+function isSensitiveKey(key: string): boolean {
+  const segments = getKeySegments(key);
+  return (
+    segments.some((segment) => sensitiveKeySegments.has(segment)) ||
+    segments.some(
+      (segment, index) => segment === "api" && segments[index + 1] === "key",
+    )
+  );
+}
 
 function isIpv6(candidate: string): boolean {
   if (!candidate.includes(":")) return false;
@@ -41,8 +67,11 @@ export function redactDiagnostic(value: string): string {
     })
     .replace(/\bBearer\s+[^\s|,;]+/gi, "Bearer [REDACTED]")
     .replace(
-      /\b(password|passwd|senha|secret|token|api[_-]?key|authorization|capability|cookie)\b(\s*[:=]\s*)([^\s|,;]+)/gi,
-      "$1$2[REDACTED]",
+      /(["']?)((?:[A-Za-z0-9_-]*(?:authorization|capability|cookie|password|passwd|secret|senha|token)[A-Za-z0-9_-]*)|(?:[A-Za-z0-9_-]*api[_-]?key[A-Za-z0-9_-]*))\1(\s*[:=]\s*)(["']?)([^\s|,;}"']+)\4/gi,
+      (candidate, keyQuote, key, separator, valueQuote) =>
+        isSensitiveKey(key)
+          ? `${keyQuote}${key}${keyQuote}${separator}${valueQuote}[REDACTED]${valueQuote}`
+          : candidate,
     )
     .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[REDACTED_EMAIL]")
     .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "[REDACTED_IP]")
@@ -76,7 +105,7 @@ export function redactDiagnosticValue(
   return Object.fromEntries(
     Object.entries(value).map(([key, entry]) => [
       key,
-      sensitiveKeyPattern.test(key)
+      isSensitiveKey(key)
         ? "[REDACTED]"
         : redactDiagnosticValue(entry, depth + 1, seen),
     ]),

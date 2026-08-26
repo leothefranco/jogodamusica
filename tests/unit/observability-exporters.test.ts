@@ -35,8 +35,13 @@ describe("contrato compartilhado dos exporters", () => {
 
     expect(memory.events).toEqual([event]);
     expect(JSON.parse(write.mock.calls[0][0])).toEqual(memory.events[0]);
-    expect(memory.rawRetentionDays).toBe(7);
-    expect(structured.rawRetentionDays).toBe(7);
+    const retentionDeclaration = {
+      configuredRawRetentionDays: 7,
+      enforcement: "external_collector",
+      collectorVerification: "required_before_rollout",
+    };
+    expect(memory.retention).toEqual(retentionDeclaration);
+    expect(structured.retention).toEqual(retentionDeclaration);
   });
 
   it("rejeita configuração efetiva acima do teto de retenção", () => {

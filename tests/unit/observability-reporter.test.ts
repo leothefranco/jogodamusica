@@ -63,7 +63,7 @@ describe("reporter de observabilidade", () => {
     const reporter = createObservabilityReporter({
       environment: "local",
       now: () => new Date("2026-08-25T14:00:00.000Z"),
-      exporter: { rawRetentionDays: 30, export: exportEvent },
+      exporter: { export: exportEvent },
     });
     const validInput = {
       eventName: "request_failed" as const,
@@ -92,7 +92,7 @@ describe("reporter de observabilidade", () => {
     const reporter = createObservabilityReporter({
       environment: "local",
       now: () => new Date("2026-08-25T14:00:00.000Z"),
-      exporter: { rawRetentionDays: 30, export: exportEvent },
+      exporter: { export: exportEvent },
     });
 
     reporter.report({
@@ -105,11 +105,15 @@ describe("reporter de observabilidade", () => {
         failureClass: "unexpected_error",
       },
       diagnostic: {
-        token: "sentinela-secreta",
+        YOUTUBE_API_KEY: "sentinela-youtube-exporter",
+        RATE_LIMIT_KEY_SECRET: "sentinela-rate-exporter",
+        client_secret: "sentinela-client-exporter",
+        accessToken: "sentinela-access-exporter",
         clientIp: "2001:db8::1",
       },
     } as never);
 
     expect(exportEvent).not.toHaveBeenCalled();
+    expect(JSON.stringify(exportEvent.mock.calls)).not.toContain("sentinela-");
   });
 });

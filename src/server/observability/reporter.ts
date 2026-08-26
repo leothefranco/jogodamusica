@@ -1,6 +1,6 @@
 import type { ObservabilityExporter } from "@/server/observability/exporters";
 import { createStructuredObservabilityExporter } from "@/server/observability/exporters";
-import { getObservabilityRuntimeConfig } from "@/server/observability/config";
+import { getObservabilityEnv } from "@/lib/env";
 import { redactDiagnosticValue } from "@/server/observability/redaction";
 import {
   observabilityEventSchema,
@@ -52,7 +52,7 @@ export function createObservabilityReporter(dependencies: {
   };
 }
 
-const runtimeConfig = getObservabilityRuntimeConfig();
+const runtimeConfig = getObservabilityEnv();
 const defaultExporter: ObservabilityExporter =
   runtimeConfig.exporter === "structured"
     ? createStructuredObservabilityExporter({
@@ -60,7 +60,6 @@ const defaultExporter: ObservabilityExporter =
         write: (serializedEvent) => console.info(serializedEvent),
       })
     : {
-        rawRetentionDays: runtimeConfig.rawRetentionDays,
         export() {},
       };
 const defaultReporter = createObservabilityReporter({

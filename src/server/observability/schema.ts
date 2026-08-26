@@ -1,18 +1,24 @@
 import { z } from "zod";
 
+import {
+  observabilityEnvironmentSchema,
+  releaseCommitSchema,
+} from "@/lib/env-schema";
+
 const utcTimestampSchema = z
   .string()
   .refine(
     (value) => value.endsWith("Z") && !Number.isNaN(Date.parse(value)),
     "occurredAt precisa ser um timestamp UTC válido.",
   );
-const releaseCommitSchema = z.string().regex(/^[0-9a-f]{7,64}$/);
 
 export const publicGameSurfaceSchema = z.enum([
   "game_create",
   "game_session",
   "game_decision",
   "game_player_error",
+  "theme_catalog",
+  "game_result_image",
 ]);
 
 export const requestFailureErrorCodeSchema = z.enum([
@@ -24,7 +30,7 @@ export const requestFailureErrorCodeSchema = z.enum([
 const eventEnvelopeSchema = z.object({
   schemaVersion: z.literal(1),
   occurredAt: utcTimestampSchema,
-  environment: z.enum(["local", "preview", "production"]),
+  environment: observabilityEnvironmentSchema,
   releaseCommit: releaseCommitSchema.optional(),
   correlationId: z.string().uuid(),
 });

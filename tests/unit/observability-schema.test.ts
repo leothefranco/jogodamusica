@@ -22,6 +22,27 @@ describe("contrato de eventos de observabilidade", () => {
     expect(observabilityEventSchema.parse(event)).toEqual(event);
   });
 
+  it.each(["theme_catalog", "game_result_image"] as const)(
+    "mantém a surface pública %s no catálogo fechado",
+    (surface) => {
+      const event = {
+        eventName: "request_failed",
+        schemaVersion: 1,
+        occurredAt: "2026-08-25T14:00:00.000Z",
+        environment: "preview",
+        correlationId: "10000000-0000-4000-8000-000000000001",
+        payload: {
+          surface,
+          errorCode: "INTERNAL_ERROR",
+          status: 500,
+          failureClass: "unexpected_error",
+        },
+      };
+
+      expect(observabilityEventSchema.parse(event)).toEqual(event);
+    },
+  );
+
   it("rejeita campo desconhecido, versão incompatível, obrigatório ausente e timestamp sem UTC", () => {
     const baseEvent = {
       eventName: "request_failed",
