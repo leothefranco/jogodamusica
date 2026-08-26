@@ -561,7 +561,7 @@ describe("contratos públicos de partida", () => {
     },
   );
 
-  it("preserva o envelope 4xx quando o resultado ainda não está disponível", async () => {
+  it("preserva o contrato textual 404 quando o resultado ainda não está disponível", async () => {
     publicGamePage.getPublicGamePageState.mockResolvedValue(gameState);
     resultShareCard.createResultShareCard.mockReturnValue(null);
 
@@ -571,13 +571,12 @@ describe("contratos públicos de partida", () => {
     );
 
     expect(response.status).toBe(404);
-    await expect(response.json()).resolves.toEqual({
-      error: {
-        code: "GAME_RESULT_NOT_READY",
-        message: "O resultado ainda não está disponível.",
-        fieldErrors: null,
-      },
-    });
+    expect(response.headers.get("content-type")).toBe(
+      "text/plain;charset=UTF-8",
+    );
+    await expect(response.text()).resolves.toBe(
+      "O resultado ainda não está disponível.",
+    );
     expect(response.headers.get("x-request-id")).toBeNull();
     expect(observability.reportObservabilityEvent).not.toHaveBeenCalled();
   });

@@ -1,7 +1,6 @@
 import { createResultStoryImage } from "@/components/game/result-story-image";
 import { createResultShareCard } from "@/domain/game/result-share-card";
 import { getPublicGamePageState } from "@/app/(public)/game-page-state";
-import { AppError } from "@/lib/errors";
 import { handlePublicGameRequest } from "@/server/http/public-game-handler";
 
 export async function GET(
@@ -16,11 +15,9 @@ export async function GET(
     const card = createResultShareCard(state, appUrl);
 
     if (!card) {
-      throw new AppError(
-        "GAME_RESULT_NOT_READY",
-        "O resultado ainda não está disponível.",
-        404,
-      );
+      return new Response("O resultado ainda não está disponível.", {
+        status: 404,
+      });
     }
 
     const shouldDownload = requestUrl.searchParams.get("download") === "1";

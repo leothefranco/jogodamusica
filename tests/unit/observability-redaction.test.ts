@@ -60,4 +60,76 @@ describe("redaction operacional central", () => {
     }
     expect(serialized.match(/\[REDACTED\]/g)).toHaveLength(12);
   });
+
+  it("remove por inteiro assignments sensíveis citados com espaços e delimitadores", () => {
+    const sensitiveAssignments = [
+      'client_secret="alpha beta"',
+      "access_token='gamma delta;epsilon'",
+      'client-secret="zeta eta,theta"',
+      "accessToken='iota kappa|lambda'",
+      'YOUTUBE_API_KEY="mu nu:xi"',
+      "RATE_LIMIT_KEY_SECRET='omicron pi=rho'",
+      'client_secret="escaped \\"inner\\" tail"',
+      `access_token="lineone
+linetwo"`,
+    ];
+    const diagnostic = {
+      message: sensitiveAssignments.join(" | "),
+      nested: {
+        client_secret: "sigma tau",
+        access_token: "upsilon phi",
+        "client-secret": "chi psi",
+        accessToken: "omega alphaobject",
+        YOUTUBE_API_KEY: "betaobject gammaobject",
+        RATE_LIMIT_KEY_SECRET: "deltaobject epsilonobject",
+      },
+      ordinary: 'tokenizer="nota pública de catálogo permanece intacta"',
+    };
+    const forbiddenFragments = [
+      "alpha",
+      "beta",
+      "gamma",
+      "delta",
+      "epsilon",
+      "zeta",
+      "eta",
+      "theta",
+      "iota",
+      "kappa",
+      "lambda",
+      "mu",
+      "nu",
+      "xi",
+      "omicron",
+      "pi",
+      "rho",
+      "sigma",
+      "tau",
+      "upsilon",
+      "phi",
+      "chi",
+      "psi",
+      "omega",
+      "alphaobject",
+      "betaobject",
+      "gammaobject",
+      "deltaobject",
+      "epsilonobject",
+      "escaped",
+      "inner",
+      "tail",
+      "lineone",
+      "linetwo",
+    ];
+
+    const serialized = JSON.stringify(redactDiagnosticValue(diagnostic));
+
+    for (const fragment of forbiddenFragments) {
+      expect(serialized).not.toContain(fragment);
+    }
+    expect(serialized).toContain(
+      'tokenizer=\\"nota pública de catálogo permanece intacta\\"',
+    );
+    expect(serialized.match(/\[REDACTED\]/g)).toHaveLength(14);
+  });
 });

@@ -67,11 +67,17 @@ export function redactDiagnostic(value: string): string {
     })
     .replace(/\bBearer\s+[^\s|,;]+/gi, "Bearer [REDACTED]")
     .replace(
-      /(["']?)((?:[A-Za-z0-9_-]*(?:authorization|capability|cookie|password|passwd|secret|senha|token)[A-Za-z0-9_-]*)|(?:[A-Za-z0-9_-]*api[_-]?key[A-Za-z0-9_-]*))\1(\s*[:=]\s*)(["']?)([^\s|,;}"']+)\4/gi,
-      (candidate, keyQuote, key, separator, valueQuote) =>
-        isSensitiveKey(key)
-          ? `${keyQuote}${key}${keyQuote}${separator}${valueQuote}[REDACTED]${valueQuote}`
-          : candidate,
+      /(["']?)((?:[A-Za-z0-9_-]*(?:authorization|capability|cookie|password|passwd|secret|senha|token)[A-Za-z0-9_-]*)|(?:[A-Za-z0-9_-]*api[_-]?key[A-Za-z0-9_-]*))\1(\s*[:=]\s*)("(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|[^\s|,;}"']+)/gi,
+      (candidate, keyQuote, key, separator, assignmentValue) => {
+        if (!isSensitiveKey(key)) return candidate;
+
+        const valueQuote = assignmentValue[0];
+        const redactedValue =
+          valueQuote === '"' || valueQuote === "'"
+            ? `${valueQuote}[REDACTED]${valueQuote}`
+            : "[REDACTED]";
+        return `${keyQuote}${key}${keyQuote}${separator}${redactedValue}`;
+      },
     )
     .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[REDACTED_EMAIL]")
     .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "[REDACTED_IP]")

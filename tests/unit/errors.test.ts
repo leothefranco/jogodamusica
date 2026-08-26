@@ -47,20 +47,24 @@ describe("respostas de erro", () => {
     expect(JSON.stringify(log.mock.calls)).not.toContain("causa-secreta");
   });
 
-  it("redige chaves compostas no diagnóstico do console", () => {
+  it("redige assignments compostos citados no diagnóstico do console", () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const sentinels = [
-      "sentinela-youtube-console",
-      "sentinela-rate-console",
-      "sentinela-client-console",
-      "sentinela-access-console",
+      "youtube-alpha",
+      "youtube-beta",
+      "rate-gamma",
+      "rate-delta",
+      "client-epsilon",
+      "client-zeta",
+      "access-eta",
+      "access-theta",
     ];
     const failure = new Error(
       [
-        `YOUTUBE_API_KEY=${sentinels[0]}`,
-        `RATE_LIMIT_KEY_SECRET=${sentinels[1]}`,
-        `client_secret=${sentinels[2]}`,
-        `accessToken=${sentinels[3]}`,
+        `YOUTUBE_API_KEY="${sentinels[0]} ${sentinels[1]}"`,
+        `RATE_LIMIT_KEY_SECRET='${sentinels[2]};${sentinels[3]}'`,
+        `client_secret="${sentinels[4]},${sentinels[5]}"`,
+        `accessToken='${sentinels[6]}|${sentinels[7]}'`,
       ].join(" | "),
     );
 
