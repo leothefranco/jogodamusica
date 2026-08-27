@@ -1,17 +1,19 @@
 import { describe, expect, it } from "vitest";
 
-import { createAdminManifest } from "@/app/admin/manifest.webmanifest/route";
-import { createPublicManifest } from "@/app/manifest.webmanifest/route";
+import { createAdminManifest, createPublicManifest } from "@/lib/pwa-manifest";
 
 describe("manifesto da PWA", () => {
   it("expõe a identidade instalável e os dois ícones obrigatórios", () => {
-    expect(createPublicManifest()).toMatchObject({
+    expect(createPublicManifest()).toEqual({
       name: "Jogo da Música",
       short_name: "Jogo da Música",
+      description:
+        "Compare músicas em confrontos eliminatórios e descubra a campeã do grupo.",
       start_url: "/",
       scope: "/",
       display: "standalone",
       lang: "pt-BR",
+      orientation: "any",
       background_color: "#08080f",
       theme_color: "#08080f",
       icons: [
@@ -30,14 +32,16 @@ describe("manifesto da PWA", () => {
   });
 
   it("separa a instalação administrativa por nome, escopo e cor", () => {
-    expect(createAdminManifest()).toMatchObject({
+    expect(createAdminManifest()).toEqual({
       id: "/admin",
       name: "Jogo da Música Admin",
       short_name: "Jogo da Música Admin",
+      description: "Administre temas e músicas do Jogo da Música.",
       start_url: "/admin",
       scope: "/admin",
       display: "standalone",
       lang: "pt-BR",
+      orientation: "any",
       background_color: "#08080f",
       theme_color: "#059669",
       icons: [
