@@ -82,6 +82,67 @@ export const themes = pgTable(
   ],
 );
 
+export type ThemeCoverClaimStatus =
+  "claimed" | "consumed" | "deleting" | "delete_failed" | "deleted";
+
+export const themeCoverClaims = pgTable(
+  "theme_cover_claims",
+  {
+    bucket: varchar("bucket", { length: 63 }).notNull(),
+    objectKey: text("object_key").notNull(),
+    ownerId: uuid("owner_id").notNull(),
+    payloadHash: varchar("payload_hash", { length: 64 }).notNull(),
+    epoch: integer("epoch").default(1).notNull(),
+    status: varchar("status", { length: 20 })
+      .$type<ThemeCoverClaimStatus>()
+      .default("claimed")
+      .notNull(),
+    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+    themeId: uuid("theme_id").references(() => themes.id, {
+      onDelete: "cascade",
+    }),
+    ...timestamps,
+  },
+  (table) => [
+    primaryKey({ columns: [table.bucket, table.objectKey, table.ownerId] }),
+    index("theme_cover_claims_owner_bucket_idx").on(
+      table.ownerId,
+      table.bucket,
+    ),
+    index("theme_cover_claims_theme_idx").on(table.themeId),
+    check("theme_cover_claims_epoch_check", sql`${table.epoch} > 0`),
+    check(
+      "theme_cover_claims_status_check",
+      sql`${table.status} in ('claimed', 'consumed', 'deleting', 'delete_failed', 'deleted')`,
+    ),
+    check(
+      "theme_cover_claims_payload_hash_check",
+      sql`${table.payloadHash} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      "theme_cover_claims_object_key_check",
+      sql`${table.bucket} = 'theme-covers'
+        and split_part(${table.objectKey}, '/', 1) = ${table.ownerId}::text
+        and ${table.objectKey} ~ '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.(jpg|png|webp)$'`,
+    ),
+    check(
+      "theme_cover_claims_lease_check",
+      sql`(
+          ${table.status} in ('claimed', 'deleting')
+          and ${table.leaseExpiresAt} is not null
+        ) or (
+          ${table.status} in ('consumed', 'delete_failed', 'deleted')
+          and ${table.leaseExpiresAt} is null
+        )`,
+    ),
+    check(
+      "theme_cover_claims_theme_check",
+      sql`(${table.status} = 'consumed' and ${table.themeId} is not null)
+        or (${table.status} <> 'consumed' and ${table.themeId} is null)`,
+    ),
+  ],
+);
+
 export const songs = pgTable(
   "songs",
   {
@@ -242,6 +303,7 @@ export type AdminProfile = typeof adminProfiles.$inferSelect;
 export type NewAdminProfile = typeof adminProfiles.$inferInsert;
 export type Theme = typeof themes.$inferSelect;
 export type NewTheme = typeof themes.$inferInsert;
+export type ThemeCoverClaimRecord = typeof themeCoverClaims.$inferSelect;
 export type Song = typeof songs.$inferSelect;
 export type NewSong = typeof songs.$inferInsert;
 export type ThemeSong = typeof themeSongs.$inferSelect;

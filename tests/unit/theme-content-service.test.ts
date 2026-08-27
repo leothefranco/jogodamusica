@@ -43,7 +43,6 @@ function createService(overrides: Partial<ServiceDependencies> = {}) {
       totalSongCount: 4,
       updatedAt: new Date("2026-01-01T00:00:00Z"),
     }),
-    insertTheme: async () => "10000000-0000-4000-8000-000000000010",
     musicProvider: {
       search: async () => [],
       resolve: async () => resolvedTrack,

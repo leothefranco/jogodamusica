@@ -5,21 +5,27 @@ import { redirect } from "next/navigation";
 
 import {
   trackAssociationInputSchema,
-  themeInputSchema,
   themeSongInputSchema,
 } from "@/domain/music/content-validation";
 import type { ContentActionState } from "@/components/admin/content-action-state";
 import { fieldErrorsFromZod, toAppError } from "@/lib/errors";
 import { requireAdmin } from "@/server/auth/session";
+import { createThemeActionAdapter } from "@/server/actions/create-theme-action";
+import { createThemeWithManagedCover } from "@/server/services/create-theme-workflow";
+import { parseThemeUpdateFormData } from "@/server/services/theme-form-data";
 import {
   attachResolvedTrack,
-  createTheme,
   deleteTheme,
   removeThemeSong,
   setThemePublication,
   updateTheme,
   updateThemeSong,
 } from "@/server/services/theme-content-service";
+
+const runCreateThemeAction = createThemeActionAdapter({
+  authenticate: requireAdmin,
+  createTheme: createThemeWithManagedCover,
+});
 
 function errorState(error: unknown): ContentActionState {
   const appError = toAppError(error);
@@ -41,44 +47,16 @@ function validationState(
   };
 }
 
-function themeInputFromFormData(formData: FormData, coverUrl: string | null) {
-  return themeInputSchema.safeParse({
-    name: formData.get("name"),
-    slug: formData.get("slug"),
-    description: formData.get("description"),
-    coverUrl,
-  });
-}
-
-function currentCoverUrl(formData: FormData) {
-  if (formData.get("removeCover") === "on") return null;
-  const value = formData.get("coverUrl");
-  return typeof value === "string" ? value : null;
-}
-
 export async function createThemeAction(
   _previousState: ContentActionState,
   formData: FormData,
 ): Promise<ContentActionState> {
-  await requireAdmin();
-  const parsed = themeInputFromFormData(formData, null);
-  if (!parsed.success) {
-    return validationState(
-      "Revise os campos do tema.",
-      parsed.error.flatten().fieldErrors,
-    );
-  }
-
-  let themeId: string;
-  try {
-    themeId = await createTheme(parsed.data);
-  } catch (error) {
-    return errorState(error);
-  }
+  const result = await runCreateThemeAction(formData);
+  if ("status" in result) return result;
 
   revalidatePath("/admin");
   revalidatePath("/admin/temas");
-  redirect(`/admin/temas/${themeId}?message=Tema criado`);
+  redirect(`/admin/temas/${result.themeId}?message=Tema criado`);
 }
 
 export async function updateThemeAction(
@@ -87,7 +65,7 @@ export async function updateThemeAction(
   formData: FormData,
 ): Promise<ContentActionState> {
   await requireAdmin();
-  const parsed = themeInputFromFormData(formData, currentCoverUrl(formData));
+  const parsed = parseThemeUpdateFormData(formData);
   if (!parsed.success) {
     return validationState(
       "Revise os campos do tema.",
