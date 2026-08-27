@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   boolean,
   check,
   index,
@@ -205,40 +206,39 @@ function sourceAvailabilityObservationColumns() {
   };
 }
 
-export const sourceAvailabilityObservations = pgTable(
-  "source_availability_observations",
-  {
-    songId: uuid("song_id")
-      .notNull()
-      .references(() => songs.id, { onDelete: "cascade" }),
-    ...sourceAvailabilityObservationColumns(),
-  },
-  (table) => [
-    primaryKey({ columns: [table.songId, table.region] }),
-    index("source_availability_region_next_check_idx").on(
-      table.region,
-      table.nextCheckAt,
-    ),
+type SourceAvailabilityObservationTable = {
+  confirmedState: AnyPgColumn;
+  confirmationReason: AnyPgColumn;
+  graceUntil: AnyPgColumn;
+  lastAttemptAt: AnyPgColumn;
+  lastConfirmedAt: AnyPgColumn;
+  nextCheckAt: AnyPgColumn;
+  observedAt: AnyPgColumn;
+  policyVersion: AnyPgColumn;
+  region: AnyPgColumn;
+  revision: AnyPgColumn;
+  validUntil: AnyPgColumn;
+};
+
+function sourceAvailabilityObservationChecks(
+  prefix: "source_availability" | "unbound_source_availability",
+  table: SourceAvailabilityObservationTable,
+) {
+  return [
+    check(`${prefix}_region_check`, sql`${table.region} ~ '^[A-Z]{2}$'`),
+    check(`${prefix}_revision_check`, sql`${table.revision} > 0`),
+    check(`${prefix}_policy_version_check`, sql`${table.policyVersion} > 0`),
     check(
-      "source_availability_region_check",
-      sql`${table.region} ~ '^[A-Z]{2}$'`,
-    ),
-    check("source_availability_revision_check", sql`${table.revision} > 0`),
-    check(
-      "source_availability_policy_version_check",
-      sql`${table.policyVersion} > 0`,
-    ),
-    check(
-      "source_availability_attempt_order_check",
+      `${prefix}_attempt_order_check`,
       sql`${table.observedAt} <= ${table.lastAttemptAt}
         and (${table.lastConfirmedAt} is null or ${table.lastConfirmedAt} <= ${table.lastAttemptAt})`,
     ),
     check(
-      "source_availability_next_check_check",
+      `${prefix}_next_check_check`,
       sql`${table.nextCheckAt} >= ${table.lastAttemptAt}`,
     ),
     check(
-      "source_availability_confirmation_check",
+      `${prefix}_confirmation_check`,
       sql`(
           ${table.confirmedState} = 'available'
           and ${table.confirmationReason} = 'available'
@@ -261,6 +261,24 @@ export const sourceAvailabilityObservations = pgTable(
           and ${table.graceUntil} is null
         )`,
     ),
+  ];
+}
+
+export const sourceAvailabilityObservations = pgTable(
+  "source_availability_observations",
+  {
+    songId: uuid("song_id")
+      .notNull()
+      .references(() => songs.id, { onDelete: "cascade" }),
+    ...sourceAvailabilityObservationColumns(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.songId, table.region] }),
+    index("source_availability_region_next_check_idx").on(
+      table.region,
+      table.nextCheckAt,
+    ),
+    ...sourceAvailabilityObservationChecks("source_availability", table),
   ],
 ).enableRLS();
 
@@ -280,50 +298,9 @@ export const unboundSourceAvailabilityObservations = pgTable(
       "unbound_source_availability_key_hash_check",
       sql`${table.sourceKeyHash} ~ '^[0-9a-f]{64}$'`,
     ),
-    check(
-      "unbound_source_availability_region_check",
-      sql`${table.region} ~ '^[A-Z]{2}$'`,
-    ),
-    check(
-      "unbound_source_availability_revision_check",
-      sql`${table.revision} > 0`,
-    ),
-    check(
-      "unbound_source_availability_policy_version_check",
-      sql`${table.policyVersion} > 0`,
-    ),
-    check(
-      "unbound_source_availability_attempt_order_check",
-      sql`${table.observedAt} <= ${table.lastAttemptAt}
-        and (${table.lastConfirmedAt} is null or ${table.lastConfirmedAt} <= ${table.lastAttemptAt})`,
-    ),
-    check(
-      "unbound_source_availability_next_check_check",
-      sql`${table.nextCheckAt} >= ${table.lastAttemptAt}`,
-    ),
-    check(
-      "unbound_source_availability_confirmation_check",
-      sql`(
-          ${table.confirmedState} = 'available'
-          and ${table.confirmationReason} = 'available'
-          and ${table.lastConfirmedAt} is not null
-          and ${table.validUntil} is not null
-          and ${table.graceUntil} is not null
-          and ${table.lastConfirmedAt} <= ${table.validUntil}
-          and ${table.validUntil} <= ${table.graceUntil}
-        ) or (
-          ${table.confirmedState} = 'unavailable'
-          and ${table.confirmationReason} in ('region_blocked', 'not_embeddable', 'not_found')
-          and ${table.lastConfirmedAt} is not null
-          and ${table.validUntil} is null
-          and ${table.graceUntil} is null
-        ) or (
-          ${table.confirmedState} = 'unknown'
-          and ${table.confirmationReason} is null
-          and ${table.lastConfirmedAt} is null
-          and ${table.validUntil} is null
-          and ${table.graceUntil} is null
-        )`,
+    ...sourceAvailabilityObservationChecks(
+      "unbound_source_availability",
+      table,
     ),
   ],
 ).enableRLS();

@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type {
-  NormalizedProviderAvailabilityResult,
-  SourceAvailabilityObservation,
+import {
+  applySourceAvailabilityResult,
+  type NormalizedProviderAvailabilityResult,
+  type SourceAvailabilityObservation,
 } from "@/domain/music/source-availability";
 import { createSourceAvailabilityService } from "@/server/services/source-availability-service";
 
@@ -30,6 +31,7 @@ function createService(overrides: Partial<Dependencies> = {}) {
       songId,
       observation,
       applied: true,
+      track,
     }),
     provider: {
       observe: async () => ({ type: "available", reason: "available", track }),
@@ -63,7 +65,7 @@ describe("serviço de disponibilidade regional", () => {
         order.push("transaction");
         transactionOpen = true;
         try {
-          return { songId, observation, applied: true };
+          return { songId, observation, applied: true, track };
         } finally {
           transactionOpen = false;
         }
@@ -101,12 +103,13 @@ describe("serviço de disponibilidade regional", () => {
   });
 
   it("persiste confirmação indisponível sem torná-la candidata", async () => {
+    const blockedTrack = { ...track, isRegionAllowed: false };
     const persistObservation = vi.fn(async ({ observation }) => ({
       songId,
       observation,
       applied: true,
+      track: blockedTrack,
     }));
-    const blockedTrack = { ...track, isRegionAllowed: false };
     const service = createService({
       provider: {
         observe: async () => ({
@@ -177,6 +180,7 @@ describe("serviço de disponibilidade regional", () => {
       songId: null,
       observation,
       applied: true,
+      track: null,
     }));
     const service = createService({
       persistObservation,
@@ -246,6 +250,38 @@ describe("serviço de disponibilidade regional", () => {
     expect(clock).toHaveBeenCalledTimes(2);
   });
 
+  it("retorna os metadados da observação que venceu o CAS", async () => {
+    const winningObservation = applySourceAvailabilityResult({
+      current: null,
+      observedAt: now,
+      result: { type: "available", reason: "available", track },
+    });
+    const service = createService({
+      findSource: async () => null,
+      persistObservation: async () => ({
+        songId,
+        observation: winningObservation,
+        applied: false,
+        track,
+      }),
+      provider: {
+        observe: async () => ({
+          type: "transient_error",
+          errorCode: "transport",
+        }),
+      },
+    });
+
+    await expect(
+      service.observeSource(providerContentId),
+    ).resolves.toMatchObject({
+      songId,
+      applied: false,
+      availability: { state: "available_fresh", playable: true },
+      track,
+    });
+  });
+
   it("torna retry concorrente idempotente no adapter em memória", async () => {
     let stored: SourceAvailabilityObservation | null = null;
     let effects = 0;
@@ -277,7 +313,7 @@ describe("serviço de disponibilidade regional", () => {
           };
           effects += 1;
         }
-        return { songId, observation: stored!, applied };
+        return { songId, observation: stored!, applied, track };
       } finally {
         release();
       }
@@ -342,7 +378,7 @@ describe("serviço de disponibilidade regional", () => {
           };
           effects += 1;
         }
-        return { songId, observation: stored!, applied };
+        return { songId, observation: stored!, applied, track };
       } finally {
         release();
       }

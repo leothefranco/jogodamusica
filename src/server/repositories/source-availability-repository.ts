@@ -33,15 +33,19 @@ type ObservationRow = {
   validUntil: Date | string | null;
 };
 
-type SourceRow = Partial<ObservationRow> & {
+type TrackRow = {
   durationSeconds: number | string;
   isEmbeddable: boolean;
   providerContentId: string;
-  songId: string;
   sourceChannel: string;
   sourceTitle: string;
   thumbnailUrl: string;
 };
+
+type SourceRow = Partial<ObservationRow> &
+  TrackRow & {
+    songId: string;
+  };
 
 export type SourceAvailabilitySource = {
   songId: string | null;
@@ -86,6 +90,21 @@ function observationFromRow(
 
 function hasObservation(row: SourceRow): row is SourceRow & ObservationRow {
   return row.revision !== null && row.revision !== undefined;
+}
+
+function trackFromRow(
+  row: TrackRow,
+  observation: SourceAvailabilityObservation | null,
+): ResolvedProviderTrack {
+  return {
+    providerContentId: row.providerContentId,
+    sourceTitle: row.sourceTitle,
+    sourceChannel: row.sourceChannel,
+    thumbnailUrl: row.thumbnailUrl,
+    durationSeconds: Number(row.durationSeconds),
+    isEmbeddable: row.isEmbeddable,
+    isRegionAllowed: observation?.confirmationReason !== "region_blocked",
+  };
 }
 
 function sourceKeyHash(providerContentId: string) {
@@ -260,15 +279,7 @@ async function findSourceUsing(
   return {
     songId: row.songId,
     providerContentId: row.providerContentId,
-    track: {
-      providerContentId: row.providerContentId,
-      sourceTitle: row.sourceTitle,
-      sourceChannel: row.sourceChannel,
-      thumbnailUrl: row.thumbnailUrl,
-      durationSeconds: Number(row.durationSeconds),
-      isEmbeddable: row.isEmbeddable,
-      isRegionAllowed: observation?.confirmationReason !== "region_blocked",
-    },
+    track: trackFromRow(row, observation),
     observation,
   };
 }
@@ -477,6 +488,33 @@ async function findObservationUsing(
   return observationFromRow(row);
 }
 
+async function findTrackUsing(
+  database: SourceAvailabilityDatabase,
+  songId: string,
+  observation: SourceAvailabilityObservation,
+) {
+  const rows = await database.execute(sql<TrackRow>`
+    select
+      provider_content_id as "providerContentId",
+      source_title as "sourceTitle",
+      source_channel as "sourceChannel",
+      thumbnail_url as "thumbnailUrl",
+      duration_seconds as "durationSeconds",
+      is_embeddable as "isEmbeddable"
+    from public.songs
+    where id = ${songId}::uuid
+  `);
+  const row = rows[0] as TrackRow | undefined;
+  if (!row) {
+    throw new AppError(
+      "SOURCE_AVAILABILITY_WRITE_CONFLICT",
+      "A Fonte concorrente não pôde ser reconciliada.",
+      409,
+    );
+  }
+  return trackFromRow(row, observation);
+}
+
 async function updateSourceMetadata(
   database: SourceAvailabilityDatabase,
   songId: string,
@@ -507,6 +545,7 @@ export async function persistSourceAvailabilityObservation(
   songId: string | null;
   observation: SourceAvailabilityObservation;
   applied: boolean;
+  track: ResolvedProviderTrack | null;
 }> {
   return getDatabase().transaction(async (transaction) => {
     await lockSourceAvailabilityIdentity(
@@ -533,6 +572,7 @@ export async function persistSourceAvailabilityObservation(
             input.observation.region,
           ),
           applied: false,
+          track: null,
         };
       }
 
@@ -540,6 +580,7 @@ export async function persistSourceAvailabilityObservation(
         songId: null,
         observation: appliedObservation,
         applied: true,
+        track: null,
       };
     }
 
@@ -573,6 +614,7 @@ export async function persistSourceAvailabilityObservation(
         songId,
         observation: persistedObservation,
         applied: false,
+        track: await findTrackUsing(transaction, songId, persistedObservation),
       };
     }
 
@@ -586,6 +628,17 @@ export async function persistSourceAvailabilityObservation(
       await updateSourceMetadata(transaction, songId, input.track);
     }
 
-    return { songId, observation: appliedObservation, applied: true };
+    return {
+      songId,
+      observation: appliedObservation,
+      applied: true,
+      track: input.track
+        ? {
+            ...input.track,
+            isRegionAllowed:
+              appliedObservation.confirmationReason !== "region_blocked",
+          }
+        : await findTrackUsing(transaction, songId, appliedObservation),
+    };
   });
 }

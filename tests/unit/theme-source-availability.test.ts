@@ -5,6 +5,7 @@ import {
   createThemeContentService,
   createThemeEditorService,
 } from "@/server/services/theme-content-service";
+import { createSourceAvailabilityService } from "@/server/services/source-availability-service";
 
 const themeId = "10000000-0000-4000-8000-000000000010";
 const songId = "20000000-0000-4000-8000-000000000020";
@@ -204,30 +205,43 @@ describe("integração individual da disponibilidade no Tema", () => {
     );
   });
 
-  it("permite associação durante fresh/grace quando a tentativa atual é transitória", async () => {
-    const { association, service } = createService({
-      observeResult: {
+  it("associa a Fonte fresh que venceu o CAS de uma tentativa transitória", async () => {
+    const winningObservation = {
+      ...availableObservation,
+      errorCode: "transport" as const,
+      revision: 2,
+    };
+    const sourceService = createSourceAvailabilityService({
+      clock: () => now,
+      findSource: async () => null,
+      metrics: { record: vi.fn() },
+      persistObservation: async () => ({
         songId,
-        observation: {
-          ...availableObservation,
-          errorCode: "transport",
-          revision: 2,
-        },
-        availability: {
-          state: "available_fresh",
-          playable: true,
-          degraded: false,
-        },
-        applied: true,
+        observation: winningObservation,
+        applied: false,
         track,
-        result: { type: "transient_error", errorCode: "transport" },
+      }),
+      provider: {
+        observe: async () => ({
+          type: "transient_error",
+          errorCode: "transport",
+        }),
       },
     });
+    const { association, observeSourceAvailability, service } = createService(
+      {},
+    );
+    observeSourceAvailability.mockImplementationOnce((providerContentId) =>
+      sourceService.observeSource(providerContentId),
+    );
 
     await expect(
       service.attachResolvedTrack(themeId, associationInput),
     ).resolves.toBeUndefined();
     expect(association).toHaveBeenCalledOnce();
+    expect(observeSourceAvailability).toHaveBeenCalledWith(
+      track.providerContentId,
+    );
   });
 
   it("recarrega editor derivando saúde e URLs sem chamar provider", async () => {

@@ -96,7 +96,7 @@ describe("repositório de disponibilidade regional", () => {
         track,
         observation,
       }),
-    ).resolves.toEqual({ songId, observation, applied: true });
+    ).resolves.toEqual({ songId, observation, applied: true, track });
 
     expect(databaseMocks.database.transaction).toHaveBeenCalledOnce();
     expect(databaseMocks.database.transactionOpen).toBe(false);
@@ -183,6 +183,16 @@ describe("repositório de disponibilidade regional", () => {
       [],
       [current],
       [],
+      [
+        {
+          providerContentId: track.providerContentId,
+          sourceTitle: track.sourceTitle,
+          sourceChannel: track.sourceChannel,
+          thumbnailUrl: track.thumbnailUrl,
+          durationSeconds: track.durationSeconds,
+          isEmbeddable: track.isEmbeddable,
+        },
+      ],
     );
 
     await expect(
@@ -195,15 +205,17 @@ describe("repositório de disponibilidade regional", () => {
       songId,
       applied: false,
       observation: { revision: 3 },
+      track,
     });
 
-    expect(normalizedStatements()).toHaveLength(7);
-    expect(normalizedStatements().at(-2)).toContain(
+    expect(normalizedStatements()).toHaveLength(8);
+    expect(normalizedStatements().at(-3)).toContain(
       "from public.source_availability_observations",
     );
-    expect(normalizedStatements().at(-1)).toContain(
+    expect(normalizedStatements().at(-2)).toContain(
       "delete from public.unbound_source_availability_observations",
     );
+    expect(normalizedStatements().at(-1)).toContain("from public.songs");
     expect(normalizedStatements()).not.toEqual(
       expect.arrayContaining([expect.stringContaining("update public.songs")]),
     );
@@ -261,6 +273,16 @@ describe("repositório de disponibilidade regional", () => {
       [],
       [observationRow(newerUnavailable)],
       [],
+      [
+        {
+          providerContentId: track.providerContentId,
+          sourceTitle: track.sourceTitle,
+          sourceChannel: track.sourceChannel,
+          thumbnailUrl: track.thumbnailUrl,
+          durationSeconds: track.durationSeconds,
+          isEmbeddable: track.isEmbeddable,
+        },
+      ],
     );
 
     await expect(

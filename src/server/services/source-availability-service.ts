@@ -63,10 +63,6 @@ export function createSourceAvailabilityService(
         providerContentId,
         SOURCE_AVAILABILITY_POLICY.region,
       );
-      const track =
-        result.type === "transient_error"
-          ? (current?.track ?? null)
-          : result.track;
       const candidate = applySourceAvailabilityResult({
         current: current?.observation ?? null,
         observedAt: attemptedAt,
@@ -95,7 +91,7 @@ export function createSourceAvailabilityService(
         resultCode: resultCode(result),
       });
 
-      return { ...persisted, availability, result, track };
+      return { ...persisted, availability, result };
     },
   };
 }
