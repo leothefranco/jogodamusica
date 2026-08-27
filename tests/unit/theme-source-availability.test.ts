@@ -56,6 +56,7 @@ function createService(options: {
       degraded: boolean;
     };
     applied: boolean;
+    track?: typeof track | null;
     result:
       | { type: "available"; reason: "available"; track: typeof track }
       | {
@@ -80,6 +81,7 @@ function createService(options: {
         degraded: false,
       },
       applied: true,
+      track,
       result: { type: "available", reason: "available", track },
     },
   );
@@ -141,6 +143,7 @@ describe("integração individual da disponibilidade no Tema", () => {
           degraded: false,
         },
         applied: true,
+        track,
         result: {
           type: "available" as const,
           reason: "available" as const,
@@ -174,6 +177,7 @@ describe("integração individual da disponibilidade no Tema", () => {
           degraded: false,
         },
         applied: true,
+        track: blockedTrack,
         result: {
           type: "unavailable",
           reason: "region_blocked",
@@ -198,6 +202,32 @@ describe("integração individual da disponibilidade no Tema", () => {
     expect(observeSourceAvailability).toHaveBeenCalledWith(
       track.providerContentId,
     );
+  });
+
+  it("permite associação durante fresh/grace quando a tentativa atual é transitória", async () => {
+    const { association, service } = createService({
+      observeResult: {
+        songId,
+        observation: {
+          ...availableObservation,
+          errorCode: "transport",
+          revision: 2,
+        },
+        availability: {
+          state: "available_fresh",
+          playable: true,
+          degraded: false,
+        },
+        applied: true,
+        track,
+        result: { type: "transient_error", errorCode: "transport" },
+      },
+    });
+
+    await expect(
+      service.attachResolvedTrack(themeId, associationInput),
+    ).resolves.toBeUndefined();
+    expect(association).toHaveBeenCalledOnce();
   });
 
   it("recarrega editor derivando saúde e URLs sem chamar provider", async () => {

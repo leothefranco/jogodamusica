@@ -256,7 +256,87 @@ export const sourceAvailabilityObservations = pgTable(
         )`,
     ),
   ],
-);
+).enableRLS();
+
+export const unboundSourceAvailabilityObservations = pgTable(
+  "unbound_source_availability_observations",
+  {
+    sourceKeyHash: varchar("source_key_hash", { length: 64 }).notNull(),
+    region: varchar("region", { length: 8 }).notNull(),
+    confirmedState: sourceAvailabilityStateEnum("confirmed_state")
+      .default("unknown")
+      .notNull(),
+    confirmationReason: sourceAvailabilityReasonEnum("confirmation_reason"),
+    errorCode: sourceAvailabilityErrorEnum("error_code"),
+    observedAt: timestamp("observed_at", { withTimezone: true }).notNull(),
+    lastAttemptAt: timestamp("last_attempt_at", {
+      withTimezone: true,
+    }).notNull(),
+    lastConfirmedAt: timestamp("last_confirmed_at", { withTimezone: true }),
+    validUntil: timestamp("valid_until", { withTimezone: true }),
+    graceUntil: timestamp("grace_until", { withTimezone: true }),
+    nextCheckAt: timestamp("next_check_at", { withTimezone: true }).notNull(),
+    revision: integer("revision").default(1).notNull(),
+    policyVersion: integer("policy_version").default(1).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    primaryKey({ columns: [table.sourceKeyHash, table.region] }),
+    index("unbound_source_availability_region_next_check_idx").on(
+      table.region,
+      table.nextCheckAt,
+    ),
+    check(
+      "unbound_source_availability_key_hash_check",
+      sql`${table.sourceKeyHash} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      "unbound_source_availability_region_check",
+      sql`${table.region} ~ '^[A-Z]{2}$'`,
+    ),
+    check(
+      "unbound_source_availability_revision_check",
+      sql`${table.revision} > 0`,
+    ),
+    check(
+      "unbound_source_availability_policy_version_check",
+      sql`${table.policyVersion} > 0`,
+    ),
+    check(
+      "unbound_source_availability_attempt_order_check",
+      sql`${table.observedAt} <= ${table.lastAttemptAt}
+        and (${table.lastConfirmedAt} is null or ${table.lastConfirmedAt} <= ${table.lastAttemptAt})`,
+    ),
+    check(
+      "unbound_source_availability_next_check_check",
+      sql`${table.nextCheckAt} >= ${table.lastAttemptAt}`,
+    ),
+    check(
+      "unbound_source_availability_confirmation_check",
+      sql`(
+          ${table.confirmedState} = 'available'
+          and ${table.confirmationReason} = 'available'
+          and ${table.lastConfirmedAt} is not null
+          and ${table.validUntil} is not null
+          and ${table.graceUntil} is not null
+          and ${table.lastConfirmedAt} <= ${table.validUntil}
+          and ${table.validUntil} <= ${table.graceUntil}
+        ) or (
+          ${table.confirmedState} = 'unavailable'
+          and ${table.confirmationReason} in ('region_blocked', 'not_embeddable', 'not_found')
+          and ${table.lastConfirmedAt} is not null
+          and ${table.validUntil} is null
+          and ${table.graceUntil} is null
+        ) or (
+          ${table.confirmedState} = 'unknown'
+          and ${table.confirmationReason} is null
+          and ${table.lastConfirmedAt} is null
+          and ${table.validUntil} is null
+          and ${table.graceUntil} is null
+        )`,
+    ),
+  ],
+).enableRLS();
 
 export const themeSongs = pgTable(
   "theme_songs",
@@ -399,6 +479,8 @@ export type Song = typeof songs.$inferSelect;
 export type NewSong = typeof songs.$inferInsert;
 export type SourceAvailabilityObservationRecord =
   typeof sourceAvailabilityObservations.$inferSelect;
+export type UnboundSourceAvailabilityObservationRecord =
+  typeof unboundSourceAvailabilityObservations.$inferSelect;
 export type ThemeSong = typeof themeSongs.$inferSelect;
 export type GameSession = typeof gameSessions.$inferSelect;
 export type SessionSong = typeof sessionSongs.$inferSelect;

@@ -333,6 +333,11 @@ const themeSongEditorSelection = {
   availabilityPolicyVersion: sourceAvailabilityObservations.policyVersion,
 };
 
+const brSourceAvailabilityJoinCondition = and(
+  eq(sourceAvailabilityObservations.songId, songs.id),
+  eq(sourceAvailabilityObservations.region, SOURCE_AVAILABILITY_POLICY.region),
+);
+
 type ThemeSongEditorRow = Omit<ThemeSongEditorItem, "sourceAvailability"> & {
   availabilityRegion: string | null;
   availabilityConfirmedState:
@@ -424,16 +429,7 @@ async function findThemeSongUsing(
     .select(themeSongEditorSelection)
     .from(themeSongs)
     .innerJoin(songs, eq(songs.id, themeSongs.songId))
-    .leftJoin(
-      sourceAvailabilityObservations,
-      and(
-        eq(sourceAvailabilityObservations.songId, songs.id),
-        eq(
-          sourceAvailabilityObservations.region,
-          SOURCE_AVAILABILITY_POLICY.region,
-        ),
-      ),
-    )
+    .leftJoin(sourceAvailabilityObservations, brSourceAvailabilityJoinCondition)
     .where(and(eq(themeSongs.themeId, themeId), eq(themeSongs.songId, songId)))
     .limit(1);
 
@@ -449,16 +445,7 @@ async function findThemeSongByProviderContentIdUsing(
     .select(themeSongEditorSelection)
     .from(themeSongs)
     .innerJoin(songs, eq(songs.id, themeSongs.songId))
-    .leftJoin(
-      sourceAvailabilityObservations,
-      and(
-        eq(sourceAvailabilityObservations.songId, songs.id),
-        eq(
-          sourceAvailabilityObservations.region,
-          SOURCE_AVAILABILITY_POLICY.region,
-        ),
-      ),
-    )
+    .leftJoin(sourceAvailabilityObservations, brSourceAvailabilityJoinCondition)
     .where(
       and(
         eq(themeSongs.themeId, themeId),
@@ -605,16 +592,7 @@ export async function listThemeSongs(
     .select(themeSongEditorSelection)
     .from(themeSongs)
     .innerJoin(songs, eq(songs.id, themeSongs.songId))
-    .leftJoin(
-      sourceAvailabilityObservations,
-      and(
-        eq(sourceAvailabilityObservations.songId, songs.id),
-        eq(
-          sourceAvailabilityObservations.region,
-          SOURCE_AVAILABILITY_POLICY.region,
-        ),
-      ),
-    )
+    .leftJoin(sourceAvailabilityObservations, brSourceAvailabilityJoinCondition)
     .where(eq(themeSongs.themeId, themeId))
     .orderBy(
       sql`${themeSongs.displayOrder} asc nulls last`,

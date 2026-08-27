@@ -17,7 +17,10 @@ import {
   parseIsoDurationSeconds,
   parseYouTubeVideoId,
 } from "@/domain/music/youtube";
-import { normalizeProviderAvailabilityResult } from "@/domain/music/source-availability";
+import {
+  normalizeProviderAvailabilityResult,
+  type SourceAvailabilityRegion,
+} from "@/domain/music/source-availability";
 import { getYouTubeEnv } from "@/lib/env";
 import { AppError } from "@/lib/errors";
 
@@ -333,7 +336,7 @@ export class YouTubeProvider implements PlaylistMusicProvider {
     return track;
   }
 
-  async observe(input: string, regionCode: string) {
+  async observe(input: string, regionCode: SourceAvailabilityRegion) {
     const videoId = parseYouTubeVideoId(input);
 
     try {
@@ -342,6 +345,13 @@ export class YouTubeProvider implements PlaylistMusicProvider {
         regionCode,
         this.fetcher,
       );
+
+      if (track && track.providerContentId !== videoId) {
+        return normalizeProviderAvailabilityResult({
+          type: "error",
+          code: "INVALID_PROVIDER_RESPONSE",
+        });
+      }
 
       return normalizeProviderAvailabilityResult(
         track ? { type: "resolved", track } : { type: "not_found" },

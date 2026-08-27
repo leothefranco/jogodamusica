@@ -875,7 +875,7 @@
           "value": "(\n          \"source_availability_observations\".\"confirmed_state\" = 'available'\n          and \"source_availability_observations\".\"confirmation_reason\" = 'available'\n          and \"source_availability_observations\".\"last_confirmed_at\" is not null\n          and \"source_availability_observations\".\"valid_until\" is not null\n          and \"source_availability_observations\".\"grace_until\" is not null\n          and \"source_availability_observations\".\"last_confirmed_at\" <= \"source_availability_observations\".\"valid_until\"\n          and \"source_availability_observations\".\"valid_until\" <= \"source_availability_observations\".\"grace_until\"\n        ) or (\n          \"source_availability_observations\".\"confirmed_state\" = 'unavailable'\n          and \"source_availability_observations\".\"confirmation_reason\" in ('region_blocked', 'not_embeddable', 'not_found')\n          and \"source_availability_observations\".\"last_confirmed_at\" is not null\n          and \"source_availability_observations\".\"valid_until\" is null\n          and \"source_availability_observations\".\"grace_until\" is null\n        ) or (\n          \"source_availability_observations\".\"confirmed_state\" = 'unknown'\n          and \"source_availability_observations\".\"confirmation_reason\" is null\n          and \"source_availability_observations\".\"last_confirmed_at\" is null\n          and \"source_availability_observations\".\"valid_until\" is null\n          and \"source_availability_observations\".\"grace_until\" is null\n        )"
         }
       },
-      "isRLSEnabled": false
+      "isRLSEnabled": true
     },
     "public.theme_cover_claims": {
       "name": "theme_cover_claims",
@@ -1281,6 +1281,176 @@
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
+    },
+    "public.unbound_source_availability_observations": {
+      "name": "unbound_source_availability_observations",
+      "schema": "",
+      "columns": {
+        "source_key_hash": {
+          "name": "source_key_hash",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "region": {
+          "name": "region",
+          "type": "varchar(8)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "confirmed_state": {
+          "name": "confirmed_state",
+          "type": "source_availability_state",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'unknown'"
+        },
+        "confirmation_reason": {
+          "name": "confirmation_reason",
+          "type": "source_availability_reason",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_code": {
+          "name": "error_code",
+          "type": "source_availability_error",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "observed_at": {
+          "name": "observed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_attempt_at": {
+          "name": "last_attempt_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_confirmed_at": {
+          "name": "last_confirmed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "valid_until": {
+          "name": "valid_until",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "grace_until": {
+          "name": "grace_until",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "next_check_at": {
+          "name": "next_check_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revision": {
+          "name": "revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "policy_version": {
+          "name": "policy_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "unbound_source_availability_region_next_check_idx": {
+          "name": "unbound_source_availability_region_next_check_idx",
+          "columns": [
+            {
+              "expression": "region",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "next_check_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "unbound_source_availability_observations_source_key_hash_region_pk": {
+          "name": "unbound_source_availability_observations_source_key_hash_region_pk",
+          "columns": [
+            "source_key_hash",
+            "region"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "unbound_source_availability_key_hash_check": {
+          "name": "unbound_source_availability_key_hash_check",
+          "value": "\"unbound_source_availability_observations\".\"source_key_hash\" ~ '^[0-9a-f]{64}$'"
+        },
+        "unbound_source_availability_region_check": {
+          "name": "unbound_source_availability_region_check",
+          "value": "\"unbound_source_availability_observations\".\"region\" ~ '^[A-Z]{2}$'"
+        },
+        "unbound_source_availability_revision_check": {
+          "name": "unbound_source_availability_revision_check",
+          "value": "\"unbound_source_availability_observations\".\"revision\" > 0"
+        },
+        "unbound_source_availability_policy_version_check": {
+          "name": "unbound_source_availability_policy_version_check",
+          "value": "\"unbound_source_availability_observations\".\"policy_version\" > 0"
+        },
+        "unbound_source_availability_attempt_order_check": {
+          "name": "unbound_source_availability_attempt_order_check",
+          "value": "\"unbound_source_availability_observations\".\"observed_at\" <= \"unbound_source_availability_observations\".\"last_attempt_at\"\n        and (\"unbound_source_availability_observations\".\"last_confirmed_at\" is null or \"unbound_source_availability_observations\".\"last_confirmed_at\" <= \"unbound_source_availability_observations\".\"last_attempt_at\")"
+        },
+        "unbound_source_availability_next_check_check": {
+          "name": "unbound_source_availability_next_check_check",
+          "value": "\"unbound_source_availability_observations\".\"next_check_at\" >= \"unbound_source_availability_observations\".\"last_attempt_at\""
+        },
+        "unbound_source_availability_confirmation_check": {
+          "name": "unbound_source_availability_confirmation_check",
+          "value": "(\n          \"unbound_source_availability_observations\".\"confirmed_state\" = 'available'\n          and \"unbound_source_availability_observations\".\"confirmation_reason\" = 'available'\n          and \"unbound_source_availability_observations\".\"last_confirmed_at\" is not null\n          and \"unbound_source_availability_observations\".\"valid_until\" is not null\n          and \"unbound_source_availability_observations\".\"grace_until\" is not null\n          and \"unbound_source_availability_observations\".\"last_confirmed_at\" <= \"unbound_source_availability_observations\".\"valid_until\"\n          and \"unbound_source_availability_observations\".\"valid_until\" <= \"unbound_source_availability_observations\".\"grace_until\"\n        ) or (\n          \"unbound_source_availability_observations\".\"confirmed_state\" = 'unavailable'\n          and \"unbound_source_availability_observations\".\"confirmation_reason\" in ('region_blocked', 'not_embeddable', 'not_found')\n          and \"unbound_source_availability_observations\".\"last_confirmed_at\" is not null\n          and \"unbound_source_availability_observations\".\"valid_until\" is null\n          and \"unbound_source_availability_observations\".\"grace_until\" is null\n        ) or (\n          \"unbound_source_availability_observations\".\"confirmed_state\" = 'unknown'\n          and \"unbound_source_availability_observations\".\"confirmation_reason\" is null\n          and \"unbound_source_availability_observations\".\"last_confirmed_at\" is null\n          and \"unbound_source_availability_observations\".\"valid_until\" is null\n          and \"unbound_source_availability_observations\".\"grace_until\" is null\n        )"
+        }
+      },
+      "isRLSEnabled": true
     }
   },
   "enums": {

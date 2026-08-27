@@ -238,11 +238,13 @@ export function createThemeContentService(
       );
       if (
         !observed.availability.playable ||
-        observed.result.type !== "available"
+        !observed.track ||
+        !observed.songId
       ) {
         throw unavailableSourceError(observed.result);
       }
-      const resolvedTrack = observed.result.track;
+      const resolvedTrack = observed.track;
+      const observedSongId = observed.songId;
 
       validatePreviewWindow({
         durationSeconds: resolvedTrack.durationSeconds,
@@ -266,7 +268,7 @@ export function createThemeContentService(
         );
 
         await repository.upsertThemeSongAssociation({
-          songId: observed.songId,
+          songId: observedSongId,
           title: input.title,
           artist: input.artist,
           startTimeSeconds: input.startTimeSeconds,

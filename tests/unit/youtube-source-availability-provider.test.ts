@@ -61,6 +61,17 @@ describe("observação regional do provider YouTube", () => {
     });
   });
 
+  it("rejeita metadados devolvidos para outro vídeo", async () => {
+    const provider = new YouTubeProvider(async () =>
+      Response.json({ items: [{ ...video(), id: "bbbbbbbbbbb" }] }),
+    );
+
+    await expect(provider.observe(videoId, "BR")).resolves.toEqual({
+      type: "transient_error",
+      errorCode: "invalid_response",
+    });
+  });
+
   it.each([
     [
       "transporte",

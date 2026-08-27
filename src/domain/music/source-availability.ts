@@ -12,6 +12,9 @@ export const SOURCE_AVAILABILITY_POLICY = {
   transientBackoffMs: HOUR_MS,
 } as const;
 
+export type SourceAvailabilityRegion =
+  (typeof SOURCE_AVAILABILITY_POLICY)["region"];
+
 export type SourceAvailabilityConfirmedState =
   "available" | "unavailable" | "unknown";
 
@@ -90,7 +93,7 @@ export function normalizeProviderAvailabilityResult(
     return {
       type: "transient_error",
       errorCode:
-        providerErrorCodes.get(input.code) ?? SOURCE_AVAILABILITY_POLICY_ERROR,
+        providerErrorCodes.get(input.code) ?? UNRECOGNIZED_PROVIDER_ERROR_CODE,
     };
   }
 
@@ -113,7 +116,7 @@ export function normalizeProviderAvailabilityResult(
   return { type: "available", reason: "available", track: input.track };
 }
 
-const SOURCE_AVAILABILITY_POLICY_ERROR: SourceAvailabilityErrorCode =
+const UNRECOGNIZED_PROVIDER_ERROR_CODE: SourceAvailabilityErrorCode =
   "invalid_response";
 
 export function applySourceAvailabilityResult({

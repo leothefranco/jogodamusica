@@ -66,6 +66,7 @@ function createService(overrides: Partial<ServiceDependencies> = {}) {
         degraded: false,
       },
       applied: true,
+      track: resolvedTrack,
       result: {
         type: "available",
         reason: "available",
@@ -175,6 +176,7 @@ describe("serviço de conteúdo de temas", () => {
           degraded: false,
         },
         applied: true,
+        track: { ...resolvedTrack, isRegionAllowed: false },
         result: {
           type: "unavailable",
           reason: "region_blocked",

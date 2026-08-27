@@ -73,4 +73,16 @@ describe("action de revalidação de Fonte", () => {
       "redirect",
     ]);
   });
+
+  it("rejeita identificadores não confiáveis antes do serviço", async () => {
+    await expect(
+      revalidateSourceAvailabilityAction("tema-inválido", "song-inválido"),
+    ).rejects.toMatchObject({
+      path: "/admin/temas?error=Identificadores%20inv%C3%A1lidos",
+    });
+
+    expect(actionMocks.revalidateSourceAvailability).not.toHaveBeenCalled();
+    expect(actionMocks.revalidatePath).not.toHaveBeenCalled();
+    expect(actionMocks.order).toEqual(["auth", "redirect"]);
+  });
 });

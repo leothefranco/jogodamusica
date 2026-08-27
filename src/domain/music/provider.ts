@@ -1,5 +1,8 @@
 import type { ProviderPlaylistItemStatus } from "@/domain/music/playlist";
-import type { NormalizedProviderAvailabilityResult } from "@/domain/music/source-availability";
+import type {
+  NormalizedProviderAvailabilityResult,
+  SourceAvailabilityRegion,
+} from "@/domain/music/source-availability";
 
 export type ProviderSearchResult = {
   providerContentId: string;
@@ -48,7 +51,7 @@ export interface MusicProvider {
 export interface SourceAvailabilityProvider {
   observe(
     input: string,
-    regionCode: string,
+    regionCode: SourceAvailabilityRegion,
   ): Promise<NormalizedProviderAvailabilityResult>;
 }
 

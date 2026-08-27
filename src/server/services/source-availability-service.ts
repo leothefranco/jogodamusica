@@ -58,11 +58,15 @@ export function createSourceAvailabilityService(
         providerContentId,
         SOURCE_AVAILABILITY_POLICY.region,
       );
+      const observedAt = dependencies.clock();
       const result = await dependencies.provider.observe(
         providerContentId,
         SOURCE_AVAILABILITY_POLICY.region,
       );
-      const observedAt = dependencies.clock();
+      const track =
+        result.type === "transient_error"
+          ? (current?.track ?? null)
+          : result.track;
       const candidate = applySourceAvailabilityResult({
         current: current?.observation ?? null,
         observedAt,
@@ -90,7 +94,7 @@ export function createSourceAvailabilityService(
         resultCode: resultCode(result),
       });
 
-      return { ...persisted, availability, result };
+      return { ...persisted, availability, result, track };
     },
   };
 }

@@ -78,7 +78,13 @@ describe("repositório de disponibilidade regional", () => {
   });
 
   it("persiste Fonte e observação em transação curta com CAS atômico", async () => {
-    databaseMocks.responses.push([{ id: songId }], [observationRow()], []);
+    databaseMocks.responses.push(
+      [{ id: songId }],
+      [],
+      [observationRow()],
+      [],
+      [],
+    );
 
     await expect(
       persistSourceAvailabilityObservation({
@@ -93,21 +99,28 @@ describe("repositório de disponibilidade regional", () => {
     expect(normalizedStatements()).toEqual([
       expect.stringContaining("insert into public.songs"),
       expect.stringContaining(
+        "from public.unbound_source_availability_observations",
+      ),
+      expect.stringContaining(
         "insert into public.source_availability_observations",
+      ),
+      expect.stringContaining(
+        "delete from public.unbound_source_availability_observations",
       ),
       expect.stringContaining("update public.songs"),
     ]);
 
-    const cas = normalizedStatements()[1];
+    const cas = normalizedStatements()[2];
     expect(cas).toContain("on conflict (song_id, region) do update");
-    expect(cas).toContain("excluded.revision > current.revision");
+    expect(cas).toContain("excluded.revision >= current.revision");
+    expect(cas).toContain("revision = current.revision + 1");
     expect(cas).toContain("excluded.observed_at >= current.observed_at");
     expect(cas).toContain(
       "excluded.last_attempt_at >= current.last_attempt_at",
     );
     expect(cas).toContain("is distinct from");
 
-    const casParams = compiledStatements()[1].params;
+    const casParams = compiledStatements()[2].params;
     expect(casParams).not.toContain(track.providerContentId);
     expect(casParams).not.toContain(track.sourceTitle);
     expect(casParams).not.toContain(track.thumbnailUrl);
@@ -120,7 +133,7 @@ describe("repositório de disponibilidade regional", () => {
       lastConfirmedAt: new Date("2026-01-03T00:00:00.000Z"),
       revision: 3,
     });
-    databaseMocks.responses.push([], [{ id: songId }], [], [current]);
+    databaseMocks.responses.push([], [{ id: songId }], [], [], [current], []);
 
     await expect(
       persistSourceAvailabilityObservation({
@@ -134,22 +147,25 @@ describe("repositório de disponibilidade regional", () => {
       observation: { revision: 3 },
     });
 
-    expect(normalizedStatements()).toHaveLength(4);
-    expect(normalizedStatements().at(-1)).toContain(
+    expect(normalizedStatements()).toHaveLength(6);
+    expect(normalizedStatements().at(-2)).toContain(
       "from public.source_availability_observations",
+    );
+    expect(normalizedStatements().at(-1)).toContain(
+      "delete from public.unbound_source_availability_observations",
     );
     expect(normalizedStatements()).not.toEqual(
       expect.arrayContaining([expect.stringContaining("update public.songs")]),
     );
   });
 
-  it("rejeita ausência explícita nova sem fabricar metadados", async () => {
-    databaseMocks.responses.push([]);
+  it("persiste ausência explícita nova por hash sem fabricar metadados", async () => {
     const unavailable = applySourceAvailabilityResult({
       current: null,
       observedAt: new Date("2026-01-01T00:00:00.000Z"),
       result: { type: "unavailable", reason: "not_found", track: null },
     });
+    databaseMocks.responses.push([], [observationRow(unavailable)]);
 
     await expect(
       persistSourceAvailabilityObservation({
@@ -157,8 +173,67 @@ describe("repositório de disponibilidade regional", () => {
         track: null,
         observation: unavailable,
       }),
-    ).rejects.toMatchObject({ code: "SOURCE_NOT_FOUND", status: 404 });
-    expect(normalizedStatements()).toHaveLength(1);
+    ).resolves.toMatchObject({
+      songId: null,
+      observation: unavailable,
+      applied: true,
+    });
+    expect(normalizedStatements()).toHaveLength(2);
     expect(normalizedStatements()[0]).toContain("from public.songs");
+    expect(normalizedStatements()[1]).toContain(
+      "insert into public.unbound_source_availability_observations",
+    );
+    expect(compiledStatements()[1].params).not.toContain(
+      track.providerContentId,
+    );
+    const pendingCas = normalizedStatements()[1];
+    expect(pendingCas).toContain("excluded.revision >= current.revision");
+    expect(pendingCas).toContain("revision = current.revision + 1");
+    expect(pendingCas).toContain("is distinct from");
+  });
+
+  it("migra a observação por hash antes de comparar resposta antiga", async () => {
+    const newerUnavailable = applySourceAvailabilityResult({
+      current: null,
+      observedAt: new Date("2026-01-03T00:00:00.000Z"),
+      result: {
+        type: "unavailable",
+        reason: "region_blocked",
+        track: { ...track, isRegionAllowed: false },
+      },
+    });
+    databaseMocks.responses.push(
+      [{ id: songId }],
+      [observationRow(newerUnavailable)],
+      [observationRow(newerUnavailable)],
+      [],
+      [observationRow(newerUnavailable)],
+      [],
+    );
+
+    await expect(
+      persistSourceAvailabilityObservation({
+        providerContentId: track.providerContentId,
+        track,
+        observation,
+      }),
+    ).resolves.toMatchObject({
+      songId,
+      observation: { confirmationReason: "region_blocked" },
+      applied: false,
+    });
+
+    const statements = normalizedStatements();
+    expect(statements[1]).toContain("for update");
+    expect(
+      statements.filter((statement) =>
+        statement.includes(
+          "insert into public.source_availability_observations",
+        ),
+      ),
+    ).toHaveLength(2);
+    expect(statements).not.toEqual(
+      expect.arrayContaining([expect.stringContaining("update public.songs")]),
+    );
   });
 });

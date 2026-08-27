@@ -19,7 +19,13 @@ describe("migration da disponibilidade regional de Fonte", () => {
 
     const migration = normalizedFile(migrationPath);
     const snapshot = JSON.parse(readFileSync(snapshotPath, "utf8")) as {
-      tables: Record<string, { columns: Record<string, { type: string }> }>;
+      tables: Record<
+        string,
+        {
+          columns: Record<string, { type: string }>;
+          isRLSEnabled: boolean;
+        }
+      >;
     };
 
     expect(migration).toContain(
@@ -33,6 +39,13 @@ describe("migration da disponibilidade regional de Fonte", () => {
     expect(snapshot.tables["public.songs"].columns.is_embeddable.type).toBe(
       "boolean",
     );
+    expect(
+      snapshot.tables["public.source_availability_observations"].isRLSEnabled,
+    ).toBe(true);
+    expect(
+      snapshot.tables["public.unbound_source_availability_observations"]
+        .isRLSEnabled,
+    ).toBe(true);
   });
 
   it("modela estados e códigos somente por allowlists", () => {
@@ -50,6 +63,10 @@ describe("migration da disponibilidade regional de Fonte", () => {
     expect(migration).not.toMatch(
       /provider_content_id|thumbnail_url|source_title|source_channel/,
     );
+    expect(migration).toContain(
+      'create table "unbound_source_availability_observations"',
+    );
+    expect(migration).toContain('"source_key_hash" varchar(64) not null');
   });
 
   it("impõe identidade, integridade temporal, revisão e versão positivas", () => {
@@ -65,6 +82,11 @@ describe("migration da disponibilidade regional de Fonte", () => {
     expect(migration).toContain("on delete cascade");
     expect(migration).toContain(
       'create index "source_availability_region_next_check_idx"',
+    );
+    expect(migration).toContain('primary key("source_key_hash","region")');
+    expect(migration).toContain("unbound_source_availability_key_hash_check");
+    expect(migration).toContain(
+      'create index "unbound_source_availability_region_next_check_idx"',
     );
   });
 
@@ -83,6 +105,15 @@ describe("migration da disponibilidade regional de Fonte", () => {
     expect(migration).not.toMatch(/grant .*source_availability_observations/);
     expect(migration).not.toMatch(
       /create policy .*source_availability_observations/,
+    );
+    expect(migration).toContain(
+      'alter table "public"."unbound_source_availability_observations" enable row level security',
+    );
+    expect(migration).toContain(
+      'alter table "public"."unbound_source_availability_observations" force row level security',
+    );
+    expect(migration).toContain(
+      'revoke all on table "public"."unbound_source_availability_observations" from public, anon, authenticated',
     );
   });
 });
