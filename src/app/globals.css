@@ -132,6 +132,34 @@
   background: linear-gradient(to top, rgb(8 8 15 / 0.32), transparent 45%);
 }
 
+.theme-visual-placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 0.65rem;
+  color: rgb(237 233 254 / 0.78);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.theme-visual-placeholder-mark {
+  display: grid;
+  place-self: center;
+  width: 3rem;
+  aspect-ratio: 1;
+  place-items: center;
+  border: 1px solid rgb(196 181 253 / 0.22);
+  border-radius: 0.9rem;
+  background: rgb(167 139 250 / 0.1);
+  color: rgb(216 180 254 / 0.9);
+  font-size: 1.35rem;
+  letter-spacing: 0;
+}
+
 .theme-thumbnail-card {
   position: absolute;
   top: 50%;
