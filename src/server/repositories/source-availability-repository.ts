@@ -94,38 +94,109 @@ function sourceKeyHash(providerContentId: string) {
     .digest("hex");
 }
 
+const observationProjection = sql`
+  region,
+  confirmed_state as "confirmedState",
+  confirmation_reason as "confirmationReason",
+  error_code as "errorCode",
+  observed_at as "observedAt",
+  last_attempt_at as "lastAttemptAt",
+  last_confirmed_at as "lastConfirmedAt",
+  valid_until as "validUntil",
+  grace_until as "graceUntil",
+  next_check_at as "nextCheckAt",
+  revision,
+  policy_version as "policyVersion"
+`;
+
+function observationValues(observation: SourceAvailabilityObservation) {
+  return sql`
+    ${observation.region},
+    ${observation.confirmedState},
+    ${observation.confirmationReason},
+    ${observation.errorCode},
+    ${observation.observedAt},
+    ${observation.lastAttemptAt},
+    ${observation.lastConfirmedAt},
+    ${observation.validUntil},
+    ${observation.graceUntil},
+    ${observation.nextCheckAt},
+    ${observation.revision},
+    ${observation.policyVersion}
+  `;
+}
+
+const observationConflictUpdate = sql`
+  do update set
+    confirmed_state = excluded.confirmed_state,
+    confirmation_reason = excluded.confirmation_reason,
+    error_code = excluded.error_code,
+    observed_at = excluded.observed_at,
+    last_attempt_at = excluded.last_attempt_at,
+    last_confirmed_at = excluded.last_confirmed_at,
+    valid_until = excluded.valid_until,
+    grace_until = excluded.grace_until,
+    next_check_at = excluded.next_check_at,
+    revision = current.revision + 1,
+    policy_version = excluded.policy_version,
+    updated_at = now()
+  where excluded.revision >= current.revision
+    and excluded.observed_at >= current.observed_at
+    and excluded.last_attempt_at >= current.last_attempt_at
+    and row(
+      excluded.confirmed_state,
+      excluded.confirmation_reason,
+      excluded.error_code,
+      excluded.observed_at,
+      excluded.last_attempt_at,
+      excluded.last_confirmed_at,
+      excluded.valid_until,
+      excluded.grace_until,
+      excluded.next_check_at,
+      excluded.policy_version
+    ) is distinct from row(
+      current.confirmed_state,
+      current.confirmation_reason,
+      current.error_code,
+      current.observed_at,
+      current.last_attempt_at,
+      current.last_confirmed_at,
+      current.valid_until,
+      current.grace_until,
+      current.next_check_at,
+      current.policy_version
+    )
+  returning ${observationProjection}
+`;
+
 async function findUnboundObservationUsing(
   database: SourceAvailabilityDatabase,
   providerContentId: string,
   region: string,
-): Promise<SourceAvailabilitySource | null> {
+): Promise<SourceAvailabilityObservation | null> {
   const rows = await database.execute(sql<ObservationRow>`
-    select
-      region,
-      confirmed_state as "confirmedState",
-      confirmation_reason as "confirmationReason",
-      error_code as "errorCode",
-      observed_at as "observedAt",
-      last_attempt_at as "lastAttemptAt",
-      last_confirmed_at as "lastConfirmedAt",
-      valid_until as "validUntil",
-      grace_until as "graceUntil",
-      next_check_at as "nextCheckAt",
-      revision,
-      policy_version as "policyVersion"
+    select ${observationProjection}
     from public.unbound_source_availability_observations
     where source_key_hash = ${sourceKeyHash(providerContentId)}
       and region = ${region}
   `);
 
   const row = rows[0] as ObservationRow | undefined;
-  if (!row) return null;
-  return {
-    songId: null,
-    providerContentId,
-    track: null,
-    observation: observationFromRow(row),
-  };
+  return row ? observationFromRow(row) : null;
+}
+
+function shouldUseCandidateObservation(
+  current: SourceAvailabilityObservation | null,
+  candidate: SourceAvailabilityObservation | null,
+) {
+  if (!candidate) return false;
+  if (!current) return true;
+
+  return (
+    candidate.revision >= current.revision &&
+    candidate.observedAt >= current.observedAt &&
+    candidate.lastAttemptAt >= current.lastAttemptAt
+  );
 }
 
 async function findSourceUsing(
@@ -164,10 +235,28 @@ async function findSourceUsing(
   `);
 
   const row = rows[0] as SourceRow | undefined;
+  const unboundObservation = await findUnboundObservationUsing(
+    database,
+    providerContentId,
+    region,
+  );
   if (!row) {
-    return findUnboundObservationUsing(database, providerContentId, region);
+    return unboundObservation
+      ? {
+          songId: null,
+          providerContentId,
+          track: null,
+          observation: unboundObservation,
+        }
+      : null;
   }
-  const observation = hasObservation(row) ? observationFromRow(row) : null;
+  const boundObservation = hasObservation(row) ? observationFromRow(row) : null;
+  const observation = shouldUseCandidateObservation(
+    boundObservation,
+    unboundObservation,
+  )
+    ? unboundObservation
+    : boundObservation;
   return {
     songId: row.songId,
     providerContentId: row.providerContentId,
@@ -182,6 +271,17 @@ async function findSourceUsing(
     },
     observation,
   };
+}
+
+async function lockSourceAvailabilityIdentity(
+  database: SourceAvailabilityDatabase,
+  providerContentId: string,
+  region: string,
+) {
+  const lockIdentity = `${sourceKeyHash(providerContentId)}:${region}`;
+  await database.execute(
+    sql`select pg_advisory_xact_lock(hashtextextended(${lockIdentity}, 0))`,
+  );
 }
 
 async function findSongIdForUpdate(
@@ -262,71 +362,9 @@ async function upsertObservationUsing(
       policy_version
     ) values (
       ${songId}::uuid,
-      ${observation.region},
-      ${observation.confirmedState},
-      ${observation.confirmationReason},
-      ${observation.errorCode},
-      ${observation.observedAt},
-      ${observation.lastAttemptAt},
-      ${observation.lastConfirmedAt},
-      ${observation.validUntil},
-      ${observation.graceUntil},
-      ${observation.nextCheckAt},
-      ${observation.revision},
-      ${observation.policyVersion}
+      ${observationValues(observation)}
     )
-    on conflict (song_id, region) do update set
-      confirmed_state = excluded.confirmed_state,
-      confirmation_reason = excluded.confirmation_reason,
-      error_code = excluded.error_code,
-      observed_at = excluded.observed_at,
-      last_attempt_at = excluded.last_attempt_at,
-      last_confirmed_at = excluded.last_confirmed_at,
-      valid_until = excluded.valid_until,
-      grace_until = excluded.grace_until,
-      next_check_at = excluded.next_check_at,
-      revision = current.revision + 1,
-      policy_version = excluded.policy_version,
-      updated_at = now()
-    where excluded.revision >= current.revision
-      and excluded.observed_at >= current.observed_at
-      and excluded.last_attempt_at >= current.last_attempt_at
-      and row(
-        excluded.confirmed_state,
-        excluded.confirmation_reason,
-        excluded.error_code,
-        excluded.observed_at,
-        excluded.last_attempt_at,
-        excluded.last_confirmed_at,
-        excluded.valid_until,
-        excluded.grace_until,
-        excluded.next_check_at,
-        excluded.policy_version
-      ) is distinct from row(
-        current.confirmed_state,
-        current.confirmation_reason,
-        current.error_code,
-        current.observed_at,
-        current.last_attempt_at,
-        current.last_confirmed_at,
-        current.valid_until,
-        current.grace_until,
-        current.next_check_at,
-        current.policy_version
-      )
-    returning
-      region,
-      confirmed_state as "confirmedState",
-      confirmation_reason as "confirmationReason",
-      error_code as "errorCode",
-      observed_at as "observedAt",
-      last_attempt_at as "lastAttemptAt",
-      last_confirmed_at as "lastConfirmedAt",
-      valid_until as "validUntil",
-      grace_until as "graceUntil",
-      next_check_at as "nextCheckAt",
-      revision,
-      policy_version as "policyVersion"
+    on conflict (song_id, region) ${observationConflictUpdate}
   `);
 
   const row = rows[0] as ObservationRow | undefined;
@@ -355,71 +393,9 @@ async function upsertUnboundObservationUsing(
       policy_version
     ) values (
       ${sourceKeyHash(providerContentId)},
-      ${observation.region},
-      ${observation.confirmedState},
-      ${observation.confirmationReason},
-      ${observation.errorCode},
-      ${observation.observedAt},
-      ${observation.lastAttemptAt},
-      ${observation.lastConfirmedAt},
-      ${observation.validUntil},
-      ${observation.graceUntil},
-      ${observation.nextCheckAt},
-      ${observation.revision},
-      ${observation.policyVersion}
+      ${observationValues(observation)}
     )
-    on conflict (source_key_hash, region) do update set
-      confirmed_state = excluded.confirmed_state,
-      confirmation_reason = excluded.confirmation_reason,
-      error_code = excluded.error_code,
-      observed_at = excluded.observed_at,
-      last_attempt_at = excluded.last_attempt_at,
-      last_confirmed_at = excluded.last_confirmed_at,
-      valid_until = excluded.valid_until,
-      grace_until = excluded.grace_until,
-      next_check_at = excluded.next_check_at,
-      revision = current.revision + 1,
-      policy_version = excluded.policy_version,
-      updated_at = now()
-    where excluded.revision >= current.revision
-      and excluded.observed_at >= current.observed_at
-      and excluded.last_attempt_at >= current.last_attempt_at
-      and row(
-        excluded.confirmed_state,
-        excluded.confirmation_reason,
-        excluded.error_code,
-        excluded.observed_at,
-        excluded.last_attempt_at,
-        excluded.last_confirmed_at,
-        excluded.valid_until,
-        excluded.grace_until,
-        excluded.next_check_at,
-        excluded.policy_version
-      ) is distinct from row(
-        current.confirmed_state,
-        current.confirmation_reason,
-        current.error_code,
-        current.observed_at,
-        current.last_attempt_at,
-        current.last_confirmed_at,
-        current.valid_until,
-        current.grace_until,
-        current.next_check_at,
-        current.policy_version
-      )
-    returning
-      region,
-      confirmed_state as "confirmedState",
-      confirmation_reason as "confirmationReason",
-      error_code as "errorCode",
-      observed_at as "observedAt",
-      last_attempt_at as "lastAttemptAt",
-      last_confirmed_at as "lastConfirmedAt",
-      valid_until as "validUntil",
-      grace_until as "graceUntil",
-      next_check_at as "nextCheckAt",
-      revision,
-      policy_version as "policyVersion"
+    on conflict (source_key_hash, region) ${observationConflictUpdate}
   `);
 
   const row = rows[0] as ObservationRow | undefined;
@@ -432,19 +408,7 @@ async function findUnboundObservationForWriteUsing(
   region: string,
 ) {
   const rows = await database.execute(sql<ObservationRow>`
-    select
-      region,
-      confirmed_state as "confirmedState",
-      confirmation_reason as "confirmationReason",
-      error_code as "errorCode",
-      observed_at as "observedAt",
-      last_attempt_at as "lastAttemptAt",
-      last_confirmed_at as "lastConfirmedAt",
-      valid_until as "validUntil",
-      grace_until as "graceUntil",
-      next_check_at as "nextCheckAt",
-      revision,
-      policy_version as "policyVersion"
+    select ${observationProjection}
     from public.unbound_source_availability_observations
     where source_key_hash = ${sourceKeyHash(providerContentId)}
       and region = ${region}
@@ -467,19 +431,7 @@ async function findUnboundObservationForUpdateUsing(
   region: string,
 ) {
   const rows = await database.execute(sql<ObservationRow>`
-    select
-      region,
-      confirmed_state as "confirmedState",
-      confirmation_reason as "confirmationReason",
-      error_code as "errorCode",
-      observed_at as "observedAt",
-      last_attempt_at as "lastAttemptAt",
-      last_confirmed_at as "lastConfirmedAt",
-      valid_until as "validUntil",
-      grace_until as "graceUntil",
-      next_check_at as "nextCheckAt",
-      revision,
-      policy_version as "policyVersion"
+    select ${observationProjection}
     from public.unbound_source_availability_observations
     where source_key_hash = ${sourceKeyHash(providerContentId)}
       and region = ${region}
@@ -508,19 +460,7 @@ async function findObservationUsing(
   region: string,
 ) {
   const rows = await database.execute(sql<ObservationRow>`
-    select
-      region,
-      confirmed_state as "confirmedState",
-      confirmation_reason as "confirmationReason",
-      error_code as "errorCode",
-      observed_at as "observedAt",
-      last_attempt_at as "lastAttemptAt",
-      last_confirmed_at as "lastConfirmedAt",
-      valid_until as "validUntil",
-      grace_until as "graceUntil",
-      next_check_at as "nextCheckAt",
-      revision,
-      policy_version as "policyVersion"
+    select ${observationProjection}
     from public.source_availability_observations
     where song_id = ${songId}::uuid
       and region = ${region}
@@ -569,6 +509,11 @@ export async function persistSourceAvailabilityObservation(
   applied: boolean;
 }> {
   return getDatabase().transaction(async (transaction) => {
+    await lockSourceAvailabilityIdentity(
+      transaction,
+      input.providerContentId,
+      input.observation.region,
+    );
     const songId = input.track
       ? await resolveSongId(transaction, input)
       : await findSongIdForUpdate(transaction, input.providerContentId);

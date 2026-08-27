@@ -79,7 +79,13 @@ describe("serviço de disponibilidade regional", () => {
       availability: { state: "available_fresh", playable: true },
       observation: { revision: 1, policyVersion: 1 },
     });
-    expect(order).toEqual(["read-current", "clock", "provider", "transaction"]);
+    expect(order).toEqual([
+      "read-current",
+      "clock",
+      "provider",
+      "transaction",
+      "clock",
+    ]);
     expect(metrics.record).toHaveBeenCalledWith({
       metric: "source_availability_observation",
       count: 1,
@@ -195,6 +201,51 @@ describe("serviço de disponibilidade regional", () => {
     );
   });
 
+  it("deriva unknown se a grace expirar durante o I/O do provider", async () => {
+    const graceUntil = new Date("2026-01-01T00:00:00.000Z");
+    const current: SourceAvailabilityObservation = {
+      region: "BR",
+      confirmedState: "available",
+      confirmationReason: "available",
+      errorCode: null,
+      observedAt: new Date("2025-12-24T00:00:00.000Z"),
+      lastAttemptAt: new Date("2025-12-24T00:00:00.000Z"),
+      lastConfirmedAt: new Date("2025-12-24T00:00:00.000Z"),
+      validUntil: new Date("2025-12-31T00:00:00.000Z"),
+      graceUntil,
+      nextCheckAt: new Date("2025-12-31T00:00:00.000Z"),
+      revision: 2,
+      policyVersion: 1,
+    };
+    const clock = vi
+      .fn<() => Date>()
+      .mockReturnValueOnce(graceUntil)
+      .mockReturnValueOnce(new Date(graceUntil.getTime() + 1));
+    const service = createService({
+      clock,
+      findSource: async () => ({
+        songId,
+        providerContentId,
+        track,
+        observation: current,
+      }),
+      provider: {
+        observe: async () => ({
+          type: "transient_error",
+          errorCode: "transport",
+        }),
+      },
+    });
+
+    await expect(
+      service.observeSource(providerContentId),
+    ).resolves.toMatchObject({
+      availability: { state: "unknown", playable: false },
+      observation: { observedAt: graceUntil, errorCode: "transport" },
+    });
+    expect(clock).toHaveBeenCalledTimes(2);
+  });
+
   it("torna retry concorrente idempotente no adapter em memória", async () => {
     let stored: SourceAvailabilityObservation | null = null;
     let effects = 0;
@@ -252,6 +303,8 @@ describe("serviço de disponibilidade regional", () => {
     const clock = vi
       .fn<() => Date>()
       .mockReturnValueOnce(olderAt)
+      .mockReturnValueOnce(newerAt)
+      .mockReturnValueOnce(newerAt)
       .mockReturnValueOnce(newerAt);
     const resolvers: Array<
       (result: NormalizedProviderAvailabilityResult) => void

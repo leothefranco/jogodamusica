@@ -58,7 +58,7 @@ export function createSourceAvailabilityService(
         providerContentId,
         SOURCE_AVAILABILITY_POLICY.region,
       );
-      const observedAt = dependencies.clock();
+      const attemptedAt = dependencies.clock();
       const result = await dependencies.provider.observe(
         providerContentId,
         SOURCE_AVAILABILITY_POLICY.region,
@@ -69,7 +69,7 @@ export function createSourceAvailabilityService(
           : result.track;
       const candidate = applySourceAvailabilityResult({
         current: current?.observation ?? null,
-        observedAt,
+        observedAt: attemptedAt,
         result,
       });
       const persisted = await dependencies.persistObservation({
@@ -77,9 +77,10 @@ export function createSourceAvailabilityService(
         track: result.type === "transient_error" ? null : result.track,
         observation: candidate,
       });
+      const decisionAt = dependencies.clock();
       const availability = deriveEffectiveSourceAvailability(
         persisted.observation,
-        observedAt,
+        decisionAt,
       );
 
       dependencies.metrics.record({
@@ -89,7 +90,7 @@ export function createSourceAvailabilityService(
         policyVersion: persisted.observation.policyVersion,
         ageBand: getSourceAvailabilityAgeBand(
           persisted.observation,
-          observedAt,
+          decisionAt,
         ),
         resultCode: resultCode(result),
       });

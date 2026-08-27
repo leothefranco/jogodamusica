@@ -183,12 +183,8 @@ export const songs = pgTable(
   ],
 );
 
-export const sourceAvailabilityObservations = pgTable(
-  "source_availability_observations",
-  {
-    songId: uuid("song_id")
-      .notNull()
-      .references(() => songs.id, { onDelete: "cascade" }),
+function sourceAvailabilityObservationColumns() {
+  return {
     region: varchar("region", { length: 8 }).notNull(),
     confirmedState: sourceAvailabilityStateEnum("confirmed_state")
       .default("unknown")
@@ -206,6 +202,16 @@ export const sourceAvailabilityObservations = pgTable(
     revision: integer("revision").default(1).notNull(),
     policyVersion: integer("policy_version").default(1).notNull(),
     ...timestamps,
+  };
+}
+
+export const sourceAvailabilityObservations = pgTable(
+  "source_availability_observations",
+  {
+    songId: uuid("song_id")
+      .notNull()
+      .references(() => songs.id, { onDelete: "cascade" }),
+    ...sourceAvailabilityObservationColumns(),
   },
   (table) => [
     primaryKey({ columns: [table.songId, table.region] }),
@@ -262,23 +268,7 @@ export const unboundSourceAvailabilityObservations = pgTable(
   "unbound_source_availability_observations",
   {
     sourceKeyHash: varchar("source_key_hash", { length: 64 }).notNull(),
-    region: varchar("region", { length: 8 }).notNull(),
-    confirmedState: sourceAvailabilityStateEnum("confirmed_state")
-      .default("unknown")
-      .notNull(),
-    confirmationReason: sourceAvailabilityReasonEnum("confirmation_reason"),
-    errorCode: sourceAvailabilityErrorEnum("error_code"),
-    observedAt: timestamp("observed_at", { withTimezone: true }).notNull(),
-    lastAttemptAt: timestamp("last_attempt_at", {
-      withTimezone: true,
-    }).notNull(),
-    lastConfirmedAt: timestamp("last_confirmed_at", { withTimezone: true }),
-    validUntil: timestamp("valid_until", { withTimezone: true }),
-    graceUntil: timestamp("grace_until", { withTimezone: true }),
-    nextCheckAt: timestamp("next_check_at", { withTimezone: true }).notNull(),
-    revision: integer("revision").default(1).notNull(),
-    policyVersion: integer("policy_version").default(1).notNull(),
-    ...timestamps,
+    ...sourceAvailabilityObservationColumns(),
   },
   (table) => [
     primaryKey({ columns: [table.sourceKeyHash, table.region] }),

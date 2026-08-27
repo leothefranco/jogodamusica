@@ -33,7 +33,10 @@ vi.mock("@/db", () => ({
   getDatabase: () => databaseMocks.database,
 }));
 
-import { persistSourceAvailabilityObservation } from "@/server/repositories/source-availability-repository";
+import {
+  findSourceAvailabilityByProviderContentId,
+  persistSourceAvailabilityObservation,
+} from "@/server/repositories/source-availability-repository";
 
 const dialect = new PgDialect();
 const songId = "20000000-0000-4000-8000-000000000020";
@@ -79,6 +82,7 @@ describe("repositório de disponibilidade regional", () => {
 
   it("persiste Fonte e observação em transação curta com CAS atômico", async () => {
     databaseMocks.responses.push(
+      [],
       [{ id: songId }],
       [],
       [observationRow()],
@@ -97,6 +101,7 @@ describe("repositório de disponibilidade regional", () => {
     expect(databaseMocks.database.transaction).toHaveBeenCalledOnce();
     expect(databaseMocks.database.transactionOpen).toBe(false);
     expect(normalizedStatements()).toEqual([
+      expect.stringContaining("pg_advisory_xact_lock"),
       expect.stringContaining("insert into public.songs"),
       expect.stringContaining(
         "from public.unbound_source_availability_observations",
@@ -110,7 +115,7 @@ describe("repositório de disponibilidade regional", () => {
       expect.stringContaining("update public.songs"),
     ]);
 
-    const cas = normalizedStatements()[2];
+    const cas = normalizedStatements()[3];
     expect(cas).toContain("on conflict (song_id, region) do update");
     expect(cas).toContain("excluded.revision >= current.revision");
     expect(cas).toContain("revision = current.revision + 1");
@@ -120,10 +125,47 @@ describe("repositório de disponibilidade regional", () => {
     );
     expect(cas).toContain("is distinct from");
 
-    const casParams = compiledStatements()[2].params;
+    const lockParams = compiledStatements()[0].params;
+    expect(lockParams).not.toContain(track.providerContentId);
+
+    const casParams = compiledStatements()[3].params;
     expect(casParams).not.toContain(track.providerContentId);
     expect(casParams).not.toContain(track.sourceTitle);
     expect(casParams).not.toContain(track.thumbnailUrl);
+  });
+
+  it("reconcilia observação por hash quando songs existe sem estado bound", async () => {
+    const unbound = observationRow({
+      observedAt: new Date("2026-01-03T00:00:00.000Z"),
+      lastAttemptAt: new Date("2026-01-03T00:00:00.000Z"),
+      revision: 3,
+    });
+    databaseMocks.responses.push(
+      [
+        {
+          songId,
+          providerContentId: track.providerContentId,
+          sourceTitle: track.sourceTitle,
+          sourceChannel: track.sourceChannel,
+          thumbnailUrl: track.thumbnailUrl,
+          durationSeconds: track.durationSeconds,
+          isEmbeddable: track.isEmbeddable,
+        },
+      ],
+      [unbound],
+    );
+
+    await expect(
+      findSourceAvailabilityByProviderContentId(track.providerContentId, "BR"),
+    ).resolves.toMatchObject({
+      songId,
+      track: { providerContentId: track.providerContentId },
+      observation: { revision: 3 },
+    });
+    expect(normalizedStatements()).toHaveLength(2);
+    expect(normalizedStatements()[1]).toContain(
+      "from public.unbound_source_availability_observations",
+    );
   });
 
   it("ignora resposta antiga sem regredir observação ou metadados da Fonte", async () => {
@@ -133,7 +175,15 @@ describe("repositório de disponibilidade regional", () => {
       lastConfirmedAt: new Date("2026-01-03T00:00:00.000Z"),
       revision: 3,
     });
-    databaseMocks.responses.push([], [{ id: songId }], [], [], [current], []);
+    databaseMocks.responses.push(
+      [],
+      [],
+      [{ id: songId }],
+      [],
+      [],
+      [current],
+      [],
+    );
 
     await expect(
       persistSourceAvailabilityObservation({
@@ -147,7 +197,7 @@ describe("repositório de disponibilidade regional", () => {
       observation: { revision: 3 },
     });
 
-    expect(normalizedStatements()).toHaveLength(6);
+    expect(normalizedStatements()).toHaveLength(7);
     expect(normalizedStatements().at(-2)).toContain(
       "from public.source_availability_observations",
     );
@@ -165,7 +215,7 @@ describe("repositório de disponibilidade regional", () => {
       observedAt: new Date("2026-01-01T00:00:00.000Z"),
       result: { type: "unavailable", reason: "not_found", track: null },
     });
-    databaseMocks.responses.push([], [observationRow(unavailable)]);
+    databaseMocks.responses.push([], [], [observationRow(unavailable)]);
 
     await expect(
       persistSourceAvailabilityObservation({
@@ -178,15 +228,16 @@ describe("repositório de disponibilidade regional", () => {
       observation: unavailable,
       applied: true,
     });
-    expect(normalizedStatements()).toHaveLength(2);
-    expect(normalizedStatements()[0]).toContain("from public.songs");
-    expect(normalizedStatements()[1]).toContain(
+    expect(normalizedStatements()).toHaveLength(3);
+    expect(normalizedStatements()[0]).toContain("pg_advisory_xact_lock");
+    expect(normalizedStatements()[1]).toContain("from public.songs");
+    expect(normalizedStatements()[2]).toContain(
       "insert into public.unbound_source_availability_observations",
     );
-    expect(compiledStatements()[1].params).not.toContain(
+    expect(compiledStatements()[2].params).not.toContain(
       track.providerContentId,
     );
-    const pendingCas = normalizedStatements()[1];
+    const pendingCas = normalizedStatements()[2];
     expect(pendingCas).toContain("excluded.revision >= current.revision");
     expect(pendingCas).toContain("revision = current.revision + 1");
     expect(pendingCas).toContain("is distinct from");
@@ -203,6 +254,7 @@ describe("repositório de disponibilidade regional", () => {
       },
     });
     databaseMocks.responses.push(
+      [],
       [{ id: songId }],
       [observationRow(newerUnavailable)],
       [observationRow(newerUnavailable)],
@@ -224,7 +276,7 @@ describe("repositório de disponibilidade regional", () => {
     });
 
     const statements = normalizedStatements();
-    expect(statements[1]).toContain("for update");
+    expect(statements[2]).toContain("for update");
     expect(
       statements.filter((statement) =>
         statement.includes(
