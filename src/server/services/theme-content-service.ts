@@ -2,7 +2,8 @@ import "server-only";
 
 import type { z } from "zod";
 
-import type { MusicProvider } from "@/domain/music/provider";
+import { deriveEffectiveSourceAvailability } from "@/domain/music/source-availability";
+import { getYouTubeEmbedData } from "@/domain/music/youtube";
 import {
   getThemePublishability,
   trackAssociationInputSchema,
@@ -12,7 +13,7 @@ import {
 } from "@/domain/music/content-validation";
 import { AppError } from "@/lib/errors";
 import { countLabel } from "@/lib/language";
-import { createYouTubeProvider } from "@/server/providers/youtube/youtube-provider";
+import { observeSourceAvailability } from "@/server/services/source-availability-service";
 import {
   deleteThemeRecord,
   findThemeSong,
@@ -35,14 +36,12 @@ type ThemeInput = z.infer<typeof themeInputSchema>;
 type TrackAssociationInput = z.infer<typeof trackAssociationInputSchema>;
 type ThemeSongInput = z.infer<typeof themeSongInputSchema>;
 
-const musicProvider = createYouTubeProvider();
-
 type ThemeContentServiceDependencies = {
   deleteThemeRecord: typeof deleteThemeRecord;
   findThemeSong: typeof findThemeSong;
   findThemeSummary: typeof findThemeSummary;
   findThemeSongByProviderContentId: typeof findThemeSongByProviderContentId;
-  musicProvider: MusicProvider;
+  observeSourceAvailability: typeof observeSourceAvailability;
   removeThemeSongRecord: typeof removeThemeSongRecord;
   setThemeActiveRecord: typeof setThemeActiveRecord;
   themeHasSessions: typeof themeHasSessions;
@@ -90,8 +89,8 @@ export async function getAdminThemes() {
 }
 
 type ThemeEditorServiceDependencies = {
+  clock: () => Date;
   findThemeSummary: typeof findThemeSummary;
-  getEmbedData: MusicProvider["getEmbedData"];
   listThemeSongs: typeof listThemeSongs;
 };
 
@@ -105,12 +104,15 @@ export function createThemeEditorService(
     }
 
     const themeSongItems = await dependencies.listThemeSongs(themeId);
-    const songs = await Promise.all(
-      themeSongItems.map(async (song) => ({
-        ...song,
-        ...(await dependencies.getEmbedData(song.providerContentId)),
-      })),
-    );
+    const now = dependencies.clock();
+    const songs = themeSongItems.map((song) => ({
+      ...song,
+      ...getYouTubeEmbedData(song.providerContentId),
+      availability: deriveEffectiveSourceAvailability(
+        song.sourceAvailability,
+        now,
+      ),
+    }));
     const publishability = getThemePublishability(theme.activeSongCount);
 
     return { theme, songs, publishability };
@@ -118,11 +120,50 @@ export function createThemeEditorService(
 }
 
 export const getThemeEditor = createThemeEditorService({
+  clock: () => new Date(),
   findThemeSummary,
-  getEmbedData: (providerContentId) =>
-    musicProvider.getEmbedData(providerContentId),
   listThemeSongs,
 });
+
+function unavailableSourceError(
+  result: Awaited<ReturnType<typeof observeSourceAvailability>>["result"],
+) {
+  if (result.type === "transient_error") {
+    return new AppError(
+      "SOURCE_AVAILABILITY_UNKNOWN",
+      "Não foi possível confirmar a disponibilidade da Fonte agora. Tente revalidar mais tarde.",
+      503,
+    );
+  }
+
+  if (result.type === "available") {
+    return new AppError(
+      "SOURCE_AVAILABILITY_UNKNOWN",
+      "A confirmação recebida perdeu uma disputa concorrente. Revalide a Fonte.",
+      409,
+    );
+  }
+
+  const errors = {
+    region_blocked: new AppError(
+      "VIDEO_REGION_BLOCKED",
+      "Este vídeo não está disponível no Brasil e não pode ser usado no jogo.",
+      400,
+    ),
+    not_embeddable: new AppError(
+      "VIDEO_NOT_EMBEDDABLE",
+      "Este vídeo não permite incorporação e não pode ser usado no jogo.",
+      400,
+    ),
+    not_found: new AppError(
+      "YOUTUBE_VIDEO_NOT_FOUND",
+      "O vídeo não foi encontrado ou não está disponível.",
+      404,
+    ),
+  } as const;
+
+  return errors[result.reason];
+}
 
 export function createThemeContentService(
   dependencies: ThemeContentServiceDependencies,
@@ -192,23 +233,16 @@ export function createThemeContentService(
       themeId: string,
       input: TrackAssociationInput,
     ): Promise<void> {
-      const resolvedTrack = await dependencies.musicProvider.resolve(
+      const observed = await dependencies.observeSourceAvailability(
         input.providerContentId,
       );
-      if (!resolvedTrack.isEmbeddable) {
-        throw new AppError(
-          "VIDEO_NOT_EMBEDDABLE",
-          "Este vídeo não permite incorporação e não pode ser usado no jogo.",
-          400,
-        );
+      if (
+        !observed.availability.playable ||
+        observed.result.type !== "available"
+      ) {
+        throw unavailableSourceError(observed.result);
       }
-      if (!resolvedTrack.isRegionAllowed) {
-        throw new AppError(
-          "VIDEO_REGION_BLOCKED",
-          "Este vídeo não está disponível no Brasil e não pode ser usado no jogo.",
-          400,
-        );
-      }
+      const resolvedTrack = observed.result.track;
 
       validatePreviewWindow({
         durationSeconds: resolvedTrack.durationSeconds,
@@ -231,8 +265,8 @@ export function createThemeContentService(
           "Desative o tema antes de reduzir suas músicas ativas abaixo de quatro.",
         );
 
-        await repository.upsertSongAndAssociation({
-          ...resolvedTrack,
+        await repository.upsertThemeSongAssociation({
+          songId: observed.songId,
           title: input.title,
           artist: input.artist,
           startTimeSeconds: input.startTimeSeconds,
@@ -240,6 +274,21 @@ export function createThemeContentService(
           isActive: input.isActive,
         });
       });
+    },
+    async revalidateSourceAvailability(themeId: string, songId: string) {
+      const source = await dependencies.findThemeSong(themeId, songId);
+      if (!source) {
+        throw new AppError(
+          "THEME_SONG_NOT_FOUND",
+          "Música associada não encontrada.",
+          404,
+        );
+      }
+
+      const observed = await dependencies.observeSourceAvailability(
+        source.providerContentId,
+      );
+      return observed.availability;
     },
     async updateThemeSong(
       themeId: string,
@@ -307,7 +356,7 @@ const themeContentService = createThemeContentService({
   findThemeSong,
   findThemeSummary,
   findThemeSongByProviderContentId,
-  musicProvider,
+  observeSourceAvailability,
   removeThemeSongRecord,
   setThemeActiveRecord,
   themeHasSessions,
@@ -323,3 +372,5 @@ export const setThemePublication = themeContentService.setThemePublication;
 export const updateTheme = themeContentService.updateTheme;
 export const updateThemeSong = themeContentService.updateThemeSong;
 export const removeThemeSong = themeContentService.removeThemeSong;
+export const revalidateSourceAvailability =
+  themeContentService.revalidateSourceAvailability;

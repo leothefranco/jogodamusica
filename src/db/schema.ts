@@ -36,6 +36,22 @@ export const matchStatusEnum = pgEnum("match_status", [
   "ready",
   "completed",
 ]);
+export const sourceAvailabilityStateEnum = pgEnum("source_availability_state", [
+  "available",
+  "unavailable",
+  "unknown",
+]);
+export const sourceAvailabilityReasonEnum = pgEnum(
+  "source_availability_reason",
+  ["available", "region_blocked", "not_embeddable", "not_found"],
+);
+export const sourceAvailabilityErrorEnum = pgEnum("source_availability_error", [
+  "transport",
+  "quota",
+  "configuration",
+  "invalid_response",
+  "provider_error",
+]);
 
 export const rateLimitBuckets = pgTable(
   "rate_limit_buckets",
@@ -164,6 +180,81 @@ export const songs = pgTable(
       table.providerContentId,
     ),
     check("songs_duration_positive_check", sql`${table.durationSeconds} > 0`),
+  ],
+);
+
+export const sourceAvailabilityObservations = pgTable(
+  "source_availability_observations",
+  {
+    songId: uuid("song_id")
+      .notNull()
+      .references(() => songs.id, { onDelete: "cascade" }),
+    region: varchar("region", { length: 8 }).notNull(),
+    confirmedState: sourceAvailabilityStateEnum("confirmed_state")
+      .default("unknown")
+      .notNull(),
+    confirmationReason: sourceAvailabilityReasonEnum("confirmation_reason"),
+    errorCode: sourceAvailabilityErrorEnum("error_code"),
+    observedAt: timestamp("observed_at", { withTimezone: true }).notNull(),
+    lastAttemptAt: timestamp("last_attempt_at", {
+      withTimezone: true,
+    }).notNull(),
+    lastConfirmedAt: timestamp("last_confirmed_at", { withTimezone: true }),
+    validUntil: timestamp("valid_until", { withTimezone: true }),
+    graceUntil: timestamp("grace_until", { withTimezone: true }),
+    nextCheckAt: timestamp("next_check_at", { withTimezone: true }).notNull(),
+    revision: integer("revision").default(1).notNull(),
+    policyVersion: integer("policy_version").default(1).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    primaryKey({ columns: [table.songId, table.region] }),
+    index("source_availability_region_next_check_idx").on(
+      table.region,
+      table.nextCheckAt,
+    ),
+    check(
+      "source_availability_region_check",
+      sql`${table.region} ~ '^[A-Z]{2}$'`,
+    ),
+    check("source_availability_revision_check", sql`${table.revision} > 0`),
+    check(
+      "source_availability_policy_version_check",
+      sql`${table.policyVersion} > 0`,
+    ),
+    check(
+      "source_availability_attempt_order_check",
+      sql`${table.observedAt} <= ${table.lastAttemptAt}
+        and (${table.lastConfirmedAt} is null or ${table.lastConfirmedAt} <= ${table.lastAttemptAt})`,
+    ),
+    check(
+      "source_availability_next_check_check",
+      sql`${table.nextCheckAt} >= ${table.lastAttemptAt}`,
+    ),
+    check(
+      "source_availability_confirmation_check",
+      sql`(
+          ${table.confirmedState} = 'available'
+          and ${table.confirmationReason} = 'available'
+          and ${table.lastConfirmedAt} is not null
+          and ${table.validUntil} is not null
+          and ${table.graceUntil} is not null
+          and ${table.lastConfirmedAt} <= ${table.validUntil}
+          and ${table.validUntil} <= ${table.graceUntil}
+        ) or (
+          ${table.confirmedState} = 'unavailable'
+          and ${table.confirmationReason} in ('region_blocked', 'not_embeddable', 'not_found')
+          and ${table.lastConfirmedAt} is not null
+          and ${table.validUntil} is null
+          and ${table.graceUntil} is null
+        ) or (
+          ${table.confirmedState} = 'unknown'
+          and ${table.confirmationReason} is null
+          and ${table.lastConfirmedAt} is null
+          and ${table.validUntil} is null
+          and ${table.graceUntil} is null
+        )`,
+    ),
   ],
 );
 
@@ -306,6 +397,8 @@ export type NewTheme = typeof themes.$inferInsert;
 export type ThemeCoverClaimRecord = typeof themeCoverClaims.$inferSelect;
 export type Song = typeof songs.$inferSelect;
 export type NewSong = typeof songs.$inferInsert;
+export type SourceAvailabilityObservationRecord =
+  typeof sourceAvailabilityObservations.$inferSelect;
 export type ThemeSong = typeof themeSongs.$inferSelect;
 export type GameSession = typeof gameSessions.$inferSelect;
 export type SessionSong = typeof sessionSongs.$inferSelect;

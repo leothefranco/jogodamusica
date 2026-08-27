@@ -17,6 +17,7 @@ import {
   attachResolvedTrack,
   deleteTheme,
   removeThemeSong,
+  revalidateSourceAvailability,
   setThemePublication,
   updateTheme,
   updateThemeSong,
@@ -207,4 +208,22 @@ export async function removeThemeSongAction(themeId: string, songId: string) {
   revalidatePath("/admin/temas");
   revalidatePath(`/admin/temas/${themeId}`);
   redirect(`/admin/temas/${themeId}?message=Música removida`);
+}
+
+export async function revalidateSourceAvailabilityAction(
+  themeId: string,
+  songId: string,
+) {
+  await requireAdmin();
+
+  try {
+    await revalidateSourceAvailability(themeId, songId);
+  } catch (error) {
+    redirect(
+      `/admin/temas/${themeId}?error=${encodeURIComponent(toAppError(error).message)}`,
+    );
+  }
+
+  revalidatePath(`/admin/temas/${themeId}`);
+  redirect(`/admin/temas/${themeId}?message=Disponibilidade revalidada`);
 }

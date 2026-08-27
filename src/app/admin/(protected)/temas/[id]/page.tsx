@@ -6,6 +6,7 @@ import {
   CircleAlert,
   ExternalLink,
   ListMusic,
+  RefreshCw,
   Save,
   Trash2,
 } from "lucide-react";
@@ -14,12 +15,14 @@ import {
   attachTrackAction,
   deleteThemeAction,
   removeThemeSongAction,
+  revalidateSourceAvailabilityAction,
   setThemePublicationAction,
   updateThemeAction,
   updateThemeSongAction,
 } from "@/app/admin/(protected)/temas/actions";
 import { ConfirmSubmitButton } from "@/components/admin/confirm-submit-button";
 import { adminInputClassName } from "@/components/admin/form-styles";
+import { SourceAvailabilityStatus } from "@/components/admin/source-availability-status";
 import { ThemeForm } from "@/components/admin/theme-form";
 import { YouTubeSongManager } from "@/components/admin/youtube-song-manager";
 import { SupportedGameModes } from "@/components/admin/supported-game-modes";
@@ -243,7 +246,28 @@ export default async function EditThemePage({
                       Fonte: {song.sourceChannel} · {song.durationSeconds}s
                     </p>
                   </div>
+                  <form
+                    action={revalidateSourceAvailabilityAction.bind(
+                      null,
+                      theme.id,
+                      song.songId,
+                    )}
+                  >
+                    <Button
+                      type="submit"
+                      variant="outline"
+                      className="min-h-10 rounded-xl px-3"
+                    >
+                      <RefreshCw aria-hidden="true" />
+                      Revalidar Fonte
+                    </Button>
+                  </form>
                 </div>
+
+                <SourceAvailabilityStatus
+                  availability={song.availability}
+                  observation={song.sourceAvailability}
+                />
 
                 <form
                   action={updateThemeSongAction.bind(

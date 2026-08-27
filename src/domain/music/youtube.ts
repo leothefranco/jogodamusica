@@ -1,4 +1,5 @@
 import { AppError } from "@/lib/errors";
+import type { EmbedData } from "@/domain/music/provider";
 
 const youtubeIdPattern = /^[A-Za-z0-9_-]{11}$/;
 const supportedHosts = new Set([
@@ -103,4 +104,13 @@ export function parseIsoDurationSeconds(duration: string): number {
   }
 
   return total;
+}
+
+export function getYouTubeEmbedData(providerContentId: string): EmbedData {
+  const videoId = parseYouTubeVideoId(providerContentId);
+
+  return {
+    embedUrl: `https://www.youtube-nocookie.com/embed/${videoId}`,
+    watchUrl: `https://www.youtube.com/watch?v=${videoId}`,
+  };
 }

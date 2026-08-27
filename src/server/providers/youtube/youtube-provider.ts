@@ -13,9 +13,11 @@ import type {
 } from "@/domain/music/provider";
 import { parseYouTubePlaylistId } from "@/domain/music/playlist";
 import {
+  getYouTubeEmbedData,
   parseIsoDurationSeconds,
   parseYouTubeVideoId,
 } from "@/domain/music/youtube";
+import { normalizeProviderAvailabilityResult } from "@/domain/music/source-availability";
 import { getYouTubeEnv } from "@/lib/env";
 import { AppError } from "@/lib/errors";
 
@@ -331,6 +333,28 @@ export class YouTubeProvider implements PlaylistMusicProvider {
     return track;
   }
 
+  async observe(input: string, regionCode: string) {
+    const videoId = parseYouTubeVideoId(input);
+
+    try {
+      const [track] = await getVideoDetails(
+        [videoId],
+        regionCode,
+        this.fetcher,
+      );
+
+      return normalizeProviderAvailabilityResult(
+        track ? { type: "resolved", track } : { type: "not_found" },
+      );
+    } catch (error) {
+      return normalizeProviderAvailabilityResult({
+        type: "error",
+        code:
+          error instanceof AppError ? error.code : "INVALID_PROVIDER_RESPONSE",
+      });
+    }
+  }
+
   async resolveMany(
     providerContentIds: string[],
     regionCode: string,
@@ -475,12 +499,7 @@ export class YouTubeProvider implements PlaylistMusicProvider {
   }
 
   async getEmbedData(providerContentId: string): Promise<EmbedData> {
-    const videoId = parseYouTubeVideoId(providerContentId);
-
-    return {
-      embedUrl: `https://www.youtube-nocookie.com/embed/${videoId}`,
-      watchUrl: `https://www.youtube.com/watch?v=${videoId}`,
-    };
+    return getYouTubeEmbedData(providerContentId);
   }
 }
 
