@@ -1,10 +1,11 @@
 import "server-only";
 
-import { and, asc, count, eq, sql } from "drizzle-orm";
+import { and, asc, count, eq, gte, sql } from "drizzle-orm";
 import { connection } from "next/server";
 
 import { getDatabase } from "@/db";
 import { songs, themes, themeSongs } from "@/db/schema";
+import { minimumPlayableSongCount } from "@/domain/music/content-validation";
 
 export type PlayableThemeRecord = {
   id: string;
@@ -23,19 +24,23 @@ const selection = {
   description: themes.description,
   coverUrl: themes.coverUrl,
   thumbnailUrls: sql<string[]>`
-    coalesce(
-      (array_agg(
-        ${songs.thumbnailUrl}
-        order by ${themeSongs.displayOrder} asc nulls last, ${themeSongs.createdAt} asc
-      ))[1:4],
-      array[]::text[]
-    )
-  `,
-  activeSongCount: count(themeSongs.songId).mapWith(Number),
+      coalesce(
+        (array_agg(
+          ${songs.thumbnailUrl}
+          order by ${themeSongs.displayOrder} asc nulls last, ${themeSongs.createdAt} asc
+        ))[1:4],
+        array[]::text[]
+      )
+    `.as("thumbnail_urls"),
+  activeSongCount: count(themeSongs.songId)
+    .mapWith(Number)
+    .as("active_song_count"),
 };
 
-function playableThemeQuery() {
-  return getDatabase()
+type Database = Pick<ReturnType<typeof getDatabase>, "select">;
+
+export function buildPlayableThemeQuery(database: Database, slug?: string) {
+  return database
     .select(selection)
     .from(themes)
     .innerJoin(
@@ -46,22 +51,56 @@ function playableThemeQuery() {
       songs,
       and(eq(songs.id, themeSongs.songId), eq(songs.isEmbeddable, true)),
     )
-    .where(eq(themes.isActive, true))
-    .groupBy(themes.id);
+    .where(
+      and(
+        eq(themes.isActive, true),
+        slug === undefined ? undefined : eq(themes.slug, slug),
+      ),
+    )
+    .groupBy(themes.id)
+    .having(gte(count(themeSongs.songId), minimumPlayableSongCount))
+    .orderBy(asc(themes.name));
 }
 
-export async function listPlayableThemes(): Promise<PlayableThemeRecord[]> {
-  await connection();
-  return playableThemeQuery().orderBy(asc(themes.name));
+type PublicThemeQuery = ReturnType<typeof buildPlayableThemeQuery>;
+
+type PublicThemeRepositoryDependencies = {
+  executeQuery(query: PublicThemeQuery): Promise<PlayableThemeRecord[]>;
+  getDatabase(): Database;
+  waitForRequest(): Promise<unknown>;
+};
+
+export function createPublicThemeRepository(
+  dependencies: PublicThemeRepositoryDependencies,
+) {
+  return {
+    async listPlayableThemes(): Promise<PlayableThemeRecord[]> {
+      await dependencies.waitForRequest();
+      return dependencies.executeQuery(
+        buildPlayableThemeQuery(dependencies.getDatabase()),
+      );
+    },
+    async findPlayableThemeBySlug(
+      slug: string,
+    ): Promise<PlayableThemeRecord | null> {
+      await dependencies.waitForRequest();
+      const [row] = await dependencies.executeQuery(
+        buildPlayableThemeQuery(dependencies.getDatabase(), slug),
+      );
+
+      return row ?? null;
+    },
+  };
 }
 
-export async function findPlayableThemeBySlug(
-  slug: string,
-): Promise<PlayableThemeRecord | null> {
-  await connection();
-  const [row] = await playableThemeQuery()
-    .having(eq(themes.slug, slug))
-    .limit(1);
+const publicThemeRepository = createPublicThemeRepository({
+  async executeQuery(query) {
+    return query;
+  },
+  getDatabase,
+  waitForRequest: connection,
+});
 
-  return row ?? null;
-}
+export const listPlayableThemes = publicThemeRepository.listPlayableThemes;
+export const findPlayableThemeBySlug =
+  publicThemeRepository.findPlayableThemeBySlug;

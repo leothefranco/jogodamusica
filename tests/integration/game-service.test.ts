@@ -213,7 +213,7 @@ describe("criação transacional de partida", () => {
     expect(harness.sessions).toHaveLength(0);
   });
 
-  it("rejeita tema sem músicas ativas suficientes", async () => {
+  it("rejeita insuficiência atual sem persistência parcial", async () => {
     const harness = gameHarness({ songs: activeSongs.slice(0, 3) });
 
     await expect(
@@ -223,6 +223,9 @@ describe("criação transacional de partida", () => {
       status: 409,
     });
     expect(harness.sessions).toHaveLength(0);
+    expect(harness.snapshots).toHaveLength(0);
+    expect(harness.matches).toHaveLength(0);
+    expect(harness.transactionCounts().creationTransactions).toBe(1);
   });
 
   it.each([64, 128] as const)(
