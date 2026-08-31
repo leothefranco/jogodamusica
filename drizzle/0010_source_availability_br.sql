@@ -26,6 +26,7 @@ CREATE TABLE "source_availability_observations" (
 	CONSTRAINT "source_availability_next_check_check" CHECK ("source_availability_observations"."next_check_at" >= "source_availability_observations"."last_attempt_at"),
 	CONSTRAINT "source_availability_confirmation_check" CHECK ((
           "source_availability_observations"."confirmed_state" = 'available'
+          and "source_availability_observations"."confirmation_reason" is not null
           and "source_availability_observations"."confirmation_reason" = 'available'
           and "source_availability_observations"."last_confirmed_at" is not null
           and "source_availability_observations"."valid_until" is not null
@@ -34,6 +35,7 @@ CREATE TABLE "source_availability_observations" (
           and "source_availability_observations"."valid_until" <= "source_availability_observations"."grace_until"
         ) or (
           "source_availability_observations"."confirmed_state" = 'unavailable'
+          and "source_availability_observations"."confirmation_reason" is not null
           and "source_availability_observations"."confirmation_reason" in ('region_blocked', 'not_embeddable', 'not_found')
           and "source_availability_observations"."last_confirmed_at" is not null
           and "source_availability_observations"."valid_until" is null
@@ -73,6 +75,7 @@ CREATE TABLE "unbound_source_availability_observations" (
 	CONSTRAINT "unbound_source_availability_next_check_check" CHECK ("unbound_source_availability_observations"."next_check_at" >= "unbound_source_availability_observations"."last_attempt_at"),
 	CONSTRAINT "unbound_source_availability_confirmation_check" CHECK ((
           "unbound_source_availability_observations"."confirmed_state" = 'available'
+          and "unbound_source_availability_observations"."confirmation_reason" is not null
           and "unbound_source_availability_observations"."confirmation_reason" = 'available'
           and "unbound_source_availability_observations"."last_confirmed_at" is not null
           and "unbound_source_availability_observations"."valid_until" is not null
@@ -81,6 +84,7 @@ CREATE TABLE "unbound_source_availability_observations" (
           and "unbound_source_availability_observations"."valid_until" <= "unbound_source_availability_observations"."grace_until"
         ) or (
           "unbound_source_availability_observations"."confirmed_state" = 'unavailable'
+          and "unbound_source_availability_observations"."confirmation_reason" is not null
           and "unbound_source_availability_observations"."confirmation_reason" in ('region_blocked', 'not_embeddable', 'not_found')
           and "unbound_source_availability_observations"."last_confirmed_at" is not null
           and "unbound_source_availability_observations"."valid_until" is null

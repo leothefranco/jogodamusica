@@ -241,6 +241,7 @@ function sourceAvailabilityObservationChecks(
       `${prefix}_confirmation_check`,
       sql`(
           ${table.confirmedState} = 'available'
+          and ${table.confirmationReason} is not null
           and ${table.confirmationReason} = 'available'
           and ${table.lastConfirmedAt} is not null
           and ${table.validUntil} is not null
@@ -249,6 +250,7 @@ function sourceAvailabilityObservationChecks(
           and ${table.validUntil} <= ${table.graceUntil}
         ) or (
           ${table.confirmedState} = 'unavailable'
+          and ${table.confirmationReason} is not null
           and ${table.confirmationReason} in ('region_blocked', 'not_embeddable', 'not_found')
           and ${table.lastConfirmedAt} is not null
           and ${table.validUntil} is null

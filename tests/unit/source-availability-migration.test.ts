@@ -188,6 +188,16 @@ describe("migration da disponibilidade regional de Fonte", () => {
       "constraints:source_availability_observations",
     ],
     [
+      "constraint available com confirmation_reason NULL",
+      () =>
+        mutateMigrationOccurrence(
+          'and "source_availability_observations"."confirmation_reason" is not null',
+          "",
+          1,
+        ),
+      "constraints:source_availability_observations",
+    ],
+    [
       "constraint available last_confirmed_at",
       () =>
         mutateMigration(
@@ -249,6 +259,36 @@ describe("migration da disponibilidade regional de Fonte", () => {
           "",
         ),
       "constraints:source_availability_observations",
+    ],
+    [
+      "constraint unavailable com confirmation_reason NULL",
+      () =>
+        mutateMigrationOccurrence(
+          'and "source_availability_observations"."confirmation_reason" is not null',
+          "",
+          2,
+        ),
+      "constraints:source_availability_observations",
+    ],
+    [
+      "constraint available unbound com confirmation_reason NULL",
+      () =>
+        mutateMigrationOccurrence(
+          'and "unbound_source_availability_observations"."confirmation_reason" is not null',
+          "",
+          1,
+        ),
+      "constraints:unbound_source_availability_observations",
+    ],
+    [
+      "constraint unavailable unbound com confirmation_reason NULL",
+      () =>
+        mutateMigrationOccurrence(
+          'and "unbound_source_availability_observations"."confirmation_reason" is not null',
+          "",
+          2,
+        ),
+      "constraints:unbound_source_availability_observations",
     ],
     [
       "constraint unavailable last_confirmed_at",
@@ -335,9 +375,105 @@ describe("migration da disponibilidade regional de Fonte", () => {
       "uniqueness:source_availability_observations",
     ],
     [
+      "unicidade com PK ampliada",
+      () =>
+        mutateMigration(
+          'PRIMARY KEY("song_id","region")',
+          'PRIMARY KEY("song_id","region","confirmed_state")',
+        ),
+      "uniqueness:source_availability_observations",
+    ],
+    [
+      "unicidade unbound com PK ampliada",
+      () =>
+        mutateMigration(
+          'PRIMARY KEY("source_key_hash","region")',
+          'PRIMARY KEY("source_key_hash","region","confirmed_state")',
+        ),
+      "uniqueness:unbound_source_availability_observations",
+    ],
+    [
       "foreign key",
       () => mutateMigration("ON DELETE cascade", "ON DELETE no action"),
       "foreign-key:source_availability_observations",
+    ],
+    [
+      "foreign key removida posteriormente",
+      () =>
+        appendMigrationStatement(
+          'ALTER TABLE "public"."source_availability_observations" DROP CONSTRAINT "source_availability_observations_song_id_songs_id_fk";',
+        ),
+      "foreign-key:source_availability_observations",
+    ],
+    [
+      "foreign key removida na mesma ação ALTER TABLE",
+      () =>
+        mutateMigration(
+          "ON UPDATE no action;",
+          'ON UPDATE no action, DROP CONSTRAINT "source_availability_observations_song_id_songs_id_fk";',
+        ),
+      "ddl:source_availability_observations",
+    ],
+    [
+      "foreign key removida após comentário SQL",
+      () =>
+        appendMigrationStatement(
+          '-- comentário\nALTER TABLE "public"."source_availability_observations" DROP CONSTRAINT "source_availability_observations_song_id_songs_id_fk";',
+        ),
+      "foreign-key:source_availability_observations",
+    ],
+    [
+      "grant após comentário SQL aninhado",
+      () =>
+        appendMigrationStatement(
+          "/* externo /* interno */ ainda externo */ GRANT SELECT ON ALL TABLES IN SCHEMA public TO anon;",
+        ),
+      "grants:source_availability_observations",
+    ],
+    [
+      "DROP TYPE dependente",
+      () =>
+        appendMigrationStatement(
+          'DROP TYPE "public"."source_availability_reason" CASCADE;',
+        ),
+      "ddl:source_availability_observations",
+    ],
+    [
+      "DROP SCHEMA dependente",
+      () => appendMigrationStatement("DROP SCHEMA public CASCADE;"),
+      "ddl:source_availability_observations",
+    ],
+    [
+      "DDL em bloco DO",
+      () =>
+        appendMigrationStatement(
+          'DO $$ BEGIN EXECUTE \'DROP TYPE "public"."source_availability_reason" CASCADE\'; END $$;',
+        ),
+      "ddl:source_availability_observations",
+    ],
+    [
+      "DDL com ALTER TABLE ONLY não modelado",
+      () =>
+        appendMigrationStatement(
+          'ALTER TABLE ONLY "public"."source_availability_observations" DROP CONSTRAINT "source_availability_observations_song_id_songs_id_fk";',
+        ),
+      "ddl:source_availability_observations",
+    ],
+    [
+      "DROP COLUMN relevante não modelado",
+      () =>
+        appendMigrationStatement(
+          'ALTER TABLE "public"."source_availability_observations" DROP COLUMN "song_id" CASCADE;',
+        ),
+      "ddl:source_availability_observations",
+    ],
+    [
+      "DROP de constraint não modelada",
+      () =>
+        appendMigrationStatement(
+          'ALTER TABLE "public"."source_availability_observations" DROP CONSTRAINT "source_availability_observations_song_id_region_pk" CASCADE;',
+        ),
+      "ddl:source_availability_observations",
     ],
     [
       "RLS",
@@ -365,6 +501,22 @@ describe("migration da disponibilidade regional de Fonte", () => {
       "rls:source_availability_observations",
     ],
     [
+      "FORCE RLS removido no mesmo chunk",
+      () =>
+        appendMigrationStatement(
+          'ALTER TABLE "public"."source_availability_observations" FORCE ROW LEVEL SECURITY; ALTER TABLE "public"."source_availability_observations" NO FORCE ROW LEVEL SECURITY;',
+        ),
+      "rls:source_availability_observations",
+    ],
+    [
+      "policy com relação não quoted",
+      () =>
+        appendMigrationStatement(
+          "CREATE POLICY leak ON public.source_availability_observations USING (true);",
+        ),
+      "rls:source_availability_observations",
+    ],
+    [
       "grants",
       () =>
         mutateMigration(
@@ -380,6 +532,38 @@ describe("migration da disponibilidade regional de Fonte", () => {
           'GRANT SELECT ON "public"."source_availability_observations" TO PUBLIC, anon, authenticated;',
         ),
       "grants:source_availability_observations",
+    ],
+    [
+      "grant em todas as tabelas do schema public",
+      () =>
+        appendMigrationStatement(
+          "GRANT SELECT ON ALL TABLES IN SCHEMA public TO anon;",
+        ),
+      "grants:source_availability_observations",
+    ],
+    [
+      "grant direto com WITH GRANT OPTION",
+      () =>
+        appendMigrationStatement(
+          'GRANT SELECT ON TABLE "public"."source_availability_observations" TO anon WITH GRANT OPTION;',
+        ),
+      "grants:source_availability_observations",
+    ],
+    [
+      "grant por schema com WITH GRANT OPTION",
+      () =>
+        appendMigrationStatement(
+          "GRANT SELECT ON ALL TABLES IN SCHEMA public TO anon WITH GRANT OPTION;",
+        ),
+      "grants:source_availability_observations",
+    ],
+    [
+      "grant em todas as tabelas do schema public (unbound)",
+      () =>
+        appendMigrationStatement(
+          "GRANT SELECT ON ALL TABLES IN SCHEMA public TO anon;",
+        ),
+      "grants:unbound_source_availability_observations",
     ],
   ] as const)("rejeita mutante de %s", (_case, createMutant, violation) => {
     const evaluation = evaluateSourceAvailabilityMigration(createMutant());

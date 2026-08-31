@@ -3,6 +3,7 @@ type SqlBoolean = boolean | null;
 
 type ForeignKey = {
   columns: string[];
+  name: string;
   onDelete: string;
   referencedColumns: string[];
   referencedTable: string;
@@ -19,6 +20,7 @@ type TableModel = {
   revokedRoles: Set<string>;
   rlsEnabled: boolean;
   rlsForced: boolean;
+  unsupportedDdl: boolean;
 };
 
 type Token = {
@@ -48,11 +50,44 @@ const graceUntil = new Date("2026-01-09T00:00:00.000Z");
 
 function relationName(fragment: string) {
   const identifiers = [...fragment.matchAll(/"([^"]+)"/g)];
-  return identifiers.at(-1)?.[1] ?? fragment.trim().toLowerCase();
+  return (
+    identifiers.at(-1)?.[1] ??
+    fragment.trim().split(".").at(-1)?.toLowerCase() ??
+    ""
+  );
 }
 
 function quotedColumns(fragment: string) {
   return [...fragment.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+}
+
+function normalizedNames(fragment: string) {
+  return fragment
+    .split(",")
+    .map((name) => name.trim().replaceAll('"', "").toLowerCase());
+}
+
+function normalizedRoles(fragment: string) {
+  const roleList = fragment
+    .replace(/\s+WITH GRANT OPTION\b[\s\S]*$/i, "")
+    .replace(/\s+GRANTED BY\b[\s\S]*$/i, "");
+  return normalizedNames(roleList).map((role) =>
+    role.replace(/^group\s+/i, ""),
+  );
+}
+
+function grantRoles(table: TableModel | undefined, roles: string[]) {
+  for (const role of roles) {
+    table?.grantedRoles.add(role);
+    table?.revokedRoles.delete(role);
+  }
+}
+
+function revokeRoles(table: TableModel | undefined, roles: string[]) {
+  for (const role of roles) {
+    table?.revokedRoles.add(role);
+    table?.grantedRoles.delete(role);
+  }
 }
 
 function splitTopLevel(value: string) {
@@ -87,6 +122,74 @@ function splitTopLevel(value: string) {
 
   parts.push(value.slice(start).trim());
   return parts.filter(Boolean);
+}
+
+function splitSqlStatements(value: string) {
+  const statements: string[] = [];
+  let current = "";
+  let quote: '"' | "'" | null = null;
+  let blockCommentDepth = 0;
+  let inLineComment = false;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    const nextCharacter = value[index + 1];
+
+    if (inLineComment) {
+      if (character === "\n" || character === "\r") {
+        inLineComment = false;
+        current += " ";
+      }
+      continue;
+    }
+    if (blockCommentDepth > 0) {
+      if (character === "/" && nextCharacter === "*") {
+        blockCommentDepth += 1;
+        index += 1;
+      } else if (character === "*" && nextCharacter === "/") {
+        blockCommentDepth -= 1;
+        current += " ";
+        index += 1;
+      }
+      continue;
+    }
+    if (quote) {
+      current += character;
+      if (character === quote) {
+        if (nextCharacter === quote) {
+          current += nextCharacter;
+          index += 1;
+        } else {
+          quote = null;
+        }
+      }
+      continue;
+    }
+    if (character === "-" && nextCharacter === "-") {
+      inLineComment = true;
+      index += 1;
+      continue;
+    }
+    if (character === "/" && nextCharacter === "*") {
+      blockCommentDepth = 1;
+      index += 1;
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      current += character;
+      continue;
+    }
+    if (character === ";") {
+      if (current.trim()) statements.push(current.trim());
+      current = "";
+      continue;
+    }
+    current += character;
+  }
+
+  if (current.trim()) statements.push(current.trim());
+  return statements;
 }
 
 function tokenize(expression: string) {
@@ -368,13 +471,30 @@ function createTableModel(): TableModel {
     revokedRoles: new Set(),
     rlsEnabled: false,
     rlsForced: false,
+    unsupportedDdl: false,
   };
 }
 
 function buildCatalog(statements: string[]) {
   const tables = new Map<string, TableModel>();
+  let unsupportedDdl = false;
 
   for (const statement of statements) {
+    if (
+      /^CREATE TYPE\s+"public"\."source_availability_(?:error|reason|state)"\s+AS ENUM\s*\([\s\S]+\)\s*$/i.test(
+        statement,
+      )
+    ) {
+      continue;
+    }
+    if (
+      /^CREATE INDEX\s+"(?:source_availability_region_next_check_idx|unbound_source_availability_region_next_check_idx)"\s+ON\s+"(?:source_availability_observations|unbound_source_availability_observations)"\s+USING btree\s*\("region","next_check_at"\)\s*$/i.test(
+        statement,
+      )
+    ) {
+      continue;
+    }
+
     const createTable = statement.match(
       /^CREATE TABLE\s+((?:"[^"]+"\.)?"[^"]+")\s*\(([\s\S]*)\)\s*;?$/i,
     );
@@ -407,20 +527,48 @@ function buildCatalog(statements: string[]) {
     }
 
     const foreignKey = statement.match(
-      /^ALTER TABLE\s+((?:"[^"]+"\.)?"[^"]+")\s+ADD CONSTRAINT\s+"[^"]+"\s+FOREIGN KEY\s*\(([^)]+)\)\s+REFERENCES\s+((?:"[^"]+"\.)?"[^"]+")\s*\(([^)]+)\)\s+ON DELETE\s+(.+?)\s+ON UPDATE/i,
+      /^ALTER TABLE\s+((?:"[^"]+"\.)?"[^"]+")\s+ADD CONSTRAINT\s+"([^"]+)"\s+FOREIGN KEY\s*\(([^)]+)\)\s+REFERENCES\s+((?:"[^"]+"\.)?"[^"]+")\s*\(([^)]+)\)\s+ON DELETE\s+(cascade|restrict|no action|set null|set default)\s+ON UPDATE\s+(?:cascade|restrict|no action|set null|set default)\s*$/i,
     );
     if (foreignKey) {
       tables.get(relationName(foreignKey[1]))?.foreignKeys.push({
-        columns: quotedColumns(foreignKey[2]),
-        onDelete: foreignKey[5].trim().toLowerCase(),
-        referencedColumns: quotedColumns(foreignKey[4]),
-        referencedTable: relationName(foreignKey[3]),
+        columns: quotedColumns(foreignKey[3]),
+        name: foreignKey[2],
+        onDelete: foreignKey[6].trim().toLowerCase(),
+        referencedColumns: quotedColumns(foreignKey[5]),
+        referencedTable: relationName(foreignKey[4]),
       });
       continue;
     }
 
+    const droppedConstraint = statement.match(
+      /^ALTER TABLE\s+((?:"[^"]+"\.)?"[^"]+")\s+DROP CONSTRAINT(?:\s+IF EXISTS)?\s+"([^"]+)"(?:\s+(?:CASCADE|RESTRICT))?\s*$/i,
+    );
+    if (droppedConstraint) {
+      const table = tables.get(relationName(droppedConstraint[1]));
+      if (table) {
+        const previousForeignKeyCount = table.foreignKeys.length;
+        table.foreignKeys = table.foreignKeys.filter(
+          (candidate) => candidate.name !== droppedConstraint[2],
+        );
+        if (table.foreignKeys.length === previousForeignKeyCount) {
+          table.unsupportedDdl = true;
+        }
+      }
+      continue;
+    }
+
+    const unsupportedConstraintMutation = statement.match(
+      /^ALTER TABLE\s+((?:"[^"]+"\.)?"[^"]+")\s+(?:ADD|DROP) CONSTRAINT/i,
+    );
+    if (unsupportedConstraintMutation) {
+      const table = tables.get(relationName(unsupportedConstraintMutation[1]));
+      if (table) table.unsupportedDdl = true;
+      unsupportedDdl = true;
+      continue;
+    }
+
     const rls = statement.match(
-      /^ALTER TABLE\s+((?:"[^"]+"\.)?"[^"]+")\s+(ENABLE|DISABLE|FORCE|NO FORCE) ROW LEVEL SECURITY/i,
+      /^ALTER TABLE\s+((?:"[^"]+"\.)?"[^"]+")\s+(ENABLE|DISABLE|FORCE|NO FORCE) ROW LEVEL SECURITY\s*$/i,
     );
     if (rls) {
       const table = tables.get(relationName(rls[1]));
@@ -434,14 +582,34 @@ function buildCatalog(statements: string[]) {
       continue;
     }
 
+    const schemaRevoke = statement.match(
+      /^REVOKE\s+ALL\s+ON ALL TABLES IN SCHEMA\s+(.+?)\s+FROM\s+([^;]+);?$/i,
+    );
+    if (schemaRevoke) {
+      if (normalizedNames(schemaRevoke[1]).includes("public")) {
+        const roles = normalizedRoles(schemaRevoke[2]);
+        for (const table of tables.values()) revokeRoles(table, roles);
+      }
+      continue;
+    }
+
+    const schemaGrant = statement.match(
+      /^GRANT\s+.+?\s+ON ALL TABLES IN SCHEMA\s+(.+?)\s+TO\s+([^;]+);?$/i,
+    );
+    if (schemaGrant) {
+      if (normalizedNames(schemaGrant[1]).includes("public")) {
+        const roles = normalizedRoles(schemaGrant[2]);
+        for (const table of tables.values()) grantRoles(table, roles);
+      }
+      continue;
+    }
+
     const revoke = statement.match(
       /^REVOKE\s+ALL\s+ON TABLE\s+((?:"[^"]+"\.)?"[^"]+")\s+FROM\s+([^;]+);?$/i,
     );
     if (revoke) {
       const table = tables.get(relationName(revoke[1]));
-      for (const role of revoke[2].split(",")) {
-        table?.revokedRoles.add(role.trim().replaceAll('"', "").toLowerCase());
-      }
+      revokeRoles(table, normalizedRoles(revoke[2]));
       continue;
     }
 
@@ -450,22 +618,28 @@ function buildCatalog(statements: string[]) {
     );
     if (grant) {
       const table = tables.get(relationName(grant[1]));
-      for (const role of grant[2].split(",")) {
-        table?.grantedRoles.add(role.trim().replaceAll('"', "").toLowerCase());
-      }
+      grantRoles(table, normalizedRoles(grant[2]));
+      continue;
+    }
+
+    if (/^(?:GRANT|REVOKE)\b/i.test(statement)) {
+      unsupportedDdl = true;
       continue;
     }
 
     const policy = statement.match(
-      /^CREATE POLICY\s+.+?\s+ON\s+((?:"[^"]+"\.)?"[^"]+")/i,
+      /^CREATE POLICY\s+.+?\s+ON\s+((?:(?:"[^"]+"|[a-z_][a-z0-9_$]*)\.)?(?:"[^"]+"|[a-z_][a-z0-9_$]*))/i,
     );
     if (policy) {
       const table = tables.get(relationName(policy[1]));
       if (table) table.policyCount += 1;
+      continue;
     }
+
+    unsupportedDdl = true;
   }
 
-  return tables;
+  return { tables, unsupportedDdl };
 }
 
 function canInsert(
@@ -577,6 +751,7 @@ function invalidRows(tableName: string) {
       next_check_at: new Date("2025-12-31T00:00:00.000Z"),
     },
     { ...available, confirmed_state: "unknown" },
+    { ...available, confirmation_reason: null },
     { ...available, confirmation_reason: "not_found" },
     { ...available, last_confirmed_at: null },
     { ...available, valid_until: null },
@@ -594,6 +769,7 @@ function invalidRows(tableName: string) {
       next_check_at: new Date("2026-01-10T00:00:00.000Z"),
     },
     { ...unavailable, confirmed_state: "available" },
+    { ...unavailable, confirmation_reason: null },
     { ...unavailable, confirmation_reason: "available" },
     { ...unavailable, last_confirmed_at: null },
     { ...unavailable, valid_until: validUntil },
@@ -622,6 +798,15 @@ function auditConstraints(tables: Map<string, TableModel>, tableName: string) {
 }
 
 function auditUniqueness(tables: Map<string, TableModel>, tableName: string) {
+  const table = tables.get(tableName);
+  const identityColumn =
+    tableName === boundTable ? "song_id" : "source_key_hash";
+  const expectedPrimaryKey = [identityColumn, "region"];
+  const hasExactPrimaryKey =
+    table?.primaryKey.length === expectedPrimaryKey.length &&
+    expectedPrimaryKey.every(
+      (column, index) => table.primaryKey[index] === column,
+    );
   const base = availableRow(tableName);
   const referenced = { songs: [{ id: songId }, { id: otherSongId }] };
   const duplicateRejected = !canInsert(
@@ -639,8 +824,6 @@ function auditUniqueness(tables: Map<string, TableModel>, tableName: string) {
     { ...base, region: "US" },
     { existing: [base], referenced },
   );
-  const identityColumn =
-    tableName === boundTable ? "song_id" : "source_key_hash";
   const otherIdentityAccepted = canInsert(
     tables,
     tableName,
@@ -651,18 +834,24 @@ function auditUniqueness(tables: Map<string, TableModel>, tableName: string) {
     { existing: [base], referenced },
   );
 
-  return duplicateRejected && otherRegionAccepted && otherIdentityAccepted;
+  return (
+    hasExactPrimaryKey &&
+    duplicateRejected &&
+    otherRegionAccepted &&
+    otherIdentityAccepted
+  );
 }
 
 export function evaluateSourceAvailabilityMigration(migration: string) {
-  const statements = migration
-    .split("--> statement-breakpoint")
-    .map((statement) => statement.trim());
-  const tables = buildCatalog(statements);
+  const statements = splitSqlStatements(migration);
+  const { tables, unsupportedDdl } = buildCatalog(statements);
   const violations: string[] = [];
 
   for (const tableName of [boundTable, unboundTable]) {
     const table = tables.get(tableName);
+    if (unsupportedDdl || table?.unsupportedDdl) {
+      violations.push(`ddl:${tableName}`);
+    }
     if (!auditConstraints(tables, tableName)) {
       violations.push(`constraints:${tableName}`);
     }
