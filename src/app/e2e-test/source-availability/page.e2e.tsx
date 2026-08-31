@@ -3,45 +3,49 @@ import { notFound, redirect } from "next/navigation";
 
 import { SourceAvailabilityStatus } from "@/components/admin/source-availability-status";
 import { Button } from "@/components/ui/button";
+import { deriveEffectiveSourceAvailability } from "@/domain/music/source-availability";
 import {
-  applySourceAvailabilityResult,
-  deriveEffectiveSourceAvailability,
-} from "@/domain/music/source-availability";
+  createSourceAvailabilityFixtureService,
+  readSourceAvailabilityFixture,
+} from "@/app/e2e-test/source-availability/source-availability-fixture-store.e2e";
 
-const observedAt = new Date("2026-01-01T00:00:00.000Z");
-const track = {
-  providerContentId: "dQw4w9WgXcQ",
-  sourceTitle: "Fonte E2E",
-  sourceChannel: "Canal E2E",
-  thumbnailUrl: "https://example.com/thumb.jpg",
-  durationSeconds: 180,
-  isEmbeddable: true,
-  isRegionAllowed: true,
-};
-const persistedObservation = applySourceAvailabilityResult({
-  current: null,
-  observedAt,
-  result: { type: "available", reason: "available", track },
-});
+const fixtureIdPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-async function revalidateFixture() {
+function validateFixtureId(value: string | undefined) {
+  if (!value || !fixtureIdPattern.test(value)) notFound();
+  return value;
+}
+
+async function revalidateFixture(fixtureId: string) {
   "use server";
-  redirect("/e2e-test/source-availability?revalidated=1");
+  const requestHeaders = await headers();
+  if (requestHeaders.get("x-e2e-test") !== "source-availability") notFound();
+  const validatedFixtureId = validateFixtureId(fixtureId);
+
+  await createSourceAvailabilityFixtureService(validatedFixtureId).observe();
+
+  redirect(
+    `/e2e-test/source-availability?fixture=${validatedFixtureId}&revalidated=1`,
+  );
 }
 
 export default async function SourceAvailabilityFixturePage({
   searchParams,
 }: {
-  searchParams: Promise<{ revalidated?: string }>;
+  searchParams: Promise<{ fixture?: string }>;
 }) {
   const requestHeaders = await headers();
   if (requestHeaders.get("x-e2e-test") !== "source-availability") notFound();
-  const { revalidated } = await searchParams;
-  const observation = revalidated === "1" ? persistedObservation : null;
+  const { fixture } = await searchParams;
+  const fixtureId = validateFixtureId(fixture);
+  const fixtureState = readSourceAvailabilityFixture(fixtureId);
+  const observation = fixtureState.source?.observation ?? null;
   const availability = deriveEffectiveSourceAvailability(
     observation,
-    observedAt,
+    fixtureState.now,
   );
+  const revalidateFixtureWithId = revalidateFixture.bind(null, fixtureId);
 
   return (
     <main className="min-h-screen bg-[#08080f] px-5 py-10 text-white">
@@ -56,7 +60,20 @@ export default async function SourceAvailabilityFixturePage({
           observation={observation}
         />
 
-        <form action={revalidateFixture} className="mt-5">
+        <p className="mt-4 text-xs text-white/45">
+          Chamadas ao provider:{" "}
+          <span data-testid="provider-call-count">
+            {fixtureState.providerCallCount}
+          </span>
+        </p>
+        <p className="mt-1 text-xs text-white/45">
+          Fluxo:{" "}
+          <span data-testid="fixture-flow">
+            {fixtureState.flow.join(" → ") || "nenhum"}
+          </span>
+        </p>
+
+        <form action={revalidateFixtureWithId} className="mt-5">
           <Button type="submit" size="lg">
             Revalidar Fonte
           </Button>

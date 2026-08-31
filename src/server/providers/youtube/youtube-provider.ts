@@ -117,6 +117,7 @@ const searchCache = new Map<string, CacheEntry<ProviderSearchResult[]>>();
 const resolveCache = new Map<string, CacheEntry<ResolvedProviderTrack>>();
 const cacheDurationMs = 5 * 60 * 1_000;
 const apiBaseUrl = "https://www.googleapis.com/youtube/v3";
+type YouTubeCachePolicy = "no-store" | "revalidate";
 
 function decodeEntities(value: string) {
   return value
@@ -160,6 +161,7 @@ async function youtubeFetch<T>(
   params: URLSearchParams,
   schema: z.ZodType<T>,
   fetcher: typeof fetch = fetch,
+  cachePolicy: YouTubeCachePolicy = "revalidate",
 ): Promise<T> {
   let YOUTUBE_API_KEY: string;
   try {
@@ -175,9 +177,14 @@ async function youtubeFetch<T>(
 
   let response: Response;
   try {
+    const cacheOptions =
+      cachePolicy === "no-store"
+        ? ({ cache: "no-store" } as const)
+        : ({ next: { revalidate: 300 } } as const);
+
     response = await fetcher(`${apiBaseUrl}/${path}?${params.toString()}`, {
       signal: AbortSignal.timeout(10_000),
-      next: { revalidate: 300 },
+      ...cacheOptions,
     });
   } catch {
     throw new AppError(
@@ -245,6 +252,7 @@ async function getVideoDetails(
   videoIds: string[],
   regionCode = "BR",
   fetcher: typeof fetch = fetch,
+  cachePolicy: YouTubeCachePolicy = "revalidate",
 ): Promise<ResolvedPlaylistTrack[]> {
   if (videoIds.length === 0) {
     return [];
@@ -260,6 +268,7 @@ async function getVideoDetails(
     params,
     videoResponseSchema,
     fetcher,
+    cachePolicy,
   );
 
   return payload.items.map((item) => {
@@ -344,6 +353,7 @@ export class YouTubeProvider implements PlaylistMusicProvider {
         [videoId],
         regionCode,
         this.fetcher,
+        "no-store",
       );
 
       if (track && track.providerContentId !== videoId) {

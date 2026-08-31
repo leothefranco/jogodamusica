@@ -1,12 +1,14 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { YouTubeProvider } from "@/server/providers/youtube/youtube-provider";
 
 const videoId = "aaaaaaaaaaa";
 
-function video(options: { embeddable?: boolean; blocked?: string[] } = {}) {
+function video(
+  options: { id?: string; embeddable?: boolean; blocked?: string[] } = {},
+) {
   return {
-    id: videoId,
+    id: options.id ?? videoId,
     snippet: {
       title: "Fonte",
       channelTitle: "Canal",
@@ -114,5 +116,44 @@ describe("observação regional do provider YouTube", () => {
       type: "transient_error",
       errorCode: "configuration",
     });
+  });
+
+  it("busca a observação sem cache para não renovar estado antigo como atual", async () => {
+    const fetcher = vi.fn(async (...request: Parameters<typeof fetch>) => {
+      void request;
+      return Response.json({ items: [video()] });
+    });
+    const provider = new YouTubeProvider(fetcher);
+
+    await provider.observe(videoId, "BR");
+
+    const init = fetcher.mock.calls[0]?.[1] as
+      (RequestInit & { next?: { revalidate?: number } }) | undefined;
+
+    expect(init).toMatchObject({
+      cache: "no-store",
+      signal: expect.any(AbortSignal),
+    });
+    expect(init?.next).toBeUndefined();
+  });
+
+  it("preserva a revalidação dos demais consumidores do provider", async () => {
+    const resolvedVideoId = "ccccccccccc";
+    const fetcher = vi.fn(async (...request: Parameters<typeof fetch>) => {
+      void request;
+      return Response.json({ items: [video({ id: resolvedVideoId })] });
+    });
+    const provider = new YouTubeProvider(fetcher);
+
+    await provider.resolve(resolvedVideoId);
+
+    const init = fetcher.mock.calls[0]?.[1] as
+      (RequestInit & { next?: { revalidate?: number } }) | undefined;
+
+    expect(init).toMatchObject({
+      next: { revalidate: 300 },
+      signal: expect.any(AbortSignal),
+    });
+    expect(init?.cache).toBeUndefined();
   });
 });
