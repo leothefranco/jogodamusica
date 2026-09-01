@@ -153,15 +153,13 @@ test("formulário, upload, action, workflow e leitura pública compartilham a me
   );
 
   const getThemeEditor = createThemeEditorService({
+    clock: () => new Date("2026-08-25T00:00:00Z"),
     findThemeSummary: async () => ({
       ...storedTheme!,
       activeSongCount: 0,
       totalSongCount: 0,
       updatedAt: new Date("2026-08-25T00:00:00Z"),
     }),
-    getEmbedData: async () => {
-      throw new Error("não deveria resolver música sem associação");
-    },
     listThemeSongs: async () => [],
   });
   await expect(

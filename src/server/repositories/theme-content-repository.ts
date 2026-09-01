@@ -6,12 +6,15 @@ import { getDatabase } from "@/db";
 import {
   gameSessions,
   songs,
+  sourceAvailabilityObservations,
   themes,
   themeSongs,
   type NewTheme,
   type ThemeCoverClaimStatus,
 } from "@/db/schema";
 import type { ResolvedPlaylistTrack } from "@/domain/music/provider";
+import { SOURCE_AVAILABILITY_POLICY } from "@/domain/music/source-availability";
+import type { SourceAvailabilityObservation } from "@/domain/music/source-availability";
 import { AppError } from "@/lib/errors";
 
 type ThemeContentDatabase = Pick<
@@ -247,6 +250,7 @@ export type ThemeSongEditorItem = {
   previewDurationSeconds: number;
   isActive: boolean;
   displayOrder: number | null;
+  sourceAvailability: SourceAvailabilityObservation | null;
 };
 
 export type SongAssociationUpsertInput = {
@@ -272,6 +276,16 @@ export type ThemeSongUpdateInput = {
   startTimeSeconds: number;
   previewDurationSeconds: number;
   displayOrder: number | null;
+  isActive: boolean;
+};
+
+export type ThemeSongAssociationInput = {
+  themeId: string;
+  songId: string;
+  title: string;
+  artist: string;
+  startTimeSeconds: number;
+  previewDurationSeconds: number;
   isActive: boolean;
 };
 
@@ -304,7 +318,91 @@ const themeSongEditorSelection = {
   previewDurationSeconds: themeSongs.previewDurationSeconds,
   isActive: themeSongs.isActive,
   displayOrder: themeSongs.displayOrder,
+  availabilityRegion: sourceAvailabilityObservations.region,
+  availabilityConfirmedState: sourceAvailabilityObservations.confirmedState,
+  availabilityConfirmationReason:
+    sourceAvailabilityObservations.confirmationReason,
+  availabilityErrorCode: sourceAvailabilityObservations.errorCode,
+  availabilityObservedAt: sourceAvailabilityObservations.observedAt,
+  availabilityLastAttemptAt: sourceAvailabilityObservations.lastAttemptAt,
+  availabilityLastConfirmedAt: sourceAvailabilityObservations.lastConfirmedAt,
+  availabilityValidUntil: sourceAvailabilityObservations.validUntil,
+  availabilityGraceUntil: sourceAvailabilityObservations.graceUntil,
+  availabilityNextCheckAt: sourceAvailabilityObservations.nextCheckAt,
+  availabilityRevision: sourceAvailabilityObservations.revision,
+  availabilityPolicyVersion: sourceAvailabilityObservations.policyVersion,
 };
+
+const brSourceAvailabilityJoinCondition = and(
+  eq(sourceAvailabilityObservations.songId, songs.id),
+  eq(sourceAvailabilityObservations.region, SOURCE_AVAILABILITY_POLICY.region),
+);
+
+type ThemeSongEditorRow = Omit<ThemeSongEditorItem, "sourceAvailability"> & {
+  availabilityRegion: string | null;
+  availabilityConfirmedState:
+    SourceAvailabilityObservation["confirmedState"] | null;
+  availabilityConfirmationReason: SourceAvailabilityObservation["confirmationReason"];
+  availabilityErrorCode: SourceAvailabilityObservation["errorCode"];
+  availabilityObservedAt: Date | null;
+  availabilityLastAttemptAt: Date | null;
+  availabilityLastConfirmedAt: Date | null;
+  availabilityValidUntil: Date | null;
+  availabilityGraceUntil: Date | null;
+  availabilityNextCheckAt: Date | null;
+  availabilityRevision: number | null;
+  availabilityPolicyVersion: number | null;
+};
+
+function themeSongEditorItemFromRow(
+  row: ThemeSongEditorRow,
+): ThemeSongEditorItem {
+  const {
+    availabilityRegion,
+    availabilityConfirmedState,
+    availabilityConfirmationReason,
+    availabilityErrorCode,
+    availabilityObservedAt,
+    availabilityLastAttemptAt,
+    availabilityLastConfirmedAt,
+    availabilityValidUntil,
+    availabilityGraceUntil,
+    availabilityNextCheckAt,
+    availabilityRevision,
+    availabilityPolicyVersion,
+    ...item
+  } = row;
+
+  if (
+    !availabilityRegion ||
+    !availabilityConfirmedState ||
+    !availabilityObservedAt ||
+    !availabilityLastAttemptAt ||
+    !availabilityNextCheckAt ||
+    availabilityRevision === null ||
+    availabilityPolicyVersion === null
+  ) {
+    return { ...item, sourceAvailability: null };
+  }
+
+  return {
+    ...item,
+    sourceAvailability: {
+      region: availabilityRegion,
+      confirmedState: availabilityConfirmedState,
+      confirmationReason: availabilityConfirmationReason,
+      errorCode: availabilityErrorCode,
+      observedAt: availabilityObservedAt,
+      lastAttemptAt: availabilityLastAttemptAt,
+      lastConfirmedAt: availabilityLastConfirmedAt,
+      validUntil: availabilityValidUntil,
+      graceUntil: availabilityGraceUntil,
+      nextCheckAt: availabilityNextCheckAt,
+      revision: availabilityRevision,
+      policyVersion: availabilityPolicyVersion,
+    },
+  };
+}
 
 async function findThemeSummaryUsing(
   database: ThemeContentDatabase,
@@ -331,10 +429,11 @@ async function findThemeSongUsing(
     .select(themeSongEditorSelection)
     .from(themeSongs)
     .innerJoin(songs, eq(songs.id, themeSongs.songId))
+    .leftJoin(sourceAvailabilityObservations, brSourceAvailabilityJoinCondition)
     .where(and(eq(themeSongs.themeId, themeId), eq(themeSongs.songId, songId)))
     .limit(1);
 
-  return item ?? null;
+  return item ? themeSongEditorItemFromRow(item) : null;
 }
 
 async function findThemeSongByProviderContentIdUsing(
@@ -346,6 +445,7 @@ async function findThemeSongByProviderContentIdUsing(
     .select(themeSongEditorSelection)
     .from(themeSongs)
     .innerJoin(songs, eq(songs.id, themeSongs.songId))
+    .leftJoin(sourceAvailabilityObservations, brSourceAvailabilityJoinCondition)
     .where(
       and(
         eq(themeSongs.themeId, themeId),
@@ -355,7 +455,27 @@ async function findThemeSongByProviderContentIdUsing(
     )
     .limit(1);
 
-  return item ?? null;
+  return item ? themeSongEditorItemFromRow(item) : null;
+}
+
+async function upsertThemeSongAssociationUsing(
+  database: ThemeContentDatabase,
+  input: ThemeSongAssociationInput,
+) {
+  await database
+    .insert(themeSongs)
+    .values(input)
+    .onConflictDoUpdate({
+      target: [themeSongs.themeId, themeSongs.songId],
+      set: {
+        title: input.title,
+        artist: input.artist,
+        startTimeSeconds: input.startTimeSeconds,
+        previewDurationSeconds: input.previewDurationSeconds,
+        isActive: input.isActive,
+        updatedAt: new Date(),
+      },
+    });
 }
 
 async function updateThemeRecordUsing(
@@ -400,28 +520,15 @@ async function upsertSongAndAssociationUsing(
     })
     .returning({ id: songs.id });
 
-  await database
-    .insert(themeSongs)
-    .values({
-      themeId: input.themeId,
-      songId: song.id,
-      title: input.title,
-      artist: input.artist,
-      startTimeSeconds: input.startTimeSeconds,
-      previewDurationSeconds: input.previewDurationSeconds,
-      isActive: input.isActive,
-    })
-    .onConflictDoUpdate({
-      target: [themeSongs.themeId, themeSongs.songId],
-      set: {
-        title: input.title,
-        artist: input.artist,
-        startTimeSeconds: input.startTimeSeconds,
-        previewDurationSeconds: input.previewDurationSeconds,
-        isActive: input.isActive,
-        updatedAt: new Date(),
-      },
-    });
+  await upsertThemeSongAssociationUsing(database, {
+    themeId: input.themeId,
+    songId: song.id,
+    title: input.title,
+    artist: input.artist,
+    startTimeSeconds: input.startTimeSeconds,
+    previewDurationSeconds: input.previewDurationSeconds,
+    isActive: input.isActive,
+  });
 }
 
 async function updateThemeSongAssociationUsing(
@@ -481,15 +588,18 @@ export async function findThemeSummary(
 export async function listThemeSongs(
   themeId: string,
 ): Promise<ThemeSongEditorItem[]> {
-  return getDatabase()
+  const rows = await getDatabase()
     .select(themeSongEditorSelection)
     .from(themeSongs)
     .innerJoin(songs, eq(songs.id, themeSongs.songId))
+    .leftJoin(sourceAvailabilityObservations, brSourceAvailabilityJoinCondition)
     .where(eq(themeSongs.themeId, themeId))
     .orderBy(
       sql`${themeSongs.displayOrder} asc nulls last`,
       asc(themeSongs.title),
     );
+
+  return rows.map(themeSongEditorItemFromRow);
 }
 
 async function insertThemeUsing(
@@ -1068,6 +1178,9 @@ export type LockedThemeContentRepository = {
   upsertSongAndAssociation(
     input: Omit<SongAssociationUpsertInput, "themeId">,
   ): Promise<void>;
+  upsertThemeSongAssociation(
+    input: Omit<ThemeSongAssociationInput, "themeId">,
+  ): Promise<void>;
 };
 
 export async function withThemeContentLock<T>(
@@ -1099,6 +1212,8 @@ export async function withThemeContentLock<T>(
         updateThemeRecordUsing(transaction, themeId, values),
       upsertSongAndAssociation: (input) =>
         upsertSongAndAssociationUsing(transaction, { themeId, ...input }),
+      upsertThemeSongAssociation: (input) =>
+        upsertThemeSongAssociationUsing(transaction, { themeId, ...input }),
     });
   });
 }

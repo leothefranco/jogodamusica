@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { z } from "zod";
 
 import {
   trackAssociationInputSchema,
@@ -17,6 +18,7 @@ import {
   attachResolvedTrack,
   deleteTheme,
   removeThemeSong,
+  revalidateSourceAvailability,
   setThemePublication,
   updateTheme,
   updateThemeSong,
@@ -25,6 +27,11 @@ import {
 const runCreateThemeAction = createThemeActionAdapter({
   authenticate: requireAdmin,
   createTheme: createThemeWithManagedCover,
+});
+
+const sourceAvailabilityRevalidationSchema = z.object({
+  themeId: z.string().uuid(),
+  songId: z.string().uuid(),
 });
 
 function errorState(error: unknown): ContentActionState {
@@ -207,4 +214,31 @@ export async function removeThemeSongAction(themeId: string, songId: string) {
   revalidatePath("/admin/temas");
   revalidatePath(`/admin/temas/${themeId}`);
   redirect(`/admin/temas/${themeId}?message=Música removida`);
+}
+
+export async function revalidateSourceAvailabilityAction(
+  themeId: string,
+  songId: string,
+) {
+  await requireAdmin();
+  const parsed = sourceAvailabilityRevalidationSchema.safeParse({
+    themeId,
+    songId,
+  });
+  if (!parsed.success) {
+    redirect("/admin/temas?error=Identificadores%20inv%C3%A1lidos");
+  }
+
+  try {
+    await revalidateSourceAvailability(parsed.data.themeId, parsed.data.songId);
+  } catch (error) {
+    redirect(
+      `/admin/temas/${parsed.data.themeId}?error=${encodeURIComponent(toAppError(error).message)}`,
+    );
+  }
+
+  revalidatePath(`/admin/temas/${parsed.data.themeId}`);
+  redirect(
+    `/admin/temas/${parsed.data.themeId}?message=Disponibilidade revalidada`,
+  );
 }

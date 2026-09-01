@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   boolean,
   check,
   index,
@@ -35,6 +36,22 @@ export const matchStatusEnum = pgEnum("match_status", [
   "pending",
   "ready",
   "completed",
+]);
+export const sourceAvailabilityStateEnum = pgEnum("source_availability_state", [
+  "available",
+  "unavailable",
+  "unknown",
+]);
+export const sourceAvailabilityReasonEnum = pgEnum(
+  "source_availability_reason",
+  ["available", "region_blocked", "not_embeddable", "not_found"],
+);
+export const sourceAvailabilityErrorEnum = pgEnum("source_availability_error", [
+  "transport",
+  "quota",
+  "configuration",
+  "invalid_response",
+  "provider_error",
 ]);
 
 export const rateLimitBuckets = pgTable(
@@ -166,6 +183,129 @@ export const songs = pgTable(
     check("songs_duration_positive_check", sql`${table.durationSeconds} > 0`),
   ],
 );
+
+function sourceAvailabilityObservationColumns() {
+  return {
+    region: varchar("region", { length: 8 }).notNull(),
+    confirmedState: sourceAvailabilityStateEnum("confirmed_state")
+      .default("unknown")
+      .notNull(),
+    confirmationReason: sourceAvailabilityReasonEnum("confirmation_reason"),
+    errorCode: sourceAvailabilityErrorEnum("error_code"),
+    observedAt: timestamp("observed_at", { withTimezone: true }).notNull(),
+    lastAttemptAt: timestamp("last_attempt_at", {
+      withTimezone: true,
+    }).notNull(),
+    lastConfirmedAt: timestamp("last_confirmed_at", { withTimezone: true }),
+    validUntil: timestamp("valid_until", { withTimezone: true }),
+    graceUntil: timestamp("grace_until", { withTimezone: true }),
+    nextCheckAt: timestamp("next_check_at", { withTimezone: true }).notNull(),
+    revision: integer("revision").default(1).notNull(),
+    policyVersion: integer("policy_version").default(1).notNull(),
+    ...timestamps,
+  };
+}
+
+type SourceAvailabilityObservationTable = {
+  confirmedState: AnyPgColumn;
+  confirmationReason: AnyPgColumn;
+  graceUntil: AnyPgColumn;
+  lastAttemptAt: AnyPgColumn;
+  lastConfirmedAt: AnyPgColumn;
+  nextCheckAt: AnyPgColumn;
+  observedAt: AnyPgColumn;
+  policyVersion: AnyPgColumn;
+  region: AnyPgColumn;
+  revision: AnyPgColumn;
+  validUntil: AnyPgColumn;
+};
+
+function sourceAvailabilityObservationChecks(
+  prefix: "source_availability" | "unbound_source_availability",
+  table: SourceAvailabilityObservationTable,
+) {
+  return [
+    check(`${prefix}_region_check`, sql`${table.region} ~ '^[A-Z]{2}$'`),
+    check(`${prefix}_revision_check`, sql`${table.revision} > 0`),
+    check(`${prefix}_policy_version_check`, sql`${table.policyVersion} > 0`),
+    check(
+      `${prefix}_attempt_order_check`,
+      sql`${table.observedAt} <= ${table.lastAttemptAt}
+        and (${table.lastConfirmedAt} is null or ${table.lastConfirmedAt} <= ${table.lastAttemptAt})`,
+    ),
+    check(
+      `${prefix}_next_check_check`,
+      sql`${table.nextCheckAt} >= ${table.lastAttemptAt}`,
+    ),
+    check(
+      `${prefix}_confirmation_check`,
+      sql`(
+          ${table.confirmedState} = 'available'
+          and ${table.confirmationReason} is not null
+          and ${table.confirmationReason} = 'available'
+          and ${table.lastConfirmedAt} is not null
+          and ${table.validUntil} is not null
+          and ${table.graceUntil} is not null
+          and ${table.lastConfirmedAt} <= ${table.validUntil}
+          and ${table.validUntil} <= ${table.graceUntil}
+        ) or (
+          ${table.confirmedState} = 'unavailable'
+          and ${table.confirmationReason} is not null
+          and ${table.confirmationReason} in ('region_blocked', 'not_embeddable', 'not_found')
+          and ${table.lastConfirmedAt} is not null
+          and ${table.validUntil} is null
+          and ${table.graceUntil} is null
+        ) or (
+          ${table.confirmedState} = 'unknown'
+          and ${table.confirmationReason} is null
+          and ${table.lastConfirmedAt} is null
+          and ${table.validUntil} is null
+          and ${table.graceUntil} is null
+        )`,
+    ),
+  ];
+}
+
+export const sourceAvailabilityObservations = pgTable(
+  "source_availability_observations",
+  {
+    songId: uuid("song_id")
+      .notNull()
+      .references(() => songs.id, { onDelete: "cascade" }),
+    ...sourceAvailabilityObservationColumns(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.songId, table.region] }),
+    index("source_availability_region_next_check_idx").on(
+      table.region,
+      table.nextCheckAt,
+    ),
+    ...sourceAvailabilityObservationChecks("source_availability", table),
+  ],
+).enableRLS();
+
+export const unboundSourceAvailabilityObservations = pgTable(
+  "unbound_source_availability_observations",
+  {
+    sourceKeyHash: varchar("source_key_hash", { length: 64 }).notNull(),
+    ...sourceAvailabilityObservationColumns(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.sourceKeyHash, table.region] }),
+    index("unbound_source_availability_region_next_check_idx").on(
+      table.region,
+      table.nextCheckAt,
+    ),
+    check(
+      "unbound_source_availability_key_hash_check",
+      sql`${table.sourceKeyHash} ~ '^[0-9a-f]{64}$'`,
+    ),
+    ...sourceAvailabilityObservationChecks(
+      "unbound_source_availability",
+      table,
+    ),
+  ],
+).enableRLS();
 
 export const themeSongs = pgTable(
   "theme_songs",
@@ -306,6 +446,10 @@ export type NewTheme = typeof themes.$inferInsert;
 export type ThemeCoverClaimRecord = typeof themeCoverClaims.$inferSelect;
 export type Song = typeof songs.$inferSelect;
 export type NewSong = typeof songs.$inferInsert;
+export type SourceAvailabilityObservationRecord =
+  typeof sourceAvailabilityObservations.$inferSelect;
+export type UnboundSourceAvailabilityObservationRecord =
+  typeof unboundSourceAvailabilityObservations.$inferSelect;
 export type ThemeSong = typeof themeSongs.$inferSelect;
 export type GameSession = typeof gameSessions.$inferSelect;
 export type SessionSong = typeof sessionSongs.$inferSelect;

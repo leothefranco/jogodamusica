@@ -21,6 +21,7 @@ const associatedTrack = {
   previewDurationSeconds: 30,
   isActive: true,
   displayOrder: null,
+  sourceAvailability: null,
 };
 
 type ServiceDependencies = Parameters<typeof createThemeContentService>[0];
@@ -43,14 +44,35 @@ function createService(overrides: Partial<ServiceDependencies> = {}) {
       totalSongCount: 4,
       updatedAt: new Date("2026-01-01T00:00:00Z"),
     }),
-    musicProvider: {
-      search: async () => [],
-      resolve: async () => resolvedTrack,
-      getEmbedData: async () => ({
-        embedUrl: "https://provider.example/embed/dQw4w9WgXcQ",
-        watchUrl: "https://provider.example/watch/dQw4w9WgXcQ",
-      }),
-    },
+    observeSourceAvailability: async () => ({
+      songId: associatedTrack.songId,
+      observation: {
+        region: "BR",
+        confirmedState: "available",
+        confirmationReason: "available",
+        errorCode: null,
+        observedAt: new Date("2026-01-01T00:00:00Z"),
+        lastAttemptAt: new Date("2026-01-01T00:00:00Z"),
+        lastConfirmedAt: new Date("2026-01-01T00:00:00Z"),
+        validUntil: new Date("2026-01-08T00:00:00Z"),
+        graceUntil: new Date("2026-01-09T00:00:00Z"),
+        nextCheckAt: new Date("2026-01-08T00:00:00Z"),
+        revision: 1,
+        policyVersion: 1,
+      },
+      availability: {
+        state: "available_fresh",
+        playable: true,
+        degraded: false,
+      },
+      applied: true,
+      track: resolvedTrack,
+      result: {
+        type: "available",
+        reason: "available",
+        track: resolvedTrack,
+      },
+    }),
     removeThemeSongRecord: async (_themeId, songId) => songId,
     setThemeActiveRecord: async (themeId) => themeId,
     themeHasSessions: async () => false,
@@ -89,6 +111,12 @@ function createService(overrides: Partial<ServiceDependencies> = {}) {
             boundaries.updateThemeRecord(themeId, values),
           upsertSongAndAssociation: (input) =>
             boundaries.upsertSongAndAssociation({ themeId, ...input }),
+          upsertThemeSongAssociation: (input) =>
+            boundaries.upsertSongAndAssociation({
+              themeId,
+              ...resolvedTrack,
+              ...input,
+            }),
         });
       } finally {
         releaseMutation();
@@ -126,14 +154,35 @@ describe("serviço de conteúdo de temas", () => {
   it("rejeita música individual bloqueada no Brasil antes de associá-la", async () => {
     let associationWasSaved = false;
     const service = createService({
-      musicProvider: {
-        search: async () => [],
-        resolve: async () => ({ ...resolvedTrack, isRegionAllowed: false }),
-        getEmbedData: async () => ({
-          embedUrl: "https://provider.example/embed/dQw4w9WgXcQ",
-          watchUrl: "https://provider.example/watch/dQw4w9WgXcQ",
-        }),
-      },
+      observeSourceAvailability: async () => ({
+        songId: associatedTrack.songId,
+        observation: {
+          region: "BR",
+          confirmedState: "unavailable",
+          confirmationReason: "region_blocked",
+          errorCode: null,
+          observedAt: new Date("2026-01-01T00:00:00Z"),
+          lastAttemptAt: new Date("2026-01-01T00:00:00Z"),
+          lastConfirmedAt: new Date("2026-01-01T00:00:00Z"),
+          validUntil: null,
+          graceUntil: null,
+          nextCheckAt: new Date("2026-01-02T00:00:00Z"),
+          revision: 1,
+          policyVersion: 1,
+        },
+        availability: {
+          state: "unavailable",
+          playable: false,
+          degraded: false,
+        },
+        applied: true,
+        track: { ...resolvedTrack, isRegionAllowed: false },
+        result: {
+          type: "unavailable",
+          reason: "region_blocked",
+          track: { ...resolvedTrack, isRegionAllowed: false },
+        },
+      }),
       upsertSongAndAssociation: async () => {
         associationWasSaved = true;
       },
