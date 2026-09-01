@@ -37,10 +37,8 @@ const selection = {
     .as("active_song_count"),
 };
 
-type Database = Pick<ReturnType<typeof getDatabase>, "select">;
-
-export function buildPlayableThemeQuery(database: Database, slug?: string) {
-  return database
+function playableThemeQuery(slug?: string) {
+  return getDatabase()
     .select(selection)
     .from(themes)
     .innerJoin(
@@ -62,45 +60,15 @@ export function buildPlayableThemeQuery(database: Database, slug?: string) {
     .orderBy(asc(themes.name));
 }
 
-type PublicThemeQuery = ReturnType<typeof buildPlayableThemeQuery>;
-
-type PublicThemeRepositoryDependencies = {
-  executeQuery(query: PublicThemeQuery): Promise<PlayableThemeRecord[]>;
-  getDatabase(): Database;
-  waitForRequest(): Promise<unknown>;
-};
-
-export function createPublicThemeRepository(
-  dependencies: PublicThemeRepositoryDependencies,
-) {
-  return {
-    async listPlayableThemes(): Promise<PlayableThemeRecord[]> {
-      await dependencies.waitForRequest();
-      return dependencies.executeQuery(
-        buildPlayableThemeQuery(dependencies.getDatabase()),
-      );
-    },
-    async findPlayableThemeBySlug(
-      slug: string,
-    ): Promise<PlayableThemeRecord | null> {
-      await dependencies.waitForRequest();
-      const [row] = await dependencies.executeQuery(
-        buildPlayableThemeQuery(dependencies.getDatabase(), slug),
-      );
-
-      return row ?? null;
-    },
-  };
+export async function listPlayableThemes(): Promise<PlayableThemeRecord[]> {
+  await connection();
+  return playableThemeQuery();
 }
 
-const publicThemeRepository = createPublicThemeRepository({
-  async executeQuery(query) {
-    return query;
-  },
-  getDatabase,
-  waitForRequest: connection,
-});
-
-export const listPlayableThemes = publicThemeRepository.listPlayableThemes;
-export const findPlayableThemeBySlug =
-  publicThemeRepository.findPlayableThemeBySlug;
+export async function findPlayableThemeBySlug(
+  slug: string,
+): Promise<PlayableThemeRecord | null> {
+  await connection();
+  const [row] = await playableThemeQuery(slug);
+  return row ?? null;
+}
