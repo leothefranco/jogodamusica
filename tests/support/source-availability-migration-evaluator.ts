@@ -9,6 +9,13 @@ type ForeignKey = {
   referencedTable: string;
 };
 
+type IndexModel = {
+  columns: string[];
+  method: string;
+  name: string;
+  table: string;
+};
+
 type TableModel = {
   checks: Array<(row: MigrationRow) => SqlBoolean>;
   defaults: Set<string>;
@@ -41,6 +48,20 @@ type Predicate = (row: MigrationRow) => SqlBoolean;
 const boundTable = "source_availability_observations";
 const unboundTable = "unbound_source_availability_observations";
 const protectedRoles = ["public", "anon", "authenticated"];
+const requiredIndexes = [
+  {
+    columns: ["region", "next_check_at"],
+    method: "btree",
+    name: "source_availability_region_next_check_idx",
+    table: `public.${boundTable}`,
+  },
+  {
+    columns: ["region", "next_check_at"],
+    method: "btree",
+    name: "unbound_source_availability_region_next_check_idx",
+    table: `public.${unboundTable}`,
+  },
+];
 const songId = "20000000-0000-4000-8000-000000000020";
 const otherSongId = "20000000-0000-4000-8000-000000000021";
 const sourceKeyHash = "a".repeat(64);
@@ -55,6 +76,15 @@ function relationName(fragment: string) {
     fragment.trim().split(".").at(-1)?.toLowerCase() ??
     ""
   );
+}
+
+function qualifiedRelationName(fragment: string) {
+  const identifiers = [...fragment.matchAll(/"([^"]+)"/g)].map(
+    (match) => match[1],
+  );
+  return identifiers.length === 1
+    ? `public.${identifiers[0]}`
+    : identifiers.join(".");
 }
 
 function quotedColumns(fragment: string) {
@@ -476,6 +506,7 @@ function createTableModel(): TableModel {
 }
 
 function buildCatalog(statements: string[]) {
+  const indexes: IndexModel[] = [];
   const tables = new Map<string, TableModel>();
   let unsupportedDdl = false;
 
@@ -487,11 +518,18 @@ function buildCatalog(statements: string[]) {
     ) {
       continue;
     }
-    if (
-      /^CREATE INDEX\s+"(?:source_availability_region_next_check_idx|unbound_source_availability_region_next_check_idx)"\s+ON\s+"(?:source_availability_observations|unbound_source_availability_observations)"\s+USING btree\s*\("region","next_check_at"\)\s*$/i.test(
-        statement,
-      )
-    ) {
+    const createIndex = statement.match(
+      /^CREATE INDEX\s+"([^"]+)"\s+ON\s+((?:"[^"]+"\.)?"[^"]+")\s+USING\s+([a-z_][a-z0-9_]*)\s*\(([\s\S]+)\)\s*$/i,
+    );
+    if (createIndex) {
+      indexes.push({
+        columns: splitTopLevel(createIndex[4]).map(
+          (column) => column.match(/^"([^"]+)"$/)?.[1] ?? "",
+        ),
+        method: createIndex[3].toLowerCase(),
+        name: createIndex[1],
+        table: qualifiedRelationName(createIndex[2]),
+      });
       continue;
     }
 
@@ -639,7 +677,7 @@ function buildCatalog(statements: string[]) {
     unsupportedDdl = true;
   }
 
-  return { tables, unsupportedDdl };
+  return { indexes, tables, unsupportedDdl };
 }
 
 function canInsert(
@@ -844,7 +882,7 @@ function auditUniqueness(tables: Map<string, TableModel>, tableName: string) {
 
 export function evaluateSourceAvailabilityMigration(migration: string) {
   const statements = splitSqlStatements(migration);
-  const { tables, unsupportedDdl } = buildCatalog(statements);
+  const { indexes, tables, unsupportedDdl } = buildCatalog(statements);
   const violations: string[] = [];
 
   for (const tableName of [boundTable, unboundTable]) {
@@ -868,6 +906,34 @@ export function evaluateSourceAvailabilityMigration(migration: string) {
       )
     ) {
       violations.push(`grants:${tableName}`);
+    }
+  }
+
+  for (const requiredIndex of requiredIndexes) {
+    const matchingIndexes = indexes.filter(
+      (index) => index.name === requiredIndex.name,
+    );
+    const matchingDefinitions = indexes.filter(
+      (index) =>
+        index.table === requiredIndex.table &&
+        index.method === requiredIndex.method &&
+        index.columns.length === requiredIndex.columns.length &&
+        index.columns.every(
+          (column, columnIndex) =>
+            column === requiredIndex.columns[columnIndex],
+        ),
+    );
+    if (
+      matchingIndexes.length !== 1 ||
+      matchingDefinitions.length !== 1 ||
+      matchingIndexes[0].table !== requiredIndex.table ||
+      matchingIndexes[0].method !== requiredIndex.method ||
+      matchingIndexes[0].columns.length !== requiredIndex.columns.length ||
+      !matchingIndexes[0].columns.every(
+        (column, index) => column === requiredIndex.columns[index],
+      )
+    ) {
+      violations.push(`indexes:${relationName(requiredIndex.table)}`);
     }
   }
 

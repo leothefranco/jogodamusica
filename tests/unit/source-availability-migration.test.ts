@@ -393,6 +393,77 @@ describe("migration da disponibilidade regional de Fonte", () => {
       "uniqueness:unbound_source_availability_observations",
     ],
     [
+      "índice bound ausente",
+      () =>
+        mutateMigration(
+          'CREATE INDEX "source_availability_region_next_check_idx" ON "source_availability_observations" USING btree ("region","next_check_at");',
+          "",
+        ),
+      "indexes:source_availability_observations",
+    ],
+    [
+      "índice bound duplicado com outro nome",
+      () =>
+        appendMigrationStatement(
+          'CREATE INDEX "source_availability_region_next_check_duplicate_idx" ON "source_availability_observations" USING btree ("region","next_check_at");',
+        ),
+      "indexes:source_availability_observations",
+    ],
+    [
+      "índice bound no mesmo nome de tabela em outro schema",
+      () =>
+        mutateMigration(
+          'CREATE INDEX "source_availability_region_next_check_idx" ON "source_availability_observations" USING btree ("region","next_check_at");',
+          'CREATE INDEX "source_availability_region_next_check_idx" ON "other"."source_availability_observations" USING btree ("region","next_check_at");',
+        ),
+      "indexes:source_availability_observations",
+    ],
+    [
+      "índice bound na tabela unbound",
+      () =>
+        mutateMigration(
+          'CREATE INDEX "source_availability_region_next_check_idx" ON "source_availability_observations" USING btree ("region","next_check_at");',
+          'CREATE INDEX "source_availability_region_next_check_idx" ON "unbound_source_availability_observations" USING btree ("region","next_check_at");',
+        ),
+      "indexes:source_availability_observations",
+    ],
+    [
+      "índice bound na tabela unbound com SQL esperado apenas em comentário",
+      () =>
+        mutateMigration(
+          'CREATE INDEX "source_availability_region_next_check_idx" ON "source_availability_observations" USING btree ("region","next_check_at");',
+          '-- CREATE INDEX "source_availability_region_next_check_idx" ON "source_availability_observations" USING btree ("region","next_check_at");\nCREATE INDEX "source_availability_region_next_check_idx" ON "unbound_source_availability_observations" USING btree ("region","next_check_at");',
+        ),
+      "indexes:source_availability_observations",
+    ],
+    [
+      "índice bound com método diferente de btree",
+      () =>
+        mutateMigration(
+          'CREATE INDEX "source_availability_region_next_check_idx" ON "source_availability_observations" USING btree ("region","next_check_at");',
+          'CREATE INDEX "source_availability_region_next_check_idx" ON "source_availability_observations" USING hash ("region","next_check_at");',
+        ),
+      "indexes:source_availability_observations",
+    ],
+    [
+      "índice bound com ordem de colunas invertida",
+      () =>
+        mutateMigration(
+          'CREATE INDEX "source_availability_region_next_check_idx" ON "source_availability_observations" USING btree ("region","next_check_at");',
+          'CREATE INDEX "source_availability_region_next_check_idx" ON "source_availability_observations" USING btree ("next_check_at","region");',
+        ),
+      "indexes:source_availability_observations",
+    ],
+    [
+      "índice bound com coluna diferente",
+      () =>
+        mutateMigration(
+          'CREATE INDEX "source_availability_region_next_check_idx" ON "source_availability_observations" USING btree ("region","next_check_at");',
+          'CREATE INDEX "source_availability_region_next_check_idx" ON "source_availability_observations" USING btree ("region","revision");',
+        ),
+      "indexes:source_availability_observations",
+    ],
+    [
       "foreign key",
       () => mutateMigration("ON DELETE cascade", "ON DELETE no action"),
       "foreign-key:source_availability_observations",
