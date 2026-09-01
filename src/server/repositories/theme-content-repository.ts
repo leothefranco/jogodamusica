@@ -6,17 +6,72 @@ import { getDatabase } from "@/db";
 import {
   gameSessions,
   songs,
+  sourceAvailabilityObservations,
   themes,
   themeSongs,
   type NewTheme,
+  type ThemeCoverClaimStatus,
 } from "@/db/schema";
 import type { ResolvedPlaylistTrack } from "@/domain/music/provider";
+import { SOURCE_AVAILABILITY_POLICY } from "@/domain/music/source-availability";
+import type { SourceAvailabilityObservation } from "@/domain/music/source-availability";
 import { AppError } from "@/lib/errors";
 
 type ThemeContentDatabase = Pick<
   ReturnType<typeof getDatabase>,
   "delete" | "insert" | "select" | "update"
 >;
+
+type ThemeCreationDatabase = Pick<
+  ReturnType<typeof getDatabase>,
+  "execute" | "insert" | "select"
+>;
+
+type ThemeCoverClaimKey = {
+  bucket: "theme-covers";
+  objectKey: string;
+  actorId: string;
+  ownerId: string;
+  payloadHash: string;
+};
+
+export type ThemeCoverClaim = ThemeCoverClaimKey & {
+  epoch: number;
+};
+
+export type ThemeCoverCleanupClaim = ThemeCoverClaim;
+
+export type ThemeCoverClaimAcquisition =
+  | { status: "claimed"; claim: ThemeCoverClaim }
+  | { status: "consumed"; claim: ThemeCoverClaim }
+  | { status: "cleanup-required"; claim: ThemeCoverCleanupClaim }
+  | { status: "conflict" }
+  | { status: "deleted" };
+
+type ThemeCoverClaimRow = Omit<ThemeCoverClaimKey, "actorId"> & {
+  epoch: number;
+  leaseExpiresAt: Date | string | null;
+  status: ThemeCoverClaimStatus;
+  themeId: string | null;
+};
+
+const CREATION_CLAIM_LEASE_MS = 30_000;
+const CLEANUP_CLAIM_LEASE_MS = 15_000;
+const MANAGED_THEME_COVER_KEY_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(?:jpg|png|webp)$/;
+
+export type LockedThemeCreationRepository = {
+  findBySlug(slug: string): Promise<{
+    id: string;
+    name: string;
+    slug: string;
+    description: string | null;
+    coverUrl: string | null;
+    isActive: boolean;
+  } | null>;
+  insert(values: NewTheme): Promise<string | null>;
+  isCoverUrlReferenced(coverUrl: string): Promise<boolean>;
+};
 
 export type ThemeSummary = {
   id: string;
@@ -29,6 +84,157 @@ export type ThemeSummary = {
   totalSongCount: number;
   updatedAt: Date;
 };
+
+function themeCoverClaimLockKey(input: ThemeCoverClaimKey) {
+  return JSON.stringify([
+    "theme-cover-claim-v1",
+    input.bucket,
+    input.objectKey,
+    input.ownerId,
+  ]);
+}
+
+function assertTrustedThemeCoverClaimInput(input: ThemeCoverClaimKey) {
+  if (input.actorId !== input.ownerId) {
+    throw claimForbiddenError();
+  }
+
+  if (
+    input.bucket !== "theme-covers" ||
+    !MANAGED_THEME_COVER_KEY_PATTERN.test(input.objectKey) ||
+    input.objectKey.split("/", 1)[0] !== input.ownerId ||
+    !/^[0-9a-f]{64}$/.test(input.payloadHash)
+  ) {
+    throw new AppError(
+      "INVALID_THEME_COVER_REFERENCE",
+      "A referência gerenciada da capa é inválida.",
+      400,
+    );
+  }
+}
+
+function claimForbiddenError() {
+  return new AppError(
+    "THEME_COVER_CLAIM_FORBIDDEN",
+    "Você não pode gerenciar esta referência de capa.",
+    403,
+  );
+}
+
+function claimBusyError() {
+  return new AppError(
+    "THEME_COVER_CLAIM_BUSY",
+    "Outra operação desta capa está em andamento. Tente novamente.",
+    409,
+  );
+}
+
+function databaseErrorCode(error: unknown) {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof error.code === "string"
+  ) {
+    return error.code;
+  }
+
+  return null;
+}
+
+async function assertActiveThemeCoverOwner(
+  database: ThemeCreationDatabase,
+  input: ThemeCoverClaimKey,
+) {
+  let authorizationRows: unknown[];
+  try {
+    authorizationRows = await database.execute(sql<{ allowed: boolean }>`
+      select true as allowed
+      from public.admin_profiles
+      where user_id = ${input.actorId}::uuid
+        and user_id = ${input.ownerId}::uuid
+        and is_active = true
+      for share nowait
+    `);
+  } catch (error) {
+    if (databaseErrorCode(error) === "55P03") throw claimBusyError();
+    throw error;
+  }
+  const [authorizationRow] = authorizationRows;
+  const authorization = authorizationRow as { allowed: boolean } | undefined;
+  if (!authorization?.allowed) {
+    throw claimForbiddenError();
+  }
+}
+
+async function lockThemeCoverClaim(
+  database: ThemeCreationDatabase,
+  input: ThemeCoverClaimKey,
+) {
+  const [lock] = await database.execute(sql<{ acquired: boolean }>`
+    select pg_try_advisory_xact_lock(
+      hashtextextended(${themeCoverClaimLockKey(input)}, 1::bigint)
+    ) as acquired
+  `);
+  if (!(lock as { acquired?: boolean } | undefined)?.acquired) {
+    throw claimBusyError();
+  }
+}
+
+async function findThemeCoverClaimUsing(
+  database: ThemeCreationDatabase,
+  input: ThemeCoverClaimKey,
+): Promise<ThemeCoverClaimRow | null> {
+  const [claimRow] = await database.execute(sql<ThemeCoverClaimRow>`
+    select
+      bucket,
+      object_key as "objectKey",
+      owner_id as "ownerId",
+      payload_hash as "payloadHash",
+      epoch,
+      status,
+      lease_expires_at as "leaseExpiresAt",
+      theme_id as "themeId"
+    from public.theme_cover_claims
+    where bucket = ${input.bucket}
+      and object_key = ${input.objectKey}
+      and owner_id = ${input.ownerId}::uuid
+    for update
+  `);
+
+  return (claimRow as ThemeCoverClaimRow | undefined) ?? null;
+}
+
+function asThemeCoverClaim(
+  row: ThemeCoverClaimRow,
+  actorId: string,
+): ThemeCoverClaim {
+  return {
+    bucket: row.bucket,
+    objectKey: row.objectKey,
+    actorId,
+    ownerId: row.ownerId,
+    payloadHash: row.payloadHash,
+    epoch: Number(row.epoch),
+  };
+}
+
+function claimRevokedError() {
+  return new AppError(
+    "THEME_COVER_CLAIM_REVOKED",
+    "A reserva desta capa expirou ou foi encerrada.",
+    409,
+    { coverFile: ["Envie a capa novamente e tente de novo."] },
+  );
+}
+
+function cleanupBusyError() {
+  return new AppError(
+    "THEME_COVER_CLEANUP_BUSY",
+    "Outra compensação de capa está em andamento. Tente novamente.",
+    409,
+  );
+}
 
 export type ThemeSongEditorItem = {
   songId: string;
@@ -44,6 +250,7 @@ export type ThemeSongEditorItem = {
   previewDurationSeconds: number;
   isActive: boolean;
   displayOrder: number | null;
+  sourceAvailability: SourceAvailabilityObservation | null;
 };
 
 export type SongAssociationUpsertInput = {
@@ -69,6 +276,16 @@ export type ThemeSongUpdateInput = {
   startTimeSeconds: number;
   previewDurationSeconds: number;
   displayOrder: number | null;
+  isActive: boolean;
+};
+
+export type ThemeSongAssociationInput = {
+  themeId: string;
+  songId: string;
+  title: string;
+  artist: string;
+  startTimeSeconds: number;
+  previewDurationSeconds: number;
   isActive: boolean;
 };
 
@@ -101,7 +318,91 @@ const themeSongEditorSelection = {
   previewDurationSeconds: themeSongs.previewDurationSeconds,
   isActive: themeSongs.isActive,
   displayOrder: themeSongs.displayOrder,
+  availabilityRegion: sourceAvailabilityObservations.region,
+  availabilityConfirmedState: sourceAvailabilityObservations.confirmedState,
+  availabilityConfirmationReason:
+    sourceAvailabilityObservations.confirmationReason,
+  availabilityErrorCode: sourceAvailabilityObservations.errorCode,
+  availabilityObservedAt: sourceAvailabilityObservations.observedAt,
+  availabilityLastAttemptAt: sourceAvailabilityObservations.lastAttemptAt,
+  availabilityLastConfirmedAt: sourceAvailabilityObservations.lastConfirmedAt,
+  availabilityValidUntil: sourceAvailabilityObservations.validUntil,
+  availabilityGraceUntil: sourceAvailabilityObservations.graceUntil,
+  availabilityNextCheckAt: sourceAvailabilityObservations.nextCheckAt,
+  availabilityRevision: sourceAvailabilityObservations.revision,
+  availabilityPolicyVersion: sourceAvailabilityObservations.policyVersion,
 };
+
+const brSourceAvailabilityJoinCondition = and(
+  eq(sourceAvailabilityObservations.songId, songs.id),
+  eq(sourceAvailabilityObservations.region, SOURCE_AVAILABILITY_POLICY.region),
+);
+
+type ThemeSongEditorRow = Omit<ThemeSongEditorItem, "sourceAvailability"> & {
+  availabilityRegion: string | null;
+  availabilityConfirmedState:
+    SourceAvailabilityObservation["confirmedState"] | null;
+  availabilityConfirmationReason: SourceAvailabilityObservation["confirmationReason"];
+  availabilityErrorCode: SourceAvailabilityObservation["errorCode"];
+  availabilityObservedAt: Date | null;
+  availabilityLastAttemptAt: Date | null;
+  availabilityLastConfirmedAt: Date | null;
+  availabilityValidUntil: Date | null;
+  availabilityGraceUntil: Date | null;
+  availabilityNextCheckAt: Date | null;
+  availabilityRevision: number | null;
+  availabilityPolicyVersion: number | null;
+};
+
+function themeSongEditorItemFromRow(
+  row: ThemeSongEditorRow,
+): ThemeSongEditorItem {
+  const {
+    availabilityRegion,
+    availabilityConfirmedState,
+    availabilityConfirmationReason,
+    availabilityErrorCode,
+    availabilityObservedAt,
+    availabilityLastAttemptAt,
+    availabilityLastConfirmedAt,
+    availabilityValidUntil,
+    availabilityGraceUntil,
+    availabilityNextCheckAt,
+    availabilityRevision,
+    availabilityPolicyVersion,
+    ...item
+  } = row;
+
+  if (
+    !availabilityRegion ||
+    !availabilityConfirmedState ||
+    !availabilityObservedAt ||
+    !availabilityLastAttemptAt ||
+    !availabilityNextCheckAt ||
+    availabilityRevision === null ||
+    availabilityPolicyVersion === null
+  ) {
+    return { ...item, sourceAvailability: null };
+  }
+
+  return {
+    ...item,
+    sourceAvailability: {
+      region: availabilityRegion,
+      confirmedState: availabilityConfirmedState,
+      confirmationReason: availabilityConfirmationReason,
+      errorCode: availabilityErrorCode,
+      observedAt: availabilityObservedAt,
+      lastAttemptAt: availabilityLastAttemptAt,
+      lastConfirmedAt: availabilityLastConfirmedAt,
+      validUntil: availabilityValidUntil,
+      graceUntil: availabilityGraceUntil,
+      nextCheckAt: availabilityNextCheckAt,
+      revision: availabilityRevision,
+      policyVersion: availabilityPolicyVersion,
+    },
+  };
+}
 
 async function findThemeSummaryUsing(
   database: ThemeContentDatabase,
@@ -128,10 +429,11 @@ async function findThemeSongUsing(
     .select(themeSongEditorSelection)
     .from(themeSongs)
     .innerJoin(songs, eq(songs.id, themeSongs.songId))
+    .leftJoin(sourceAvailabilityObservations, brSourceAvailabilityJoinCondition)
     .where(and(eq(themeSongs.themeId, themeId), eq(themeSongs.songId, songId)))
     .limit(1);
 
-  return item ?? null;
+  return item ? themeSongEditorItemFromRow(item) : null;
 }
 
 async function findThemeSongByProviderContentIdUsing(
@@ -143,6 +445,7 @@ async function findThemeSongByProviderContentIdUsing(
     .select(themeSongEditorSelection)
     .from(themeSongs)
     .innerJoin(songs, eq(songs.id, themeSongs.songId))
+    .leftJoin(sourceAvailabilityObservations, brSourceAvailabilityJoinCondition)
     .where(
       and(
         eq(themeSongs.themeId, themeId),
@@ -152,7 +455,27 @@ async function findThemeSongByProviderContentIdUsing(
     )
     .limit(1);
 
-  return item ?? null;
+  return item ? themeSongEditorItemFromRow(item) : null;
+}
+
+async function upsertThemeSongAssociationUsing(
+  database: ThemeContentDatabase,
+  input: ThemeSongAssociationInput,
+) {
+  await database
+    .insert(themeSongs)
+    .values(input)
+    .onConflictDoUpdate({
+      target: [themeSongs.themeId, themeSongs.songId],
+      set: {
+        title: input.title,
+        artist: input.artist,
+        startTimeSeconds: input.startTimeSeconds,
+        previewDurationSeconds: input.previewDurationSeconds,
+        isActive: input.isActive,
+        updatedAt: new Date(),
+      },
+    });
 }
 
 async function updateThemeRecordUsing(
@@ -197,28 +520,15 @@ async function upsertSongAndAssociationUsing(
     })
     .returning({ id: songs.id });
 
-  await database
-    .insert(themeSongs)
-    .values({
-      themeId: input.themeId,
-      songId: song.id,
-      title: input.title,
-      artist: input.artist,
-      startTimeSeconds: input.startTimeSeconds,
-      previewDurationSeconds: input.previewDurationSeconds,
-      isActive: input.isActive,
-    })
-    .onConflictDoUpdate({
-      target: [themeSongs.themeId, themeSongs.songId],
-      set: {
-        title: input.title,
-        artist: input.artist,
-        startTimeSeconds: input.startTimeSeconds,
-        previewDurationSeconds: input.previewDurationSeconds,
-        isActive: input.isActive,
-        updatedAt: new Date(),
-      },
-    });
+  await upsertThemeSongAssociationUsing(database, {
+    themeId: input.themeId,
+    songId: song.id,
+    title: input.title,
+    artist: input.artist,
+    startTimeSeconds: input.startTimeSeconds,
+    previewDurationSeconds: input.previewDurationSeconds,
+    isActive: input.isActive,
+  });
 }
 
 async function updateThemeSongAssociationUsing(
@@ -278,24 +588,408 @@ export async function findThemeSummary(
 export async function listThemeSongs(
   themeId: string,
 ): Promise<ThemeSongEditorItem[]> {
-  return getDatabase()
+  const rows = await getDatabase()
     .select(themeSongEditorSelection)
     .from(themeSongs)
     .innerJoin(songs, eq(songs.id, themeSongs.songId))
+    .leftJoin(sourceAvailabilityObservations, brSourceAvailabilityJoinCondition)
     .where(eq(themeSongs.themeId, themeId))
     .orderBy(
       sql`${themeSongs.displayOrder} asc nulls last`,
       asc(themeSongs.title),
     );
+
+  return rows.map(themeSongEditorItemFromRow);
 }
 
-export async function insertTheme(values: NewTheme): Promise<string> {
-  const [theme] = await getDatabase()
+async function insertThemeUsing(
+  database: ThemeCreationDatabase,
+  values: NewTheme,
+): Promise<string> {
+  const [theme] = await database
     .insert(themes)
     .values(values)
     .returning({ id: themes.id });
 
   return theme.id;
+}
+
+async function insertThemeIfSlugAvailableUsing(
+  database: ThemeCreationDatabase,
+  values: NewTheme,
+): Promise<string | null> {
+  const [theme] = await database
+    .insert(themes)
+    .values(values)
+    .onConflictDoNothing({ target: themes.slug })
+    .returning({ id: themes.id });
+
+  return theme?.id ?? null;
+}
+
+async function findThemeBySlugUsing(
+  database: ThemeCreationDatabase,
+  slug: string,
+) {
+  const [theme] = await database
+    .select({
+      id: themes.id,
+      name: themes.name,
+      slug: themes.slug,
+      description: themes.description,
+      coverUrl: themes.coverUrl,
+      isActive: themes.isActive,
+    })
+    .from(themes)
+    .where(eq(themes.slug, slug))
+    .limit(1);
+
+  return theme ?? null;
+}
+
+async function isThemeCoverUrlReferencedUsing(
+  database: ThemeCreationDatabase,
+  coverUrl: string,
+) {
+  const [theme] = await database
+    .select({ id: themes.id })
+    .from(themes)
+    .where(eq(themes.coverUrl, coverUrl))
+    .limit(1);
+
+  return Boolean(theme);
+}
+
+export async function insertTheme(values: NewTheme): Promise<string> {
+  return insertThemeUsing(getDatabase(), values);
+}
+
+export async function findThemeBySlug(slug: string) {
+  return findThemeBySlugUsing(getDatabase(), slug);
+}
+
+export async function isThemeCoverUrlReferenced(coverUrl: string) {
+  return isThemeCoverUrlReferencedUsing(getDatabase(), coverUrl);
+}
+
+export async function acquireThemeCoverClaim(
+  input: ThemeCoverClaimKey,
+): Promise<ThemeCoverClaimAcquisition> {
+  assertTrustedThemeCoverClaimInput(input);
+  return getDatabase().transaction(async (transaction) => {
+    await lockThemeCoverClaim(transaction, input);
+    await assertActiveThemeCoverOwner(transaction, input);
+    let claim = await findThemeCoverClaimUsing(transaction, input);
+
+    if (!claim) {
+      const [insertedRow] = await transaction.execute(sql<ThemeCoverClaimRow>`
+        insert into public.theme_cover_claims (
+          bucket,
+          object_key,
+          owner_id,
+          payload_hash,
+          epoch,
+          status,
+          lease_expires_at
+        ) values (
+          ${input.bucket},
+          ${input.objectKey},
+          ${input.ownerId}::uuid,
+          ${input.payloadHash},
+          1,
+          'claimed',
+          now() + ${CREATION_CLAIM_LEASE_MS} * interval '1 millisecond'
+        )
+        on conflict (bucket, object_key, owner_id) do nothing
+        returning
+          bucket,
+          object_key as "objectKey",
+          owner_id as "ownerId",
+          payload_hash as "payloadHash",
+          epoch,
+          status,
+          lease_expires_at as "leaseExpiresAt",
+          theme_id as "themeId"
+      `);
+      const inserted = insertedRow as ThemeCoverClaimRow | undefined;
+      if (inserted) {
+        return {
+          status: "claimed",
+          claim: asThemeCoverClaim(inserted, input.actorId),
+        };
+      }
+      claim = await findThemeCoverClaimUsing(transaction, input);
+    }
+
+    if (!claim) throw claimRevokedError();
+    if (claim.payloadHash !== input.payloadHash) return { status: "conflict" };
+
+    if (claim.status === "consumed") {
+      return {
+        status: "consumed",
+        claim: asThemeCoverClaim(claim, input.actorId),
+      };
+    }
+    if (claim.status === "deleted") return { status: "deleted" };
+
+    if (claim.status === "claimed") {
+      const [renewedRow] = await transaction.execute(sql<ThemeCoverClaimRow>`
+        update public.theme_cover_claims
+        set epoch = epoch + 1,
+            lease_expires_at = now() + ${CREATION_CLAIM_LEASE_MS} * interval '1 millisecond',
+            updated_at = now()
+        where bucket = ${input.bucket}
+          and object_key = ${input.objectKey}
+          and owner_id = ${input.ownerId}::uuid
+          and payload_hash = ${input.payloadHash}
+          and status = 'claimed'
+          and epoch = ${claim.epoch}
+          and lease_expires_at <= now()
+        returning
+          bucket,
+          object_key as "objectKey",
+          owner_id as "ownerId",
+          payload_hash as "payloadHash",
+          epoch,
+          status,
+          lease_expires_at as "leaseExpiresAt",
+          theme_id as "themeId"
+      `);
+
+      const renewed = renewedRow as ThemeCoverClaimRow | undefined;
+      return {
+        status: "claimed",
+        claim: asThemeCoverClaim(renewed ?? claim, input.actorId),
+      };
+    }
+
+    const [resumedRow] = await transaction.execute(sql<ThemeCoverClaimRow>`
+      update public.theme_cover_claims
+      set epoch = epoch + 1,
+          status = 'deleting',
+          lease_expires_at = now() + ${CLEANUP_CLAIM_LEASE_MS} * interval '1 millisecond',
+          updated_at = now()
+      where bucket = ${input.bucket}
+        and object_key = ${input.objectKey}
+        and owner_id = ${input.ownerId}::uuid
+        and payload_hash = ${input.payloadHash}
+        and epoch = ${claim.epoch}
+        and status = ${claim.status}
+        and (
+          status = 'delete_failed'
+          or lease_expires_at <= now()
+        )
+      returning
+        bucket,
+        object_key as "objectKey",
+        owner_id as "ownerId",
+        payload_hash as "payloadHash",
+        epoch,
+        status,
+        lease_expires_at as "leaseExpiresAt",
+        theme_id as "themeId"
+    `);
+    const resumed = resumedRow as ThemeCoverClaimRow | undefined;
+    if (!resumed) throw cleanupBusyError();
+
+    return {
+      status: "cleanup-required",
+      claim: asThemeCoverClaim(resumed, input.actorId),
+    };
+  });
+}
+
+export async function withThemeCoverClaimPersistence<
+  T extends { themeId: string },
+>(
+  claim: ThemeCoverClaim,
+  operation: (repository: LockedThemeCreationRepository) => Promise<T>,
+): Promise<T> {
+  assertTrustedThemeCoverClaimInput(claim);
+  return getDatabase().transaction(async (transaction) => {
+    await lockThemeCoverClaim(transaction, claim);
+    await assertActiveThemeCoverOwner(transaction, claim);
+    const current = await findThemeCoverClaimUsing(transaction, claim);
+    if (
+      !current ||
+      current.payloadHash !== claim.payloadHash ||
+      Number(current.epoch) !== claim.epoch ||
+      (current.status !== "claimed" && current.status !== "consumed")
+    ) {
+      throw claimRevokedError();
+    }
+
+    const result = await operation({
+      findBySlug: (slug) => findThemeBySlugUsing(transaction, slug),
+      insert: (values) =>
+        transaction.transaction((savepoint) =>
+          insertThemeIfSlugAvailableUsing(savepoint, values),
+        ),
+      isCoverUrlReferenced: (url) =>
+        isThemeCoverUrlReferencedUsing(transaction, url),
+    });
+
+    if (current.status === "consumed") {
+      if (current.themeId !== result.themeId) throw claimRevokedError();
+      return result;
+    }
+
+    const [consumed] = await transaction.execute(sql<{ themeId: string }>`
+      update public.theme_cover_claims
+      set status = 'consumed',
+          theme_id = ${result.themeId}::uuid,
+          lease_expires_at = null,
+          updated_at = now()
+      where bucket = ${claim.bucket}
+        and object_key = ${claim.objectKey}
+        and owner_id = ${claim.ownerId}::uuid
+        and payload_hash = ${claim.payloadHash}
+        and epoch = ${claim.epoch}
+        and status = 'claimed'
+      returning theme_id as "themeId"
+    `);
+    if (consumed?.themeId !== result.themeId) throw claimRevokedError();
+
+    return result;
+  });
+}
+
+export async function prepareThemeCoverCleanup(
+  claim: ThemeCoverClaim,
+  coverUrl: string,
+): Promise<
+  | { status: "preserved-in-use" }
+  | { status: "cleanup-ready"; claim: ThemeCoverCleanupClaim }
+  | { status: "already-absent" }
+> {
+  assertTrustedThemeCoverClaimInput(claim);
+  return getDatabase().transaction(async (transaction) => {
+    await lockThemeCoverClaim(transaction, claim);
+    await assertActiveThemeCoverOwner(transaction, claim);
+    const current = await findThemeCoverClaimUsing(transaction, claim);
+    if (!current || current.payloadHash !== claim.payloadHash) {
+      throw claimRevokedError();
+    }
+    if (current.status === "consumed") {
+      return { status: "preserved-in-use" };
+    }
+    if (current.status === "deleted") return { status: "already-absent" };
+    if (current.status !== "claimed" || Number(current.epoch) !== claim.epoch) {
+      throw cleanupBusyError();
+    }
+
+    const [referencedTheme] = await transaction.execute(sql<{ id: string }>`
+      select id
+      from public.themes
+      where cover_url = ${coverUrl}
+      limit 1
+    `);
+    if (referencedTheme) {
+      const [consumed] = await transaction.execute(sql<{ themeId: string }>`
+        update public.theme_cover_claims
+        set status = 'consumed',
+            theme_id = ${referencedTheme.id}::uuid,
+            lease_expires_at = null,
+            updated_at = now()
+        where bucket = ${claim.bucket}
+          and object_key = ${claim.objectKey}
+          and owner_id = ${claim.ownerId}::uuid
+          and payload_hash = ${claim.payloadHash}
+          and epoch = ${claim.epoch}
+          and status = 'claimed'
+        returning theme_id as "themeId"
+      `);
+      if (!consumed) throw claimRevokedError();
+      return { status: "preserved-in-use" };
+    }
+
+    const [cleanupRow] = await transaction.execute(sql<ThemeCoverClaimRow>`
+      update public.theme_cover_claims
+      set epoch = epoch + 1,
+          status = 'deleting',
+          lease_expires_at = now() + ${CLEANUP_CLAIM_LEASE_MS} * interval '1 millisecond',
+          updated_at = now()
+      where bucket = ${claim.bucket}
+        and object_key = ${claim.objectKey}
+        and owner_id = ${claim.ownerId}::uuid
+        and payload_hash = ${claim.payloadHash}
+        and epoch = ${claim.epoch}
+        and status = 'claimed'
+      returning
+        bucket,
+        object_key as "objectKey",
+        owner_id as "ownerId",
+        payload_hash as "payloadHash",
+        epoch,
+        status,
+        lease_expires_at as "leaseExpiresAt",
+        theme_id as "themeId"
+    `);
+    const cleanup = cleanupRow as ThemeCoverClaimRow | undefined;
+    if (!cleanup) throw claimRevokedError();
+
+    return {
+      status: "cleanup-ready",
+      claim: asThemeCoverClaim(cleanup, claim.actorId),
+    };
+  });
+}
+
+export async function finalizeThemeCoverCleanup(
+  claim: ThemeCoverCleanupClaim,
+  outcome: "deleted" | "delete-failed",
+): Promise<void> {
+  assertTrustedThemeCoverClaimInput(claim);
+  const targetStatus = outcome === "deleted" ? "deleted" : "delete_failed";
+  await getDatabase().transaction(async (transaction) => {
+    await lockThemeCoverClaim(transaction, claim);
+    await assertActiveThemeCoverOwner(transaction, claim);
+    const [finalized] = await transaction.execute(sql<{ status: string }>`
+      update public.theme_cover_claims
+      set status = ${targetStatus},
+          lease_expires_at = null,
+          updated_at = now()
+      where bucket = ${claim.bucket}
+        and object_key = ${claim.objectKey}
+        and owner_id = ${claim.ownerId}::uuid
+        and payload_hash = ${claim.payloadHash}
+        and epoch = ${claim.epoch}
+        and status = 'deleting'
+      returning status
+    `);
+    if (finalized?.status === targetStatus) return;
+
+    const current = await findThemeCoverClaimUsing(transaction, claim);
+    if (
+      current?.payloadHash === claim.payloadHash &&
+      Number(current.epoch) === claim.epoch &&
+      current.status === targetStatus
+    ) {
+      return;
+    }
+    throw claimRevokedError();
+  });
+}
+
+export async function withThemeCoverUrlLock<T>(
+  coverUrl: string,
+  operation: (repository: LockedThemeCreationRepository) => Promise<T>,
+): Promise<T> {
+  return getDatabase().transaction(async (transaction) => {
+    await transaction.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${coverUrl}, 0::bigint))`,
+    );
+
+    return operation({
+      findBySlug: (slug) => findThemeBySlugUsing(transaction, slug),
+      insert: (values) =>
+        transaction.transaction((savepoint) =>
+          insertThemeIfSlugAvailableUsing(savepoint, values),
+        ),
+      isCoverUrlReferenced: (url) =>
+        isThemeCoverUrlReferencedUsing(transaction, url),
+    });
+  });
 }
 
 export async function updateThemeRecord(
@@ -319,12 +1013,21 @@ export async function themeHasSessions(themeId: string) {
 }
 
 export async function deleteThemeRecord(themeId: string) {
-  const [deleted] = await getDatabase()
-    .delete(themes)
-    .where(eq(themes.id, themeId))
-    .returning({ id: themes.id });
+  return getDatabase().transaction(async (transaction) => {
+    await transaction.execute(sql`
+      select bucket, object_key, owner_id
+      from public.theme_cover_claims
+      where theme_id = ${themeId}::uuid
+      order by bucket, object_key, owner_id
+      for update
+    `);
+    const [deleted] = await transaction
+      .delete(themes)
+      .where(eq(themes.id, themeId))
+      .returning({ id: themes.id });
 
-  return deleted?.id ?? null;
+    return deleted?.id ?? null;
+  });
 }
 
 export async function upsertSongAndAssociation(
@@ -475,6 +1178,9 @@ export type LockedThemeContentRepository = {
   upsertSongAndAssociation(
     input: Omit<SongAssociationUpsertInput, "themeId">,
   ): Promise<void>;
+  upsertThemeSongAssociation(
+    input: Omit<ThemeSongAssociationInput, "themeId">,
+  ): Promise<void>;
 };
 
 export async function withThemeContentLock<T>(
@@ -506,6 +1212,8 @@ export async function withThemeContentLock<T>(
         updateThemeRecordUsing(transaction, themeId, values),
       upsertSongAndAssociation: (input) =>
         upsertSongAndAssociationUsing(transaction, { themeId, ...input }),
+      upsertThemeSongAssociation: (input) =>
+        upsertThemeSongAssociationUsing(transaction, { themeId, ...input }),
     });
   });
 }

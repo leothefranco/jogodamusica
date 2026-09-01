@@ -29,7 +29,11 @@ export default function NewThemePage() {
       </div>
 
       <section className="mt-9 rounded-2xl border border-white/8 bg-[#0d0d18] p-5 sm:p-7">
-        <ThemeForm action={createThemeAction} submitLabel="Criar tema" />
+        <ThemeForm
+          action={createThemeAction}
+          mode="create"
+          submitLabel="Criar tema"
+        />
       </section>
     </main>
   );

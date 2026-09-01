@@ -6,6 +6,7 @@ vi.mock("@/lib/supabase/client", () => ({
 
 import { createClient } from "@/lib/supabase/client";
 import {
+  createThemeCoverUploader,
   themeCoverBucket,
   uploadThemeCover,
 } from "@/lib/supabase/theme-cover-upload";
@@ -44,7 +45,16 @@ describe("upload da capa do tema", () => {
       },
     );
 
-    await expect(uploadThemeCover(file)).resolves.toContain("theme-covers");
+    await expect(uploadThemeCover(file)).resolves.toEqual({
+      reference: {
+        bucket: themeCoverBucket,
+        objectKey: expect.stringMatching(
+          /^10000000-0000-4000-8000-000000000001\/[0-9a-f-]+\.jpg$/,
+        ),
+      },
+      publicUrl:
+        "https://project.supabase.co/storage/v1/object/public/theme-covers/admin/capa.jpg",
+    });
     expect(from).toHaveBeenCalledWith(themeCoverBucket);
     expect(upload).toHaveBeenCalledWith(
       expect.stringMatching(
@@ -57,5 +67,36 @@ describe("upload da capa do tema", () => {
         upsert: false,
       },
     );
+  });
+
+  it("não produz referência quando o upload falha", async () => {
+    const getPublicUrl = vi.fn();
+    const uploader = createThemeCoverUploader({
+      createClient: () => ({
+        auth: {
+          getUser: async () => ({
+            data: { user: { id: "10000000-0000-4000-8000-000000000001" } },
+            error: null,
+          }),
+        },
+        storage: {
+          from: () => ({
+            upload: vi.fn().mockResolvedValue({ error: new Error("offline") }),
+            getPublicUrl,
+          }),
+        },
+      }),
+      randomUUID: () => "30000000-0000-4000-8000-000000000003",
+    });
+    const file = new File(
+      [Uint8Array.from([0xff, 0xd8, 0xff, 0xdb])],
+      "capa.jpg",
+      { type: "image/jpeg" },
+    );
+
+    await expect(uploader(file)).rejects.toMatchObject({
+      code: "THEME_COVER_UPLOAD_FAILED",
+    });
+    expect(getPublicUrl).not.toHaveBeenCalled();
   });
 });

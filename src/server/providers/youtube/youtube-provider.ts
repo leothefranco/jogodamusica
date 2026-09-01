@@ -13,9 +13,14 @@ import type {
 } from "@/domain/music/provider";
 import { parseYouTubePlaylistId } from "@/domain/music/playlist";
 import {
+  getYouTubeEmbedData,
   parseIsoDurationSeconds,
   parseYouTubeVideoId,
 } from "@/domain/music/youtube";
+import {
+  normalizeProviderAvailabilityResult,
+  type SourceAvailabilityRegion,
+} from "@/domain/music/source-availability";
 import { getYouTubeEnv } from "@/lib/env";
 import { AppError } from "@/lib/errors";
 
@@ -112,6 +117,7 @@ const searchCache = new Map<string, CacheEntry<ProviderSearchResult[]>>();
 const resolveCache = new Map<string, CacheEntry<ResolvedProviderTrack>>();
 const cacheDurationMs = 5 * 60 * 1_000;
 const apiBaseUrl = "https://www.googleapis.com/youtube/v3";
+type YouTubeCachePolicy = "no-store" | "revalidate";
 
 function decodeEntities(value: string) {
   return value
@@ -155,6 +161,7 @@ async function youtubeFetch<T>(
   params: URLSearchParams,
   schema: z.ZodType<T>,
   fetcher: typeof fetch = fetch,
+  cachePolicy: YouTubeCachePolicy = "revalidate",
 ): Promise<T> {
   let YOUTUBE_API_KEY: string;
   try {
@@ -170,9 +177,14 @@ async function youtubeFetch<T>(
 
   let response: Response;
   try {
+    const cacheOptions =
+      cachePolicy === "no-store"
+        ? ({ cache: "no-store" } as const)
+        : ({ next: { revalidate: 300 } } as const);
+
     response = await fetcher(`${apiBaseUrl}/${path}?${params.toString()}`, {
       signal: AbortSignal.timeout(10_000),
-      next: { revalidate: 300 },
+      ...cacheOptions,
     });
   } catch {
     throw new AppError(
@@ -240,6 +252,7 @@ async function getVideoDetails(
   videoIds: string[],
   regionCode = "BR",
   fetcher: typeof fetch = fetch,
+  cachePolicy: YouTubeCachePolicy = "revalidate",
 ): Promise<ResolvedPlaylistTrack[]> {
   if (videoIds.length === 0) {
     return [];
@@ -255,6 +268,7 @@ async function getVideoDetails(
     params,
     videoResponseSchema,
     fetcher,
+    cachePolicy,
   );
 
   return payload.items.map((item) => {
@@ -329,6 +343,36 @@ export class YouTubeProvider implements PlaylistMusicProvider {
 
     setCached(resolveCache, videoId, track);
     return track;
+  }
+
+  async observe(input: string, regionCode: SourceAvailabilityRegion) {
+    const videoId = parseYouTubeVideoId(input);
+
+    try {
+      const [track] = await getVideoDetails(
+        [videoId],
+        regionCode,
+        this.fetcher,
+        "no-store",
+      );
+
+      if (track && track.providerContentId !== videoId) {
+        return normalizeProviderAvailabilityResult({
+          type: "error",
+          code: "INVALID_PROVIDER_RESPONSE",
+        });
+      }
+
+      return normalizeProviderAvailabilityResult(
+        track ? { type: "resolved", track } : { type: "not_found" },
+      );
+    } catch (error) {
+      return normalizeProviderAvailabilityResult({
+        type: "error",
+        code:
+          error instanceof AppError ? error.code : "INVALID_PROVIDER_RESPONSE",
+      });
+    }
   }
 
   async resolveMany(
@@ -475,12 +519,7 @@ export class YouTubeProvider implements PlaylistMusicProvider {
   }
 
   async getEmbedData(providerContentId: string): Promise<EmbedData> {
-    const videoId = parseYouTubeVideoId(providerContentId);
-
-    return {
-      embedUrl: `https://www.youtube-nocookie.com/embed/${videoId}`,
-      watchUrl: `https://www.youtube.com/watch?v=${videoId}`,
-    };
+    return getYouTubeEmbedData(providerContentId);
   }
 }
 

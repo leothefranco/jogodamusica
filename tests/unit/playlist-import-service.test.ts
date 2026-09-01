@@ -49,6 +49,13 @@ function createService(options?: {
     previewPlaylist: async () => providerPreview,
     getEmbedData: async () => ({ embedUrl: "", watchUrl: "" }),
     ...options?.provider,
+    observe:
+      options?.provider?.observe ??
+      (async () => ({
+        type: "available",
+        reason: "available",
+        track: readyTrack,
+      })),
   };
   const service = createPlaylistImportService({
     findThemeSummary: async () => ({

@@ -1,4 +1,8 @@
 import type { ProviderPlaylistItemStatus } from "@/domain/music/playlist";
+import type {
+  NormalizedProviderAvailabilityResult,
+  SourceAvailabilityRegion,
+} from "@/domain/music/source-availability";
 
 export type ProviderSearchResult = {
   providerContentId: string;
@@ -44,7 +48,15 @@ export interface MusicProvider {
   getEmbedData(providerContentId: string): Promise<EmbedData>;
 }
 
-export interface PlaylistMusicProvider extends MusicProvider {
+export interface SourceAvailabilityProvider {
+  observe(
+    input: string,
+    regionCode: SourceAvailabilityRegion,
+  ): Promise<NormalizedProviderAvailabilityResult>;
+}
+
+export interface PlaylistMusicProvider
+  extends MusicProvider, SourceAvailabilityProvider {
   previewPlaylist(
     input: string,
     options: { maxItems: number; regionCode: string },

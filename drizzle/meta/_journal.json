@@ -57,6 +57,27 @@
       "when": 1787619780000,
       "tag": "0007_theme_cover_storage",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787674839193,
+      "tag": "0008_theme_cover_reference_policies",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787745827151,
+      "tag": "0009_theme_cover_claim_lifecycle",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787861916487,
+      "tag": "0010_source_availability_br",
+      "breakpoints": true
     }
   ]
 }
