@@ -17,7 +17,7 @@ export async function GET(
   _request: Request,
   context: { params: Promise<{ sessionId: string }> },
 ) {
-  return handlePublicGameRequest(async () => {
+  return handlePublicGameRequest("game_session", async () => {
     const { sessionId } = parsePublicGameValue(
       await context.params,
       gameParamsSchema,
@@ -30,7 +30,7 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ sessionId: string }> },
 ) {
-  return handlePublicGameRequest(async () => {
+  return handlePublicGameRequest("game_session", async () => {
     const { sessionId } = parsePublicGameValue(
       await context.params,
       gameParamsSchema,

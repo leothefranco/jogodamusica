@@ -14,7 +14,7 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ sessionId: string; matchId: string }> },
 ) {
-  return handlePublicGameRequest(async () => {
+  return handlePublicGameRequest("game_decision", async () => {
     const { sessionId, matchId } = parsePublicGameValue(
       await context.params,
       matchDecisionParamsSchema,

@@ -1,6 +1,7 @@
 import "server-only";
 
 export {
+  getObservabilityEnv,
   getSeedEnv,
   getRateLimitEnv,
   getServerEnv,

@@ -56,6 +56,10 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 DATABASE_URL=postgresql://...
 RATE_LIMIT_KEY_SECRET=gere-um-segredo-aleatorio-com-32-ou-mais-caracteres
 YOUTUBE_API_KEY=
+OBSERVABILITY_ENVIRONMENT=local
+OBSERVABILITY_EXPORTER=structured
+OBSERVABILITY_RAW_RETENTION_DAYS=30
+RELEASE_COMMIT=
 SEED_ADMIN_USER_ID=
 SEED_ADMIN_DISPLAY_NAME=Administrador
 ```
@@ -161,20 +165,37 @@ pessoais.
 
 ## Variáveis de ambiente
 
-| Variável                               | Exposição | Uso                                |
-| -------------------------------------- | --------- | ---------------------------------- |
-| `NEXT_PUBLIC_APP_URL`                  | Pública   | URL canônica da aplicação          |
-| `NEXT_PUBLIC_SUPABASE_URL`             | Pública   | URL do projeto Supabase            |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Pública   | Chave preferida em projetos novos  |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY`        | Pública   | Compatibilidade com chave legada   |
-| `DATABASE_URL`                         | Servidor  | Transaction Pooler PostgreSQL      |
-| `RATE_LIMIT_KEY_SECRET`                | Servidor  | HMAC dos identificadores de limite |
-| `YOUTUBE_API_KEY`                      | Servidor  | YouTube Data API, na Fase 2        |
-| `YOUTUBE_PLAYLIST_IMPORT_MAX_ITEMS`    | Servidor  | Teto de posições por importação    |
-| `SEED_ADMIN_USER_ID`                   | Servidor  | UUID do primeiro usuário Auth      |
-| `SEED_ADMIN_DISPLAY_NAME`              | Servidor  | Nome exibido do administrador      |
+| Variável                               | Exposição | Uso                                         |
+| -------------------------------------- | --------- | ------------------------------------------- |
+| `NEXT_PUBLIC_APP_URL`                  | Pública   | URL canônica da aplicação                   |
+| `NEXT_PUBLIC_SUPABASE_URL`             | Pública   | URL do projeto Supabase                     |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Pública   | Chave preferida em projetos novos           |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY`        | Pública   | Compatibilidade com chave legada            |
+| `DATABASE_URL`                         | Servidor  | Transaction Pooler PostgreSQL               |
+| `RATE_LIMIT_KEY_SECRET`                | Servidor  | HMAC dos identificadores de limite          |
+| `YOUTUBE_API_KEY`                      | Servidor  | YouTube Data API, na Fase 2                 |
+| `YOUTUBE_PLAYLIST_IMPORT_MAX_ITEMS`    | Servidor  | Teto de posições por importação             |
+| `OBSERVABILITY_ENVIRONMENT`            | Servidor  | Ambiente `local`, `preview` ou `production` |
+| `OBSERVABILITY_EXPORTER`               | Servidor  | Exporter `structured` ou `none`             |
+| `OBSERVABILITY_RAW_RETENTION_DAYS`     | Servidor  | Declara retenção bruta de 1–30 dias         |
+| `RELEASE_COMMIT`                       | Servidor  | SHA opcional da revisão                     |
+| `SEED_ADMIN_USER_ID`                   | Servidor  | UUID do primeiro usuário Auth               |
+| `SEED_ADMIN_DISPLAY_NAME`              | Servidor  | Nome exibido do administrador               |
 
 Somente variáveis prefixadas com `NEXT_PUBLIC_` podem chegar ao navegador.
+
+`OBSERVABILITY_ENVIRONMENT` explícito prevalece. Quando ausente, a fronteira
+canônica deriva `preview`/`production` de `VERCEL_ENV`; em outros runtimes,
+`NODE_ENV=production` deriva `production`, e desenvolvimento/teste usam `local`.
+Configuração inválida registra somente o código controlado e os nomes dos campos,
+então interrompe a inicialização em vez de desligar silenciosamente a telemetria.
+`OBSERVABILITY_EXPORTER=none` é reservado ao rollback controlado.
+
+`OBSERVABILITY_RAW_RETENTION_DAYS` é uma declaração consumida pelos exporters;
+ela não configura nem comprova a exclusão no coletor de logs. Antes de ativar o
+rollout fora de `local`, Segurança/Operações deve verificar no coletor real um
+prazo igual ou menor que o declarado e nunca superior a 30 dias. Esse gate externo
+permanece bloqueante enquanto não houver acesso autorizado ao ambiente.
 
 Use um valor aleatório exclusivo por ambiente em `RATE_LIMIT_KEY_SECRET`, com
 pelo menos 32 caracteres. Trocar esse segredo reinicia logicamente os contadores.

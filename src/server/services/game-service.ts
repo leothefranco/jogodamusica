@@ -11,6 +11,11 @@ import { gameMatchId } from "@/domain/game/ids";
 import type { BracketSize } from "@/domain/music/content-validation";
 import { AppError } from "@/lib/errors";
 import {
+  reportObservabilityEvent,
+  type ObservabilityEventInput,
+} from "@/server/observability/reporter";
+import type { PlayerPlaybackErrorCode } from "@/server/observability/schema";
+import {
   abandonGameSessionRecord,
   getGameStateRecord,
   withGameCreationTransaction,
@@ -224,15 +229,39 @@ export async function abandonGameSession(sessionId: string): Promise<void> {
   }
 }
 
-export async function reportGamePlaybackError(input: {
+export type GamePlaybackErrorInput = {
   sessionId: string;
   matchId: string;
-  errorCode: 2 | 5 | 100 | 101 | 150;
-}): Promise<void> {
-  await gameService.getState(input.sessionId);
-  console.error("[game-player-error]", {
-    sessionId: input.sessionId,
-    matchId: input.matchId,
-    errorCode: input.errorCode,
-  });
+  errorCode: PlayerPlaybackErrorCode;
+};
+
+export function createGamePlaybackErrorReporter(dependencies: {
+  ensureSessionExists(sessionId: string): Promise<unknown>;
+  randomUUID(): string;
+  reportEvent(input: ObservabilityEventInput): void;
+}) {
+  return async function reportPlaybackError(
+    input: GamePlaybackErrorInput,
+  ): Promise<void> {
+    await dependencies.ensureSessionExists(input.sessionId);
+    try {
+      dependencies.reportEvent({
+        eventName: "player_playback_failed",
+        correlationId: dependencies.randomUUID(),
+        payload: {
+          surface: "game_player",
+          playerErrorCode: input.errorCode,
+          failureClass: "provider_playback",
+        },
+      });
+    } catch {
+      // Playback reporting is best effort and cannot alter the game flow.
+    }
+  };
 }
+
+export const reportGamePlaybackError = createGamePlaybackErrorReporter({
+  ensureSessionExists: (sessionId) => gameService.getState(sessionId),
+  randomUUID: () => crypto.randomUUID(),
+  reportEvent: reportObservabilityEvent,
+});
