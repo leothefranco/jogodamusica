@@ -68,6 +68,32 @@ describe("contratos públicos de partida", () => {
     });
   });
 
+  it("retorna conflito seguro quando as candidatas atuais são insuficientes", async () => {
+    gameService.createGameSession.mockRejectedValue(
+      new AppError(
+        "INSUFFICIENT_ACTIVE_SONGS",
+        "Este tema não está disponível para esta modalidade.",
+        409,
+      ),
+    );
+
+    const response = await createGame(
+      new Request("http://localhost/api/games", {
+        method: "POST",
+        body: JSON.stringify({ themeId, bracketSize: 4 }),
+      }),
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: "INSUFFICIENT_ACTIVE_SONGS",
+        message: "Este tema não está disponível para esta modalidade.",
+        fieldErrors: null,
+      },
+    });
+  });
+
   it("limita a criação de partidas antes de tocar o domínio", async () => {
     rateLimitService.enforcePublicRateLimit.mockRejectedValue(
       new AppError(

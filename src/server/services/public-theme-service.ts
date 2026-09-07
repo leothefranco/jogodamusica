@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   getSupportedBracketSizes,
+  minimumPlayableSongCount,
   type BracketSize,
 } from "@/domain/music/content-validation";
 import {
@@ -24,16 +25,22 @@ function presentTheme(theme: PlayableThemeRecord): PublicTheme {
   return { ...theme, supportedBracketSizes };
 }
 
+function isPlayableTheme(theme: PlayableThemeRecord) {
+  return theme.activeSongCount >= minimumPlayableSongCount;
+}
+
 export function createPublicThemeService(
   dependencies: PublicThemeServiceDependencies,
 ) {
   return {
     async listThemes(): Promise<PublicTheme[]> {
-      return (await dependencies.listPlayableThemes()).map(presentTheme);
+      return (await dependencies.listPlayableThemes())
+        .filter(isPlayableTheme)
+        .map(presentTheme);
     },
     async getTheme(slug: string): Promise<PublicTheme | null> {
       const theme = await dependencies.findPlayableThemeBySlug(slug);
-      return theme ? presentTheme(theme) : null;
+      return theme && isPlayableTheme(theme) ? presentTheme(theme) : null;
     },
   };
 }
