@@ -21,7 +21,7 @@ export default function ErrorPage({
   return (
     <FullPageState
       icon={null}
-      eyebrow="Algo saiu do ritmo"
+      eyebrow="Falha ao carregar"
       eyebrowTone="danger"
       title="Não foi possível continuar"
       description="Verifique sua conexão e tente novamente. Nenhum voto é registrado automaticamente quando ocorre uma falha."
@@ -30,14 +30,14 @@ export default function ErrorPage({
         type="button"
         size="lg"
         onClick={reset}
-        className="min-h-12 rounded-xl"
+        className="min-h-12 rounded-md"
       >
         <RotateCcw aria-hidden="true" />
         Tentar novamente
       </Button>
       <Link
         href="/"
-        className="inline-flex min-h-12 items-center justify-center rounded-xl border border-white/10 px-5 font-semibold outline-none hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-violet-300"
+        className="inline-flex min-h-12 items-center justify-center rounded-md border border-white/10 px-5 font-semibold outline-none hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-[var(--duel-a)]"
       >
         Voltar ao início
       </Link>

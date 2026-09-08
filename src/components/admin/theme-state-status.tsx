@@ -18,19 +18,23 @@ export function ThemeStateStatus({ state }: { state: ThemeState }) {
     <section aria-label="Estado do Tema" className="space-y-3 text-sm">
       <dl className="grid gap-3 sm:grid-cols-3">
         <div>
-          <dt className="text-xs text-white/50">Publicação</dt>
+          <dt className="text-xs text-[var(--app-muted)]">Publicação</dt>
           <dd className="font-semibold">
             {state.editorialState === "published" ? "Publicado" : "Rascunho"}
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-white/50">Visibilidade derivada</dt>
+          <dt className="text-xs text-[var(--app-muted)]">
+            Visibilidade derivada
+          </dt>
           <dd className="font-semibold">
             {state.visibility === "visible" ? "Visível" : "Oculto"}
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-white/50">Estado operacional</dt>
+          <dt className="text-xs text-[var(--app-muted)]">
+            Estado operacional
+          </dt>
           <dd className="font-semibold">
             {operationalLabels[state.operationalState]}
           </dd>
@@ -45,7 +49,7 @@ export function ThemeStateStatus({ state }: { state: ThemeState }) {
           "Entradas ativas",
         )}
       </p>
-      <p className="text-xs text-white/60">
+      <p className="text-xs text-[var(--app-muted)]">
         {countLabel(state.counts.availableFresh, "fresca", "frescas")} ·{" "}
         {state.counts.availableGrace} em tolerância ·{" "}
         {countLabel(state.counts.unavailable, "indisponível", "indisponíveis")}{" "}

@@ -25,12 +25,11 @@ export default async function ThemePage({ params }: ThemePageProps) {
   if (!theme) notFound();
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#08080f] px-5 py-8 text-white sm:px-8">
-      <div className="grid-fade pointer-events-none absolute inset-0 opacity-35" />
-      <div className="relative mx-auto max-w-5xl">
+    <main className="relative min-h-screen overflow-hidden bg-[var(--app-bg)] px-5 py-8 text-white sm:px-8">
+      <div className="relative mx-auto max-w-6xl border-t-4 border-[var(--duel-a)]">
         <Link
           href="/"
-          className="inline-flex min-h-11 items-center gap-2 rounded-lg text-sm text-white/60 outline-none hover:text-white focus-visible:ring-2 focus-visible:ring-violet-300"
+          className="inline-flex min-h-11 items-center gap-2 rounded-lg text-sm text-[var(--app-muted)] outline-none hover:text-white focus-visible:ring-2 focus-visible:ring-white"
         >
           <ArrowLeft className="size-4" aria-hidden="true" />
           Voltar aos temas
@@ -38,14 +37,14 @@ export default async function ThemePage({ params }: ThemePageProps) {
 
         <section className="mt-8 grid gap-8 lg:grid-cols-[1fr_24rem] lg:items-start">
           <div>
-            <span className="inline-flex items-center gap-2 rounded-full border border-violet-300/20 bg-violet-300/8 px-3 py-2 text-xs font-semibold text-violet-200">
+            <span className="inline-flex items-center gap-2 rounded-none border-l-4 border-[var(--duel-a)] bg-[var(--app-surface)] px-3 py-2 text-xs font-semibold text-[var(--duel-a)]">
               <Music2 className="size-4" aria-hidden="true" />
               {theme.activeSongCount} músicas disponíveis
             </span>
-            <h1 className="mt-5 text-4xl font-black tracking-tight text-balance sm:text-6xl">
+            <h1 className="mt-5 font-['JDM_Anton'] text-5xl font-normal tracking-tight text-balance uppercase sm:text-6xl">
               {theme.name}
             </h1>
-            <p className="mt-5 max-w-2xl text-base leading-7 text-white/58 sm:text-lg">
+            <p className="mt-5 max-w-2xl text-base leading-7 text-[var(--app-muted)] sm:text-lg">
               {theme.description ??
                 "Escolha o tamanho da chave e descubra a campeã deste tema."}
             </p>
@@ -53,7 +52,7 @@ export default async function ThemePage({ params }: ThemePageProps) {
             <ThemeThumbnailStack
               thumbnailUrls={theme.thumbnailUrls}
               fallbackCoverUrl={theme.coverUrl}
-              className="mt-8 aspect-[16/9] max-w-2xl rounded-3xl border border-white/10"
+              className="mt-8 aspect-[16/9] max-w-2xl rounded-none border-r-4 border-l-4 border-r-[var(--duel-b)] border-l-[var(--duel-a)]"
             />
           </div>
 

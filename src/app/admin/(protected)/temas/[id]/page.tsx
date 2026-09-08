@@ -60,7 +60,7 @@ export default async function EditThemePage({
     <main className="mx-auto w-full max-w-7xl px-5 py-10 sm:px-8 sm:py-14">
       <Link
         href="/admin/temas"
-        className="inline-flex min-h-11 items-center gap-2 rounded-xl pr-3 text-sm font-semibold text-white/55 outline-none hover:text-white focus-visible:ring-2 focus-visible:ring-violet-300"
+        className="inline-flex min-h-11 items-center gap-2 rounded-md pr-3 text-sm font-semibold text-[var(--app-muted)] outline-none hover:text-white focus-visible:ring-2 focus-visible:ring-[var(--duel-a)]"
       >
         <ArrowLeft className="size-4" aria-hidden="true" />
         Voltar aos temas
@@ -83,7 +83,7 @@ export default async function EditThemePage({
         <div className="flex flex-wrap gap-3">
           <Link
             href={`/admin/temas/${theme.id}/importar-playlist`}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.025] px-5 text-sm font-semibold hover:bg-white/[0.06]"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-white/10 bg-white/[0.025] px-5 text-sm font-semibold hover:bg-white/[0.06]"
           >
             <ListMusic aria-hidden="true" />
             Importar playlist
@@ -100,7 +100,7 @@ export default async function EditThemePage({
               size="lg"
               variant={isPublished ? "outline" : "default"}
               disabled={!isPublished && !publishability.canPublish}
-              className="min-h-11 rounded-xl px-5"
+              className="min-h-11 rounded-md px-5"
             >
               <CheckCircle2 aria-hidden="true" />
               {isPublished ? "Voltar a rascunho" : "Publicar tema"}
@@ -112,7 +112,7 @@ export default async function EditThemePage({
               size="lg"
               variant="destructive"
               confirmation="Excluir este tema e todas as suas associações? Esta ação não pode ser desfeita."
-              className="min-h-11 rounded-xl px-4"
+              className="min-h-11 rounded-md px-4"
             >
               <Trash2 aria-hidden="true" />
               Excluir
@@ -124,7 +124,7 @@ export default async function EditThemePage({
       {query.message ? (
         <div
           role="status"
-          className="mt-7 rounded-xl border border-emerald-300/20 bg-emerald-400/8 px-4 py-3 text-sm text-emerald-100"
+          className="mt-7 rounded-md border border-emerald-300/20 bg-emerald-400/8 px-4 py-3 text-sm text-emerald-100"
         >
           {query.message}
         </div>
@@ -132,14 +132,14 @@ export default async function EditThemePage({
       {query.error ? (
         <div
           role="alert"
-          className="mt-7 rounded-xl border border-red-300/20 bg-red-400/8 px-4 py-3 text-sm text-red-100"
+          className="mt-7 rounded-md border border-red-300/20 bg-red-400/8 px-4 py-3 text-sm text-red-100"
         >
           {query.error}
         </div>
       ) : null}
 
       {!isPublished && !publishability.canPublish ? (
-        <div className="mt-7 flex gap-3 rounded-xl border border-amber-300/18 bg-amber-300/7 px-4 py-4 text-sm text-amber-100">
+        <div className="mt-7 flex gap-3 rounded-md border border-amber-300/18 bg-amber-300/7 px-4 py-4 text-sm text-amber-100">
           <CircleAlert className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
           <p>
             Faltam{" "}
@@ -154,7 +154,7 @@ export default async function EditThemePage({
       ) : null}
 
       <div className="mt-10 grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-        <section className="rounded-2xl border border-white/8 bg-[#0d0d18] p-5 sm:p-7">
+        <section className="rounded-md border border-white/8 bg-[var(--app-surface)] p-5 sm:p-7">
           <h2 className="text-xl font-black">Dados do tema</h2>
           <p className="mt-2 text-sm leading-6 text-white/42">
             Nome, endereço e apresentação do catálogo musical.
@@ -174,7 +174,7 @@ export default async function EditThemePage({
           </div>
         </section>
 
-        <section className="rounded-2xl border border-white/8 bg-[#0d0d18] p-5 sm:p-7">
+        <section className="rounded-md border border-white/8 bg-[var(--app-surface)] p-5 sm:p-7">
           <h2 className="text-xl font-black">Adicionar música</h2>
           <p className="mt-2 text-sm leading-6 text-white/42">
             Pesquise somente no painel ou cole uma URL. Os metadados são
@@ -186,7 +186,7 @@ export default async function EditThemePage({
         </section>
       </div>
 
-      <section className="mt-6 rounded-2xl border border-white/8 bg-[#0d0d18] p-5 sm:p-7">
+      <section className="mt-6 rounded-md border border-white/8 bg-[var(--app-surface)] p-5 sm:p-7">
         <div>
           <h2 className="text-xl font-black">Músicas do tema</h2>
           <p className="mt-2 text-sm text-white/42">
@@ -196,7 +196,7 @@ export default async function EditThemePage({
         </div>
 
         {songs.length === 0 ? (
-          <div className="mt-7 rounded-xl border border-dashed border-white/10 px-5 py-10 text-center text-sm text-white/38">
+          <div className="mt-7 rounded-md border border-dashed border-white/10 px-5 py-10 text-center text-sm text-white/38">
             Nenhuma música associada ainda.
           </div>
         ) : (
@@ -204,7 +204,7 @@ export default async function EditThemePage({
             {songs.map((song) => (
               <article
                 key={song.songId}
-                className="rounded-2xl border border-white/8 bg-black/15 p-5"
+                className="rounded-md border border-white/8 bg-black/15 p-5"
               >
                 <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0">
@@ -222,7 +222,7 @@ export default async function EditThemePage({
                         href={song.watchUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-violet-200 outline-none hover:text-white focus-visible:ring-2 focus-visible:ring-violet-300"
+                        className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-[var(--duel-a)] outline-none hover:text-white focus-visible:ring-2 focus-visible:ring-[var(--duel-a)]"
                       >
                         Abrir YouTube
                         <ExternalLink className="size-3.5" aria-hidden="true" />
@@ -243,7 +243,7 @@ export default async function EditThemePage({
                     <Button
                       type="submit"
                       variant="outline"
-                      className="min-h-10 rounded-xl px-3"
+                      className="min-h-10 rounded-md px-3"
                     >
                       <RefreshCw aria-hidden="true" />
                       Revalidar Fonte
@@ -320,12 +320,12 @@ export default async function EditThemePage({
                       className={adminInputClassName}
                     />
                   </label>
-                  <label className="flex min-h-11 items-center gap-3 self-end rounded-xl border border-white/8 bg-black/15 px-4 text-sm font-semibold lg:col-span-2">
+                  <label className="flex min-h-11 items-center gap-3 self-end rounded-md border border-white/8 bg-black/15 px-4 text-sm font-semibold lg:col-span-2">
                     <input
                       type="checkbox"
                       name="isActive"
                       defaultChecked={song.isActive}
-                      className="size-4 accent-violet-400"
+                      className="size-4 accent-[var(--duel-a)]"
                     />
                     Ativa neste tema
                   </label>
@@ -333,7 +333,7 @@ export default async function EditThemePage({
                     <Button
                       type="submit"
                       size="lg"
-                      className="min-h-11 rounded-xl px-4"
+                      className="min-h-11 rounded-md px-4"
                     >
                       <Save aria-hidden="true" />
                       Salvar música
@@ -353,7 +353,7 @@ export default async function EditThemePage({
                     type="submit"
                     variant="ghost"
                     confirmation={`Remover “${song.title}” deste tema? A música continuará disponível para outros temas.`}
-                    className="min-h-11 rounded-xl px-3 text-red-200 hover:bg-red-400/10 hover:text-red-100"
+                    className="min-h-11 rounded-md px-3 text-red-200 hover:bg-red-400/10 hover:text-red-100"
                   >
                     <Trash2 aria-hidden="true" />
                     Remover do tema

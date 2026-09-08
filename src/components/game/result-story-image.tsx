@@ -18,14 +18,14 @@ function CrownIcon() {
     >
       <path
         d="M10 22 23 36 34 14l11 22 13-14-5 31H15l-5-31Z"
-        fill="#FDE68A"
-        stroke="#F59E0B"
+        fill="#F5F3ED"
+        stroke="#101216"
         strokeWidth="3"
         strokeLinejoin="round"
       />
       <path
         d="M17 58h34"
-        stroke="#FDE68A"
+        stroke="#F5F3ED"
         strokeWidth="5"
         strokeLinecap="round"
       />
@@ -44,13 +44,13 @@ function MusicMark() {
     >
       <path
         d="M23 39.5V14l24-5v26.5M23 20l24-5"
-        stroke="#DDD6FE"
+        stroke="#38BDF8"
         strokeWidth="5"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <ellipse cx="15" cy="42" rx="9" ry="7" fill="#A78BFA" />
-      <ellipse cx="39" cy="38" rx="9" ry="7" fill="#A78BFA" />
+      <ellipse cx="15" cy="42" rx="9" ry="7" fill="#38BDF8" />
+      <ellipse cx="39" cy="38" rx="9" ry="7" fill="#38BDF8" />
     </svg>
   );
 }
@@ -63,8 +63,7 @@ export function createResultStoryImage(
     <div
       style={{
         alignItems: "center",
-        background:
-          "radial-gradient(circle at 50% 28%, #31205e 0%, #151026 36%, #08080f 72%)",
+        background: "#101216",
         color: "white",
         display: "flex",
         flexDirection: "column",
@@ -77,27 +76,27 @@ export function createResultStoryImage(
     >
       <div
         style={{
-          background: "rgba(167, 139, 250, 0.16)",
-          border: "2px solid rgba(196, 181, 253, 0.22)",
-          borderRadius: 999,
+          background: "#38BDF8",
+          border: "0px solid transparent",
+          borderRadius: 0,
           display: "flex",
-          height: 470,
+          height: 12,
           position: "absolute",
-          right: -260,
-          top: 300,
-          width: 470,
+          right: 0,
+          top: 0,
+          width: "50%",
         }}
       />
       <div
         style={{
-          background: "rgba(251, 191, 36, 0.09)",
-          borderRadius: 999,
-          bottom: 180,
+          background: "#FF923D",
+          borderRadius: 0,
+          top: 0,
           display: "flex",
-          height: 380,
-          left: -250,
+          height: 12,
+          left: 0,
           position: "absolute",
-          width: 380,
+          width: "50%",
         }}
       />
 
@@ -113,9 +112,9 @@ export function createResultStoryImage(
           <div
             style={{
               alignItems: "center",
-              background: "rgba(139, 92, 246, 0.2)",
-              border: "2px solid rgba(196, 181, 253, 0.25)",
-              borderRadius: 22,
+              background: "#181C22",
+              border: "2px solid #38BDF8",
+              borderRadius: 0,
               display: "flex",
               height: 82,
               justifyContent: "center",
@@ -142,7 +141,7 @@ export function createResultStoryImage(
             </span>
             <span
               style={{
-                color: "#A78BFA",
+                color: "#38BDF8",
                 fontSize: 20,
                 fontWeight: 700,
                 letterSpacing: 2,
@@ -156,9 +155,9 @@ export function createResultStoryImage(
         <div
           style={{
             alignItems: "center",
-            background: "rgba(251, 191, 36, 0.12)",
-            border: "2px solid rgba(253, 230, 138, 0.25)",
-            borderRadius: 22,
+            background: "#181C22",
+            border: "2px solid #FF923D",
+            borderRadius: 0,
             display: "flex",
             height: 82,
             justifyContent: "center",
@@ -180,7 +179,7 @@ export function createResultStoryImage(
       >
         <span
           style={{
-            color: "#C4B5FD",
+            color: "#FF923D",
             fontSize: 25,
             fontWeight: 800,
             letterSpacing: 4,
@@ -191,22 +190,22 @@ export function createResultStoryImage(
         </span>
         <span
           style={{
-            color: "#FDE68A",
+            color: "#F5F3ED",
             fontSize: 43,
             fontWeight: 900,
             letterSpacing: 6,
             marginTop: 24,
           }}
         >
-          A ESCOLHIDA
+          MÚSICA CAMPEÃ
         </span>
       </div>
 
       <div
         style={{
           background: "rgba(255, 255, 255, 0.035)",
-          border: "3px solid rgba(253, 230, 138, 0.3)",
-          borderRadius: 54,
+          border: "3px solid #F5F3ED",
+          borderRadius: 0,
           boxShadow: "0 30px 90px rgba(0, 0, 0, 0.5)",
           display: "flex",
           height: 770,
@@ -224,7 +223,7 @@ export function createResultStoryImage(
             alt=""
             src={card.thumbnailUrl}
             style={{
-              borderRadius: 40,
+              borderRadius: 0,
               height: "100%",
               objectFit: "cover",
               width: "100%",
@@ -234,8 +233,9 @@ export function createResultStoryImage(
           <div
             style={{
               alignItems: "center",
-              background: "linear-gradient(145deg, #4C1D95, #111827)",
-              borderRadius: 40,
+              background:
+                "linear-gradient(135deg, #38BDF8 0%, #38BDF8 50%, #FF923D 50%, #FF923D 100%)",
+              borderRadius: 0,
               display: "flex",
               height: "100%",
               justifyContent: "center",
@@ -248,8 +248,8 @@ export function createResultStoryImage(
         <div
           style={{
             alignItems: "center",
-            background: "#FDE68A",
-            borderRadius: 999,
+            background: "#181C22",
+            borderRadius: 0,
             bottom: 35,
             display: "flex",
             height: 100,
@@ -315,11 +315,11 @@ export function createResultStoryImage(
             fontWeight: 600,
           }}
         >
-          Uma disputa. Um aparelho. Uma campeã.
+          Elejam a melhor música.
         </span>
         <span
           style={{
-            color: "#C4B5FD",
+            color: "#FF923D",
             fontSize: 25,
             fontWeight: 800,
           }}

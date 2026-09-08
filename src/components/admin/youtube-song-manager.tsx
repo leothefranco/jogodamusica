@@ -121,7 +121,7 @@ export function YouTubeSongManager({ action }: YouTubeSongManagerProps) {
       <div className="grid gap-5 lg:grid-cols-2">
         <form
           onSubmit={search}
-          className="rounded-2xl border border-white/8 bg-black/15 p-5"
+          className="rounded-md border border-white/8 bg-black/15 p-5"
         >
           <div className="grid gap-2 text-sm font-semibold">
             <label htmlFor="youtube-search-query">Pesquisar no YouTube</label>
@@ -140,7 +140,7 @@ export function YouTubeSongManager({ action }: YouTubeSongManagerProps) {
                 type="submit"
                 size="lg"
                 disabled={loading !== null}
-                className="min-h-11 rounded-xl px-4"
+                className="min-h-11 rounded-md px-4"
                 aria-label="Pesquisar"
               >
                 {loading === "search" ? (
@@ -158,7 +158,7 @@ export function YouTubeSongManager({ action }: YouTubeSongManagerProps) {
 
         <form
           onSubmit={resolve}
-          className="rounded-2xl border border-white/8 bg-black/15 p-5"
+          className="rounded-md border border-white/8 bg-black/15 p-5"
         >
           <div className="grid gap-2 text-sm font-semibold">
             <label htmlFor="youtube-video-input">Colar URL ou ID</label>
@@ -175,7 +175,7 @@ export function YouTubeSongManager({ action }: YouTubeSongManagerProps) {
                 type="submit"
                 size="lg"
                 disabled={loading !== null}
-                className="min-h-11 rounded-xl px-4"
+                className="min-h-11 rounded-md px-4"
                 aria-label="Resolver vídeo"
               >
                 {loading === "resolve" ? (
@@ -195,7 +195,7 @@ export function YouTubeSongManager({ action }: YouTubeSongManagerProps) {
       {requestError ? (
         <div
           role="alert"
-          className="rounded-xl border border-amber-300/20 bg-amber-300/8 px-4 py-3 text-sm text-amber-100"
+          className="rounded-md border border-amber-300/20 bg-amber-300/8 px-4 py-3 text-sm text-amber-100"
         >
           {requestError}
         </div>
@@ -212,7 +212,7 @@ export function YouTubeSongManager({ action }: YouTubeSongManagerProps) {
                 key={track.providerContentId}
                 type="button"
                 onClick={() => setSelected(track)}
-                className="min-h-24 rounded-2xl border border-white/8 bg-white/[0.025] p-4 text-left transition outline-none hover:border-violet-300/30 hover:bg-violet-400/5 focus-visible:ring-2 focus-visible:ring-violet-300"
+                className="min-h-24 rounded-md border border-white/8 bg-white/[0.025] p-4 text-left transition outline-none hover:border-[var(--duel-a)]/30 hover:bg-[var(--duel-a)]/5 focus-visible:ring-2 focus-visible:ring-[var(--duel-a)]"
               >
                 <span className="line-clamp-2 text-sm font-bold">
                   {track.sourceTitle}
@@ -243,10 +243,10 @@ export function YouTubeSongManager({ action }: YouTubeSongManagerProps) {
         <form
           key={selected.providerContentId}
           action={formAction}
-          className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,32rem),1fr))] gap-6 rounded-2xl border border-violet-300/18 bg-violet-400/[0.045] p-5 sm:p-6"
+          className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,32rem),1fr))] gap-6 rounded-md border border-[var(--duel-a)]/18 bg-[var(--duel-a)]/[0.045] p-5 sm:p-6"
         >
           <div className="min-w-0">
-            <div className="aspect-video w-full overflow-hidden rounded-xl bg-black">
+            <div className="aspect-video w-full overflow-hidden rounded-md bg-black">
               <iframe
                 src={selected.embedUrl}
                 title={`Prévia de ${selected.sourceTitle}`}
@@ -268,7 +268,7 @@ export function YouTubeSongManager({ action }: YouTubeSongManagerProps) {
             {actionState.message ? (
               <div
                 role="alert"
-                className="rounded-xl border border-red-300/20 bg-red-400/8 px-4 py-3 text-sm text-red-100"
+                className="rounded-md border border-red-300/20 bg-red-400/8 px-4 py-3 text-sm text-red-100"
               >
                 {actionState.message}
               </div>
@@ -333,12 +333,12 @@ export function YouTubeSongManager({ action }: YouTubeSongManagerProps) {
               </label>
             </div>
 
-            <label className="flex min-h-11 items-center gap-3 rounded-xl border border-white/8 bg-black/15 px-4 text-sm font-semibold">
+            <label className="flex min-h-11 items-center gap-3 rounded-md border border-white/8 bg-black/15 px-4 text-sm font-semibold">
               <input
                 type="checkbox"
                 name="isActive"
                 defaultChecked
-                className="size-4 accent-violet-400"
+                className="size-4 accent-[var(--duel-a)]"
               />
               Música ativa neste tema
             </label>
@@ -347,7 +347,7 @@ export function YouTubeSongManager({ action }: YouTubeSongManagerProps) {
               type="submit"
               size="lg"
               disabled={actionPending || !selected.isEmbeddable}
-              className="min-h-11 rounded-xl px-5"
+              className="min-h-11 rounded-md px-5"
             >
               {actionPending ? (
                 <LoaderCircle className="animate-spin" />
@@ -359,7 +359,7 @@ export function YouTubeSongManager({ action }: YouTubeSongManagerProps) {
           </div>
         </form>
       ) : (
-        <div className="rounded-2xl border border-dashed border-white/10 px-5 py-10 text-center text-sm text-white/38">
+        <div className="rounded-md border border-dashed border-white/10 px-5 py-10 text-center text-sm text-white/38">
           Pesquise ou informe uma URL para visualizar e configurar a música.
         </div>
       )}

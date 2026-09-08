@@ -38,8 +38,11 @@ export function HomeExperience({ themes }: { themes: PublicTheme[] }) {
             QUAL É A<br />
             <span>MELHOR</span>
             <br />
-            MÚSICA?
+            <span className={styles.questionEnd}>MÚSICA?</span>
           </h1>
+          <div className={styles.duelRule} aria-hidden="true">
+            VS
+          </div>
           <p className={styles.description}>
             Escolha um tema.
             <br />

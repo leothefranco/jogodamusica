@@ -10,8 +10,8 @@ export function createPublicManifest(): MetadataRoute.Manifest {
     start_url: "/",
     scope: "/",
     display: "standalone",
-    background_color: "#08080f",
-    theme_color: "#08080f",
+    background_color: "#101216",
+    theme_color: "#101216",
     lang: siteConfig.locale,
     orientation: "any",
     icons: [
@@ -38,8 +38,8 @@ export function createAdminManifest(): MetadataRoute.Manifest {
     start_url: "/admin",
     scope: "/admin",
     display: "standalone",
-    background_color: "#08080f",
-    theme_color: "#059669",
+    background_color: "#101216",
+    theme_color: "#181C22",
     lang: "pt-BR",
     orientation: "any",
     icons: [

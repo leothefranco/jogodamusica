@@ -32,21 +32,22 @@ export default async function ResultPage({
   const { champion } = result;
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#08080f] px-5 py-10 text-white sm:px-8">
-      <div className="grid-fade pointer-events-none absolute inset-0 opacity-30" />
+    <main className="relative min-h-screen overflow-hidden bg-[var(--app-bg)] px-5 py-10 text-white sm:px-8">
       <div className="relative mx-auto max-w-5xl">
-        <section className="text-center">
-          <span className="mx-auto grid size-16 place-items-center rounded-2xl border border-amber-200/25 bg-amber-200/10 text-amber-200">
+        <section className="border-t-4 border-b-4 border-t-[var(--duel-a)] border-b-[var(--duel-b)] py-8 text-center">
+          <span className="mx-auto grid size-16 place-items-center rounded-none border border-white/25 bg-[var(--app-surface)] text-[var(--app-text)]">
             <Trophy className="size-8" aria-hidden="true" />
           </span>
-          <p className="mt-5 text-xs font-bold tracking-[0.2em] text-violet-300 uppercase">
+          <p className="mt-5 text-xs font-bold tracking-[0.2em] text-[var(--duel-a)] uppercase">
             Campeã de {state.theme.name}
           </p>
-          <h1 className="mt-3 text-4xl font-black tracking-tight text-balance sm:text-6xl">
+          <h1 className="mt-3 font-['JDM_Anton'] text-5xl font-normal tracking-tight text-balance uppercase sm:text-6xl">
             {champion.title}
           </h1>
-          <p className="mt-3 text-lg text-white/55">{champion.artist}</p>
-          <div className="mx-auto mt-7 aspect-video max-w-2xl overflow-hidden rounded-3xl border border-amber-200/20">
+          <p className="mt-3 text-lg text-[var(--app-muted)]">
+            {champion.artist}
+          </p>
+          <div className="mx-auto mt-7 aspect-video max-w-2xl overflow-hidden rounded-none border-r-4 border-l-4 border-r-[var(--duel-b)] border-l-[var(--duel-a)]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={champion.thumbnailUrl}
@@ -57,30 +58,30 @@ export default async function ResultPage({
         </section>
 
         <section
-          className="mx-auto mt-12 max-w-4xl rounded-3xl border border-violet-300/15 bg-violet-300/[0.045] p-5 sm:p-7"
+          className="mx-auto mt-12 max-w-4xl rounded-none border-t-4 border-[var(--duel-b)] bg-[var(--app-surface)] p-5 sm:p-7"
           aria-labelledby="imagem-do-resultado"
         >
           <div className="grid items-center gap-7 md:grid-cols-[minmax(0,1fr)_260px]">
             <div>
-              <p className="text-xs font-bold tracking-[0.18em] text-violet-300 uppercase">
-                Pronta para compartilhar
+              <p className="text-xs font-bold tracking-[0.18em] text-[var(--duel-a)] uppercase">
+                RESULTADO
               </p>
               <h2
                 id="imagem-do-resultado"
                 className="mt-3 text-2xl font-black sm:text-3xl"
               >
-                Sua campeã virou uma história
+                Compartilhar a campeã
               </h2>
-              <p className="mt-3 max-w-xl text-sm leading-6 text-white/55 sm:text-base">
-                Geramos uma imagem vertical para Stories e Status com o tema, a
-                música vencedora e o endereço do Jogo da Música.
+              <p className="mt-3 max-w-xl text-sm leading-6 text-[var(--app-muted)] sm:text-base">
+                Baixe a imagem para Stories e Status com o tema, a música
+                vencedora e o endereço do Jogo da Música.
               </p>
               <div className="mt-6 flex flex-col gap-3 sm:flex-row">
                 <a
                   href={`/api/resultados/${sessionId}/imagem?download=1`}
                   className={cn(
                     buttonVariants({ size: "lg" }),
-                    "min-h-12 rounded-xl bg-violet-300 px-5 font-bold text-[#160d25] hover:bg-violet-200",
+                    "min-h-12 rounded-none bg-[var(--duel-a)] px-5 font-bold text-[var(--app-bg)] hover:brightness-110",
                   )}
                 >
                   <Download aria-hidden="true" />
@@ -92,7 +93,7 @@ export default async function ResultPage({
                   rel="noreferrer"
                   className={cn(
                     buttonVariants({ variant: "outline", size: "lg" }),
-                    "min-h-12 rounded-xl px-5",
+                    "min-h-12 rounded-none px-5",
                   )}
                 >
                   <ExternalLink aria-hidden="true" />
@@ -105,7 +106,7 @@ export default async function ResultPage({
               href={`/api/resultados/${sessionId}/imagem`}
               target="_blank"
               rel="noreferrer"
-              className="group mx-auto block w-full max-w-[260px] overflow-hidden rounded-2xl border border-white/10 bg-black/25 shadow-2xl shadow-violet-950/40 outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
+              className="group mx-auto block w-full max-w-[260px] overflow-hidden rounded-none border border-white/10 bg-black/25 shadow-xl outline-none focus-visible:ring-2 focus-visible:ring-white"
               aria-label="Abrir a imagem do resultado em tamanho completo"
             >
               {/* This is a same-origin generated image. */}
@@ -128,9 +129,9 @@ export default async function ResultPage({
               return (
                 <article
                   key={match.id}
-                  className="rounded-2xl border border-white/10 bg-white/[0.035] p-4"
+                  className="rounded-none border border-white/10 bg-white/[0.035] p-4"
                 >
-                  <p className="text-xs font-semibold text-violet-300">
+                  <p className="text-xs font-semibold text-[var(--duel-a)]">
                     {getRoundLabel({
                       bracketSize: state.session.bracketSize,
                       roundNumber: match.roundNumber,
@@ -141,10 +142,13 @@ export default async function ResultPage({
                     <p
                       key={song?.songId ?? index}
                       className={cn(
-                        "mt-3 flex items-center justify-between gap-3 rounded-xl px-3 py-2 text-sm",
+                        "mt-3 flex items-center justify-between gap-3 rounded-none border-l-4 px-3 py-2 text-sm",
+                        index === 0
+                          ? "border-l-[var(--duel-a)]"
+                          : "border-l-[var(--duel-b)]",
                         song?.songId === match.winnerSongId
-                          ? "bg-emerald-300/10 font-bold text-emerald-100"
-                          : "bg-black/20 text-white/55",
+                          ? "bg-white/10 font-bold text-[var(--app-text)]"
+                          : "bg-black/20 text-[var(--app-muted)]",
                       )}
                     >
                       <span>
@@ -152,7 +156,7 @@ export default async function ResultPage({
                       </span>
                       {song?.songId === match.winnerSongId ? (
                         <>
-                          <span className="sr-only">Vencedora</span>
+                          <span className="text-xs">Vencedora</span>
                           <Crown
                             className="size-4 shrink-0"
                             aria-hidden="true"
@@ -172,7 +176,7 @@ export default async function ResultPage({
             href={`/tema/${state.theme.slug}`}
             className={cn(
               buttonVariants({ size: "lg" }),
-              "min-h-12 rounded-xl bg-violet-300 px-5 font-bold text-[#160d25] hover:bg-violet-200",
+              "min-h-12 rounded-none bg-[var(--duel-a)] px-5 font-bold text-[var(--app-bg)] hover:brightness-110",
             )}
           >
             <RotateCcw aria-hidden="true" />
@@ -182,7 +186,7 @@ export default async function ResultPage({
             href="/"
             className={cn(
               buttonVariants({ variant: "outline", size: "lg" }),
-              "min-h-12 rounded-xl px-5",
+              "min-h-12 rounded-none px-5",
             )}
           >
             <ArrowLeft aria-hidden="true" />

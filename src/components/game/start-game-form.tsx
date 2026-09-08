@@ -60,10 +60,10 @@ export function StartGameForm({
   }
 
   return (
-    <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-5 sm:p-7">
+    <div className="rounded-none border-t-4 border-[var(--duel-b)] bg-[var(--app-surface)] p-5 sm:p-7">
       <fieldset>
-        <legend className="text-lg font-bold">Quantas rodadas?</legend>
-        <p className="mt-2 text-sm leading-6 text-white/55">
+        <legend className="text-2xl font-black">Quantas rodadas?</legend>
+        <p className="mt-2 text-sm leading-6 text-[var(--app-muted)]">
           O tema tem {activeSongCount} músicas disponíveis. A partida sorteia
           somente a quantidade escolhida.
         </p>
@@ -71,7 +71,7 @@ export function StartGameForm({
           {supportedBracketSizes.map((size) => (
             <label
               key={size}
-              className="flex min-h-16 cursor-pointer items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 transition-colors has-checked:border-violet-300/60 has-checked:bg-violet-400/10"
+              className="flex min-h-16 cursor-pointer items-center gap-3 rounded-none border border-white/10 bg-black/20 px-4 transition-colors has-checked:border-white has-checked:bg-white/10"
             >
               <input
                 type="radio"
@@ -79,11 +79,11 @@ export function StartGameForm({
                 value={size}
                 checked={bracketSize === size}
                 onChange={() => setBracketSize(size)}
-                className="size-4 accent-violet-300"
+                className="size-4 accent-white"
               />
               <span className="font-semibold">
                 {roundCountFromBracketSize(size)} rodadas
-                <span className="block text-sm font-normal text-white/50">
+                <span className="block text-sm font-normal text-[var(--app-muted)]">
                   {size} músicas
                 </span>
               </span>
@@ -97,7 +97,7 @@ export function StartGameForm({
         size="lg"
         onClick={startGame}
         disabled={isStarting || bracketSize === null}
-        className="mt-6 min-h-12 w-full rounded-xl bg-violet-300 font-bold text-[#160d25] hover:bg-violet-200"
+        className="mt-6 min-h-12 w-full rounded-none bg-[var(--duel-b)] font-bold text-[var(--app-bg)] hover:bg-[var(--duel-b)] hover:brightness-110"
       >
         {isStarting ? (
           <LoaderCircle className="animate-spin" aria-hidden="true" />

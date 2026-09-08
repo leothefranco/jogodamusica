@@ -15,14 +15,14 @@ export default async function ProtectedAdminLayout({
   const admin = await requireAdmin();
 
   return (
-    <div className="min-h-screen bg-[#08080f] text-white">
-      <header className="border-b border-white/8 bg-[#0b0b14]/90 backdrop-blur">
+    <div className="min-h-screen border-t-4 border-[var(--duel-b)] bg-[var(--app-bg)] text-white">
+      <header className="border-b border-white/8 bg-[var(--app-surface)]/90 backdrop-blur">
         <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-4 px-5 sm:px-8">
           <Link
             href="/admin"
-            className="flex min-h-11 items-center gap-3 rounded-xl pr-3 outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
+            className="flex min-h-11 items-center gap-3 rounded-md pr-3 outline-none focus-visible:ring-2 focus-visible:ring-[var(--duel-a)]"
           >
-            <span className="grid size-9 place-items-center rounded-xl border border-violet-300/25 bg-violet-400/10 text-violet-200">
+            <span className="grid size-9 place-items-center rounded-md border border-[var(--duel-a)]/25 bg-[var(--duel-a)]/10 text-[var(--duel-a)]">
               <AudioLines className="size-4.5" aria-hidden="true" />
             </span>
             <span className="text-sm font-bold">
@@ -34,14 +34,14 @@ export default async function ProtectedAdminLayout({
           <nav aria-label="Administração" className="flex items-center gap-1">
             <Link
               href="/admin"
-              className="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-xs font-bold text-white/50 outline-none hover:bg-white/[0.04] hover:text-white focus-visible:ring-2 focus-visible:ring-violet-300"
+              className="inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-xs font-bold text-[var(--app-muted)] outline-none hover:bg-white/[0.04] hover:text-white focus-visible:ring-2 focus-visible:ring-[var(--duel-a)]"
             >
               <LayoutDashboard className="size-4" aria-hidden="true" />
               <span className="hidden md:inline">Visão geral</span>
             </Link>
             <Link
               href="/admin/temas"
-              className="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-xs font-bold text-white/50 outline-none hover:bg-white/[0.04] hover:text-white focus-visible:ring-2 focus-visible:ring-violet-300"
+              className="inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-xs font-bold text-[var(--app-muted)] outline-none hover:bg-white/[0.04] hover:text-white focus-visible:ring-2 focus-visible:ring-[var(--duel-a)]"
             >
               <Library className="size-4" aria-hidden="true" />
               <span className="hidden md:inline">Temas</span>
@@ -60,7 +60,7 @@ export default async function ProtectedAdminLayout({
                 type="submit"
                 variant="outline"
                 size="lg"
-                className="min-h-11 rounded-xl border-white/10 bg-white/[0.035]"
+                className="min-h-11 rounded-md border-white/10 bg-white/[0.035]"
               >
                 <LogOut aria-hidden="true" />
                 <span className="hidden sm:inline">Sair</span>

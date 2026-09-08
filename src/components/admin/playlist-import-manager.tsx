@@ -126,7 +126,7 @@ export function PlaylistImportManager({
     <div className="space-y-6">
       <form
         onSubmit={generatePreview}
-        className="rounded-2xl border border-white/8 bg-[#0d0d18] p-5 sm:p-7"
+        className="rounded-md border border-white/8 bg-[var(--app-surface)] p-5 sm:p-7"
       >
         <label
           htmlFor="playlist-input"
@@ -148,7 +148,7 @@ export function PlaylistImportManager({
             type="submit"
             size="lg"
             disabled={pending !== null}
-            className="min-h-11 rounded-xl px-5"
+            className="min-h-11 rounded-md px-5"
           >
             {pending === "preview" ? (
               <LoaderCircle className="animate-spin" />
@@ -167,17 +167,17 @@ export function PlaylistImportManager({
       {error ? (
         <div
           role="alert"
-          className="rounded-xl border border-red-300/20 bg-red-400/8 px-4 py-3 text-sm text-red-100"
+          className="rounded-md border border-red-300/20 bg-red-400/8 px-4 py-3 text-sm text-red-100"
         >
           {error}
         </div>
       ) : null}
 
       {preview ? (
-        <section className="rounded-2xl border border-white/8 bg-[#0d0d18] p-5 sm:p-7">
+        <section className="rounded-md border border-white/8 bg-[var(--app-surface)] p-5 sm:p-7">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <p className="text-xs font-bold tracking-[0.16em] text-violet-300 uppercase">
+              <p className="text-xs font-bold tracking-[0.16em] text-[var(--duel-a)] uppercase">
                 Prévia
               </p>
               <h2 className="mt-2 text-2xl font-black">
@@ -227,10 +227,10 @@ export function PlaylistImportManager({
               return (
                 <label
                   key={`${item.position}:${item.providerContentId ?? "invalid"}`}
-                  className={`flex items-start gap-4 rounded-xl border p-4 ${
+                  className={`flex items-start gap-4 rounded-md border p-4 ${
                     selectable
                       ? "border-white/10 bg-black/20"
-                      : "border-white/5 bg-black/10 text-white/48"
+                      : "border-white/5 bg-black/10 text-[var(--app-muted)]"
                   }`}
                 >
                   <input
@@ -246,7 +246,7 @@ export function PlaylistImportManager({
                           : current.filter((value) => value !== id),
                       );
                     }}
-                    className="mt-1 size-4 accent-violet-400"
+                    className="mt-1 size-4 accent-[var(--duel-a)]"
                   />
                   <span className="min-w-0 flex-1">
                     <strong className="block truncate text-sm">
@@ -267,7 +267,7 @@ export function PlaylistImportManager({
           </div>
 
           <div className="mt-7 flex flex-col gap-3 border-t border-white/8 pt-6 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-white/48">
+            <p className="text-sm text-[var(--app-muted)]">
               {countLabel(
                 selectedIds.length,
                 "item selecionado",
@@ -282,7 +282,7 @@ export function PlaylistImportManager({
                 (selectedIds.length === 0 && !hasExistingItems)
               }
               onClick={confirmImport}
-              className="min-h-11 rounded-xl px-5"
+              className="min-h-11 rounded-md px-5"
             >
               {pending === "import" ? (
                 <LoaderCircle className="animate-spin" />
