@@ -44,17 +44,28 @@ function SongCard({
   voting: boolean;
 }) {
   return (
-    <article className="game-song-card rounded-2xl border border-white/10 bg-white/[0.035] p-2">
-      <div className="flex min-w-0 items-center gap-2 px-1 pb-1.5">
-        <p className="shrink-0 text-xs font-bold tracking-[0.12em] text-violet-300 uppercase">
-          Música {label}
-        </p>
-        <h2 className="min-w-0 flex-1 truncate text-sm font-bold">
-          {song.title}
-        </h2>
-        <p className="max-w-[35%] truncate text-xs text-white/50">
-          {song.artist}
-        </p>
+    <article
+      data-contender={label}
+      className="game-song-card rounded-2xl border border-white/10 bg-white/[0.035] p-2"
+    >
+      <div className="game-song-heading flex min-w-0 items-center gap-3 px-1 pb-2">
+        <span
+          className="game-contender-label grid size-9 shrink-0 place-items-center rounded-xl text-sm font-black"
+          aria-label={`Música ${label}`}
+        >
+          {label}
+        </span>
+        <div className="min-w-0">
+          <h2
+            className="truncate text-sm font-bold sm:text-base"
+            title={song.title}
+          >
+            {song.title}
+          </h2>
+          <p className="truncate text-xs text-white/65" title={song.artist}>
+            {song.artist}
+          </p>
+        </div>
       </div>
       <div className="game-player-wrap relative">
         <YouTubePlayer
@@ -78,14 +89,14 @@ function SongCard({
         onClick={onVote}
         aria-label={`Votar na música ${label}`}
         disabled={!canVote || voting}
-        className="mt-2 min-h-11 w-full rounded-xl bg-violet-300 px-3 font-bold text-[#160d25] hover:bg-violet-200"
+        className="game-vote mt-2 min-h-11 w-full rounded-xl bg-violet-300 px-3 font-bold text-[#160d25] hover:bg-violet-200"
       >
         {voting ? (
           <LoaderCircle className="animate-spin" aria-hidden="true" />
         ) : (
           <Check aria-hidden="true" />
         )}
-        Votar {label}
+        Escolher música {label}
       </Button>
     </article>
   );
@@ -239,7 +250,7 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
     >
       <div className="grid-fade pointer-events-none absolute inset-0 opacity-30" />
       <div className="game-shell relative mx-auto">
-        <header className="game-header flex items-center justify-between gap-2">
+        <header className="game-header flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.025] px-3 py-2">
           <div className="min-w-0">
             <Link
               href="/"
@@ -298,11 +309,14 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
           >
             {decisions.message ??
               message ??
-              "Escolha quem avança ou declare empate."}
+              "Ouça as duas músicas. Quem merece avançar?"}
           </p>
         </section>
 
-        <section aria-label="Progresso da partida" className="game-progress">
+        <section
+          aria-label="Progresso da partida"
+          className="game-progress rounded-xl border border-white/8 bg-white/[0.025] px-3 py-2"
+        >
           <div className="flex justify-between text-xs text-white/45">
             <span>Progresso do chaveamento</span>
             <span>
