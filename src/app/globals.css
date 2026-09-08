@@ -328,88 +328,211 @@
   }
 }
 
-/* Public match presentation; player sizing remains governed by the layout above. */
+/* Match identity. Native player controls and minimum dimensions are preserved. */
 .game-screen {
-  background-image: radial-gradient(
-    ellipse at 15% 0%,
-    #8b5cf618,
-    transparent 55%
-  );
+  background: #17191d;
+  color: #eeefec;
+  padding: 20px;
 }
-
+.game-shell {
+  max-width: 1280px;
+  align-content: start;
+  grid-template-rows: auto;
+  gap: 18px;
+  min-height: calc(100dvh - 40px);
+}
+.game-header {
+  border: 0;
+  border-bottom: 1px solid #454950;
+  border-radius: 0;
+  background: none;
+  padding: 12px 0 24px;
+  gap: 20px;
+}
+.game-header a {
+  color: #eeefec;
+  font-weight: 900;
+  letter-spacing: -0.5px;
+  font-size: 16px;
+}
+.game-theme-name {
+  font-size: 11px;
+  color: #c4c9d1;
+  margin-top: 18px;
+  max-width: 600px;
+  overflow-wrap: anywhere;
+}
+.game-question {
+  font-family: Impact, "Arial Narrow", sans-serif;
+  font-size: clamp(40px, 5vw, 72px);
+  line-height: 1.05;
+  letter-spacing: -1.5px;
+  margin-top: 10px;
+}
+.game-header > p {
+  border: 0;
+  background: none;
+  border-radius: 0;
+  color: #d2d5db;
+  padding: 0;
+  white-space: normal;
+}
+.game-header > button {
+  border-radius: 0;
+  background: #2a2f38;
+  color: #eeefec;
+}
+.game-matchup {
+  gap: 24px;
+  background: #101216;
+  padding: 16px;
+  grid-template-rows: auto;
+}
 .game-song-card {
-  --contender: #c4b5fd;
-  --contender-soft: #a78bfa18;
-  border-color: #c4b5fd30;
-  background: linear-gradient(155deg, var(--contender-soft), #101019 60%);
-  box-shadow: 0 12px 32px #00000026;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: none;
+  box-shadow: none;
+  min-width: 0;
 }
-
-.game-song-card[data-contender="B"] {
-  --contender: #a5f3fc;
-  --contender-soft: #67e8f918;
-  border-color: #a5f3fc30;
-}
-
 .game-contender-label {
-  background: var(--contender-soft);
-  color: var(--contender);
-  border: 1px solid color-mix(in srgb, var(--contender) 25%, transparent);
+  color: #9bb4ff;
+  border: 0;
+  border-radius: 0;
+  background: #272c35;
 }
-
-.game-vote {
-  background: var(--contender);
-  color: #171126;
-}
-
-.game-vote:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--contender) 80%, white);
-}
-
 .game-song-heading {
-  min-height: 3rem;
+  min-height: 64px;
+  align-items: center;
+  padding: 0 0 14px;
 }
-
-@media (min-width: 900px) {
-  .game-song-card {
-    border-radius: 1.5rem;
-    padding: 1rem;
-  }
-
-  .game-song-heading {
-    padding-bottom: 1rem;
-  }
-
-  .game-vote {
-    min-height: 3.25rem;
-    margin-top: 1rem;
-  }
+.game-song-heading h2 {
+  font-size: clamp(18px, 2vw, 28px);
+  font-weight: 800;
+  letter-spacing: -0.6px;
 }
-
+.game-song-heading p {
+  font-size: 13px;
+  color: #c4c9d1;
+}
+.game-player-wrap,
+.game-youtube-player,
+.game-player-host {
+  height: auto;
+}
+.game-player-host {
+  aspect-ratio: 16/9;
+  min-height: 200px;
+}
+.game-player-host iframe {
+  height: 100%;
+}
+.game-vote {
+  border-radius: 0;
+  min-height: 52px;
+  margin-top: 14px;
+  background: #244bdf;
+  color: #f3f3ee;
+  justify-content: center;
+}
+.game-vote:hover:not(:disabled) {
+  background: #345fed;
+}
+.game-song-card[data-contender="B"] .game-vote {
+  background: #eeefec;
+  color: #17191d;
+}
+.game-song-card[data-contender="B"] .game-vote:hover:not(:disabled) {
+  background: #d5dbea;
+}
+.game-progress {
+  border: 0;
+  border-top: 1px solid #454950;
+  border-radius: 0;
+  background: none;
+  padding: 16px 0;
+}
+.game-progress > div:first-child {
+  color: #b9bec8;
+}
+.game-progress [role="progressbar"] {
+  border-radius: 0;
+  background: #353a43;
+}
+.game-progress [role="progressbar"] > div {
+  border-radius: 0;
+  background: #557aff;
+}
+.game-abandon button {
+  color: #c4c9d1;
+  border-radius: 0;
+}
 @media (max-width: 899px) {
+  .game-screen {
+    padding: 16px;
+  }
+  .game-shell {
+    gap: 14px;
+    max-width: 560px;
+    min-height: calc(100dvh - 32px);
+  }
   .game-header {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    column-gap: 0.75rem;
-    row-gap: 0.25rem;
+    gap: 12px;
+    padding-bottom: 18px;
   }
-
   .game-header > div {
     grid-column: 1;
     grid-row: 1;
   }
-
   .game-header > p {
     grid-column: 1;
     grid-row: 2;
     justify-self: start;
-    border: 0;
-    background: none;
-    padding: 0;
   }
-
   .game-header > button {
     grid-column: 2;
     grid-row: 1 / span 2;
   }
+  .game-question {
+    font-size: 40px;
+  }
+  .game-matchup {
+    gap: 24px;
+    padding: 12px;
+  }
+  .game-song-heading h2 {
+    font-size: 22px;
+  }
+  .game-player-wrap,
+  .game-player-wrap > [aria-label^="Player da música"] {
+    min-height: 200px;
+  }
+}
+
+@font-face {
+  font-family: "JDM Anton";
+  src: url("/fonts/anton/Anton-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+.game-question {
+  font-family: "JDM Anton", Impact, "Arial Narrow", sans-serif;
+  font-weight: 400;
+}
+.game-decision-dialog {
+  --primary: #244bdf;
+  --primary-foreground: #f3f3ee;
+  --secondary: #2a2f38;
+  --secondary-foreground: #eeefec;
+  --ring: #789bff;
+}
+.game-decision-dialog button {
+  border-radius: 0;
+}
+.game-youtube-player {
+  border-radius: 0;
 }

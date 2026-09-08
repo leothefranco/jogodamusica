@@ -220,7 +220,7 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
         : "Preparando o próximo confronto...";
 
     return (
-      <main className="grid min-h-screen place-items-center bg-[#08080f] px-5 text-white">
+      <main className="grid min-h-screen place-items-center bg-[#17191d] px-5 text-white">
         <div role="status" className="text-center">
           <LoaderCircle
             className="mx-auto size-8 animate-spin text-violet-300"
@@ -245,10 +245,9 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
 
   return (
     <main
-      className="game-screen relative bg-[#08080f] text-white"
+      className="game-screen relative bg-[#17191d] text-white"
       aria-busy={decisions.isDeciding}
     >
-      <div className="grid-fade pointer-events-none absolute inset-0 opacity-30" />
       <div className="game-shell relative mx-auto">
         <header className="game-header flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.025] px-3 py-2">
           <div className="min-w-0">
@@ -258,7 +257,8 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
             >
               Jogo da Música
             </Link>
-            <h1 className="truncate text-lg font-black">{state.theme.name}</h1>
+            <p className="game-theme-name">{state.theme.name}</p>
+            <h1 className="game-question">Qual é a melhor?</h1>
           </div>
           <p className="shrink-0 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/65">
             {roundLabel}
@@ -309,7 +309,7 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
           >
             {decisions.message ??
               message ??
-              "Ouça as duas músicas. Quem merece avançar?"}
+              "Compare as duas músicas e escolha a melhor."}
           </p>
         </section>
 
