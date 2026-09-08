@@ -1,11 +1,11 @@
 .page {
-  background: #17191d;
-  color: #eeefec;
+  background: var(--app-bg);
+  color: var(--app-text);
   min-height: 100dvh;
   padding: 0 max(20px, 5vw) 48px;
 }
 .page a:focus-visible {
-  outline: 3px solid #789bff;
+  outline: 3px solid var(--duel-a);
   outline-offset: 5px;
 }
 .header {
@@ -28,7 +28,7 @@
 }
 .brand span {
   font-size: 14px;
-  color: #789bff;
+  color: var(--duel-a);
   margin-left: 3px;
 }
 .about {
@@ -72,7 +72,7 @@
   margin: 28px 0;
 }
 .intro h1 span {
-  color: #789bff;
+  color: var(--duel-a);
 }
 .description {
   font-size: 16px;
@@ -116,7 +116,7 @@
   text-underline-offset: 5px;
 }
 .number {
-  color: #9bb4ff;
+  color: var(--duel-a);
   font-size: 13px;
 }
 .themeText {
@@ -133,10 +133,10 @@
   font-size: 11px;
   line-height: 1.6;
   margin-top: 10px;
-  color: #d2d5db;
+  color: var(--app-muted);
 }
 .themeText .themeDescription {
-  color: #b0b6c2;
+  color: var(--app-muted);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -155,7 +155,7 @@
 .empty {
   border-top: 1px solid #454950;
   padding: 30px 0;
-  color: #d2d5db;
+  color: var(--app-muted);
   line-height: 1.6;
 }
 .footer {
@@ -244,23 +244,69 @@
 
 /* Compact, neutral fallback for real catalog rows without artwork. */
 .cover {
-  background: #272c35;
+  background: var(--app-surface);
 }
 .cover::after {
   background: none;
 }
 .cover :global(.theme-visual-placeholder) {
-  color: #c6d4ff;
+  color: var(--duel-a);
   gap: 0;
 }
 .cover :global(.theme-visual-placeholder-mark) {
   border: 0;
   border-radius: 0;
   background: none;
-  color: #c6d4ff;
+  color: var(--duel-a);
   width: 32px;
   font-size: 28px;
 }
 .cover :global(.theme-visual-placeholder) > span:last-child {
   display: none;
+}
+
+/* Opposing accents introduce the same musical duel as the game. */
+.header {
+  border-bottom: 4px solid;
+  border-image: linear-gradient(90deg, var(--duel-a) 50%, var(--duel-b) 50%) 1;
+}
+.intro h1 .questionEnd {
+  color: var(--duel-b);
+}
+.duelRule {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 24px 0;
+  font-weight: 900;
+  font-size: 14px;
+}
+.duelRule::before,
+.duelRule::after {
+  content: "";
+  height: 6px;
+  flex: 1;
+}
+.duelRule::before {
+  background: var(--duel-a);
+}
+.duelRule::after {
+  background: var(--duel-b);
+}
+.list > li:nth-child(even) .number,
+.list > li:nth-child(even) .arrow {
+  color: var(--duel-b);
+}
+.list > li:nth-child(odd) .arrow {
+  color: var(--duel-a);
+}
+.theme {
+  border-left: 3px solid var(--duel-a);
+  padding-left: 12px;
+}
+.list > li:nth-child(even) .theme {
+  border-left-color: var(--duel-b);
+}
+.theme:hover {
+  background: var(--app-surface);
 }

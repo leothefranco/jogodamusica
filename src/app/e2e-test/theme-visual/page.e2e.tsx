@@ -21,7 +21,7 @@ export default function ThemeVisualFixturePage() {
   const detailVisual = visualUrls("detail");
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[#08080f] px-5 py-8 text-white sm:px-8">
+    <main className="min-h-screen overflow-x-hidden bg-[var(--app-bg)] px-5 py-8 text-white sm:px-8">
       <div className="mx-auto grid max-w-6xl gap-12 lg:grid-cols-2">
         <section aria-labelledby="home-composition-title">
           <h1 id="home-composition-title" className="mb-4 text-2xl font-bold">
@@ -30,7 +30,7 @@ export default function ThemeVisualFixturePage() {
           <Link
             href="/tema/tema-e2e"
             aria-labelledby="home-theme-title"
-            className="block overflow-hidden rounded-3xl border border-white/10 bg-[#0e0e19]"
+            className="block overflow-hidden rounded-none border border-white/10 bg-[var(--app-surface)]"
           >
             <div data-testid="home-visual">
               <ThemeThumbnailStack {...homeVisual} className="aspect-[16/9]" />
@@ -39,7 +39,7 @@ export default function ThemeVisualFixturePage() {
               <h2 id="home-theme-title" className="text-xl font-bold">
                 Tema E2E da home
               </h2>
-              <p className="mt-2 text-sm text-white/50">
+              <p className="mt-2 text-sm text-[var(--app-muted)]">
                 Uma chave musical pronta para jogar.
               </p>
             </div>
@@ -53,13 +53,13 @@ export default function ThemeVisualFixturePage() {
           <div data-testid="detail-visual">
             <ThemeThumbnailStack
               {...detailVisual}
-              className="aspect-[16/9] rounded-3xl border border-white/10"
+              className="aspect-[16/9] rounded-none border-r-4 border-l-4 border-r-[var(--duel-b)] border-l-[var(--duel-a)]"
             />
           </div>
           <button
             type="button"
             data-testid="detail-cta"
-            className="mt-5 min-h-11 rounded-xl bg-violet-300 px-5 font-bold text-[#130d22]"
+            className="mt-5 min-h-11 rounded-none bg-[var(--duel-b)] px-5 font-bold text-[var(--app-bg)]"
           >
             Começar jogo
           </button>

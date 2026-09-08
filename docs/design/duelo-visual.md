@@ -3,13 +3,13 @@
 ## Estado e decisão
 
 Plano atualizado a partir das duas referências visuais enviadas pelo usuário. Substitui a proposta azul × cinza do commit3f22634, que permanece local e não deve ser publicada como solução visual final.
-A home aprovada permanece como base; o primeiro protótipo desta rodada cobre o confronto. A identidade de duelo poderá orientar outras telas em entregas posteriores, sem ampliar esta implementação silenciosamente.
+Em 2026-09-08, o usuário ampliou explicitamente a reformulação para o app inteiro. Escopo: home, catálogo, tema/modalidade, confronto, resultado e imagem compartilhada, estados globais, instalação/PWA e administração. A composição desktop aprovada da home permanece a base, agora com identidade azul × laranja.
 Objetivo: duas músicas adversárias com igual força visual para eleger a melhor. Cor identifica A/B; não indica escolha prévia.
 
 ## Direção visual
 
 Referências: dois adversários, fundo escuro, azul × laranja, composição equilibrada e VS central. Traduzir esses princípios para música, com capas, títulos e artistas reais. Não incorporar as imagens de referência como arte do app.
-Cores iniciais propostas pelo agente de direção visual, a validar no protótipo:
+Tokens compartilhados da implementação, sujeitos à verificação visual e de contraste:
 
 | Papel                      | Token inicial |
 | -------------------------- | ------------- |
@@ -42,16 +42,28 @@ Cabeçalho compacto: tema e rodada/confronto; sem repetir a pergunta da home.
 3. Players nativos com área mínima200×200; controles externos com alvo mínimo44px. Preservar pausa mútua, trecho, erros, confirmação, desempate e abandono.
 4. Nenhuma cor sozinha comunica identidade ou estado. Letras, nomes e textos acompanham a apresentação.
 5. Não adicionar áudio, autoplay, overlay decorativo sobre mídia, algoritmo de recomendação, consultas ou alterações de banco.
-6. Não copiar código descartável do protótipo para produção. Implementação usa componentes reais após avaliação visual.
+6. Implementação em componentes reais; capturas das fixtures existentes permitem avaliar aparência e estados antes da publicação. Preservar a composição desktop aprovada e as regras funcionais.
+
+## Aplicação ao app inteiro
+
+- Home e catálogo: composição editorial em duas colunas no desktop, tipografia de cartaz e dupla faixa de cor. Músicas e temas reais ocupam o espaço disponível; nenhuma opção parece pré-selecionada.
+- Tema e modalidades: identidade nas bordas e cabeçalhos; modalidade selecionada comunicada por controle, texto e estado, além da cor.
+- Resultado: a campeã tem destaque explícito por nome e troféu. A dupla cromática continua na marca e na imagem de compartilhamento, sem transformar a cor B em derrota.
+- Estados e instalação: mesmos fundos, tipografia e ações; erros mantêm semântica própria e recuperação clara.
+- Administração: identidade comum com identificação textual Admin; formulários, publicação, disponibilidade e destruição preservam significados distintos. Azul/laranja não substituem estados de sucesso/alerta/erro.
+- Marca instalada: ícones e manifestos harmonizados, inclusive tema do navegador. SVG e imagem social não herdam CSS; seus valores precisam corresponder aos tokens.
 
 ## Equipe e sequência
 
-- Direção visual — agente duel_art_direction (GPT-6 Astra): paleta, composição e igualdade visual. Parecer recebido.
-- UX/acessibilidade — agente duel_ux (GPT-6 Astra): densidade móvel, ações e estados; parecer recebido e critérios incorporados.
-- Coordenador: consolida este plano, mantém um único escritor e registra as decisões aprovadas.
-- Próxima atividade: um agente implementador de interface cria protótipo comparável com dados demonstrativos, fiel aos players e às dimensões reais. Deve mostrar celular e desktop, nomes longos, estados de confirmação/erro, cores invertidas.
-- Após avaliação do protótipo: um único desenvolvedor integra ao app real. Revisores independentes de padrões e especificação conferem o SHA final; testes de fluxo e screenshots verificam a entrega.
-- Publicação é etapa posterior ao protótipo e aos gates. O push rejeitado da proposta azul/cinza não será repetido nesta rodada.
+Todos os especialistas usam GPT-6 Astra. Ownership por arquivo permite implementação paralela sem disputas:
+
+- Coordenador: tokens, globals.css, layout raiz, botão compartilhado, documentação e integração.
+- duel_art_direction: home, tema/modalidade, resultado e imagem social.
+- duel_ux: confronto, diálogos, simetria e testes de votação/sorteio.
+- app_visual_inventory: administração, estados, PWA e marca instalada.
+- Revisão final: padrões e aderência à especificação por revisores independentes, após terminar a implementação.
+
+Conclusão exige verificação dos fluxos existentes, capturas mobile/desktop de cada grupo e registro das limitações. A publicação usa somente o conjunto final revisado; a proposta azul/cinza rejeitada não é uma entrega válida.
 
 ## Evidência esperada
 

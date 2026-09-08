@@ -20,8 +20,8 @@ test("GET /manifest.webmanifest preserva o contrato público", async ({
     start_url: "/",
     scope: "/",
     display: "standalone",
-    background_color: "#08080f",
-    theme_color: "#08080f",
+    background_color: "#101216",
+    theme_color: "#101216",
     lang: "pt-BR",
     orientation: "any",
     icons: [
@@ -59,8 +59,8 @@ test("GET /admin/manifest.webmanifest preserva o contrato administrativo", async
     start_url: "/admin",
     scope: "/admin",
     display: "standalone",
-    background_color: "#08080f",
-    theme_color: "#059669",
+    background_color: "#101216",
+    theme_color: "#181C22",
     lang: "pt-BR",
     orientation: "any",
     icons: [

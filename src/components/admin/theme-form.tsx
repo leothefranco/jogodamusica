@@ -195,7 +195,7 @@ export function ThemeForm({
       {state.message ? (
         <div
           role="alert"
-          className="rounded-xl border border-red-300/20 bg-red-400/8 px-4 py-3 text-sm text-red-100"
+          className="rounded-md border border-red-300/20 bg-red-400/8 px-4 py-3 text-sm text-red-100"
         >
           {state.message}
         </div>
@@ -263,7 +263,7 @@ export function ThemeForm({
           />
         )}
         {defaults?.coverUrl ? (
-          <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+          <div className="overflow-hidden rounded-md border border-white/10 bg-black/20">
             {/* A URL já foi validada antes de ser persistida. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -283,7 +283,7 @@ export function ThemeForm({
             selectedCoverFile.current = event.currentTarget.files?.[0] ?? null;
             cachedUpload.current = null;
           }}
-          className={`${adminInputClassName} file:mr-4 file:rounded-lg file:border-0 file:bg-violet-300 file:px-3 file:py-2 file:text-xs file:font-bold file:text-[#130d22]`}
+          className={`${adminInputClassName} file:mr-4 file:rounded-lg file:border-0 file:bg-[var(--duel-a)] file:px-3 file:py-2 file:text-xs file:font-bold file:text-[var(--app-bg)]`}
           aria-invalid={Boolean(state.fieldErrors?.coverFile)}
         />
         <span className="text-xs leading-5 font-normal text-white/38">
@@ -292,11 +292,11 @@ export function ThemeForm({
         </span>
         <FieldError errors={state.fieldErrors?.coverFile} />
         {mode === "edit" && defaults?.coverUrl ? (
-          <label className="flex min-h-11 items-center gap-3 rounded-xl border border-white/8 bg-black/15 px-4 text-sm font-semibold">
+          <label className="flex min-h-11 items-center gap-3 rounded-md border border-white/8 bg-black/15 px-4 text-sm font-semibold">
             <input
               type="checkbox"
               name="removeCover"
-              className="size-4 accent-violet-400"
+              className="size-4 accent-[var(--duel-a)]"
             />
             Remover a capa atual e voltar aos cards
           </label>
@@ -320,7 +320,7 @@ export function ThemeForm({
         type="submit"
         size="lg"
         disabled={submissionPending}
-        className="min-h-11 rounded-xl px-5"
+        className="min-h-11 rounded-md px-5"
       >
         {submissionPending ? (
           <LoaderCircle className="animate-spin" aria-hidden="true" />

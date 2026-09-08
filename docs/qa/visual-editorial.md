@@ -33,3 +33,9 @@ Usuário apontou rolagem excessiva, repetição desnecessária da pergunta, sepa
 ## Direção vigente do duelo
 
 Para alterações de cor, composição, estados de escolha ou separação A/B, seguir [Duelo musical — revisão da direção visual](../design/duelo-visual.md). A proposta azul/cinza não está aprovada para publicação. Os requisitos de compactação, players e clareza do sorteio continuam válidos.
+
+## Reformulação integral azul × laranja (2026-09-08)
+
+O usuário ampliou o escopo para todo o app. As restrições antigas deste registro referentes a home intacta e exclusão de admin/tema/resultado são históricas e foram substituídas pelo [plano vigente](../design/duelo-visual.md).
+
+A entrega atual inclui home, tema, confronto, resultado, imagem compartilhável, estados, administração e PWA. Os testes de compactação móvel continuam válidos e passam a exigir peso equivalente dos dois lados vibrantes. Registro da validação desta rodada: `tmp/app-duel-identity/`.

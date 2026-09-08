@@ -757,6 +757,46 @@ test("confronto móvel cabe em 844px e explica o sorteio com lados distintos", a
   });
   expect(layout.height).toBeLessThanOrEqual(layout.viewport);
   expect(layout.colors[0]).not.toBe(layout.colors[1]);
+  const contenders = page.locator(".game-song-card");
+  const metrics = await contenders.evaluateAll((cards) =>
+    cards.map((card) => {
+      const vote = card.querySelector(".game-vote")!;
+      const player = card.querySelector(".game-player-host")!;
+      const bounds = card.getBoundingClientRect();
+      const buttonBounds = vote.getBoundingClientRect();
+      const playerBounds = player.getBoundingClientRect();
+      return {
+        width: bounds.width,
+        height: bounds.height,
+        buttonWidth: buttonBounds.width,
+        buttonHeight: buttonBounds.height,
+        playerWidth: playerBounds.width,
+        playerHeight: playerBounds.height,
+        voteColor: getComputedStyle(vote).backgroundColor,
+        textColor: getComputedStyle(vote).color,
+        hasCheck: vote.querySelector(".lucide-check") !== null,
+      };
+    }),
+  );
+  for (const side of metrics) {
+    expect(side.buttonHeight).toBeGreaterThanOrEqual(44);
+    expect(side.playerWidth).toBeGreaterThanOrEqual(200);
+    expect(side.playerHeight).toBeGreaterThanOrEqual(200);
+    expect(side.hasCheck).toBe(false);
+  }
+  for (const dimension of [
+    "width",
+    "height",
+    "buttonWidth",
+    "buttonHeight",
+    "playerWidth",
+    "playerHeight",
+  ] as const) {
+    expect(metrics[0][dimension]).toBeCloseTo(metrics[1][dimension], 0);
+  }
+  expect(metrics[0].voteColor).not.toBe(metrics[1].voteColor);
+  expect(metrics[0].textColor).toBe(metrics[1].textColor);
+  await expect(page.locator(".game-versus")).toHaveText("VS");
   await draw.click();
   await expect(
     page.getByRole("dialog", { name: "Confirmar desempate" }),

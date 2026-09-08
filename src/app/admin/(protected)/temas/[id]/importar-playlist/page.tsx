@@ -29,18 +29,18 @@ export default async function ImportPlaylistPage({
     <main className="mx-auto w-full max-w-6xl px-5 py-10 sm:px-8 sm:py-14">
       <Link
         href={`/admin/temas/${id}`}
-        className="inline-flex min-h-11 items-center gap-2 rounded-xl pr-3 text-sm font-semibold text-white/55 outline-none hover:text-white focus-visible:ring-2 focus-visible:ring-violet-300"
+        className="inline-flex min-h-11 items-center gap-2 rounded-md pr-3 text-sm font-semibold text-[var(--app-muted)] outline-none hover:text-white focus-visible:ring-2 focus-visible:ring-[var(--duel-a)]"
       >
         <ArrowLeft className="size-4" aria-hidden="true" />
         Voltar ao tema
       </Link>
-      <p className="mt-7 text-xs font-bold tracking-[0.2em] text-violet-300 uppercase">
+      <p className="mt-7 text-xs font-bold tracking-[0.2em] text-[var(--duel-a)] uppercase">
         {editor.theme.name}
       </p>
       <h1 className="mt-3 text-4xl font-black tracking-[-0.04em] sm:text-5xl">
         Importar playlist
       </h1>
-      <p className="mt-3 max-w-2xl text-sm leading-6 text-white/48">
+      <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--app-muted)]">
         Revise a elegibilidade dos vídeos antes de adicioná-los ao catálogo.
       </p>
       <div className="mt-9">

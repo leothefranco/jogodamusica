@@ -11,7 +11,7 @@ export default function OfflinePage() {
   return (
     <FullPageState
       icon={
-        <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-violet-300/10 text-violet-200">
+        <span className="mx-auto grid size-14 place-items-center rounded-md bg-[var(--duel-a)]/10 text-[var(--duel-a)]">
           <WifiOff aria-hidden="true" />
         </span>
       }
@@ -20,7 +20,7 @@ export default function OfflinePage() {
     >
       <Link
         href="/"
-        className="inline-flex min-h-12 items-center justify-center rounded-xl bg-violet-300 px-5 font-bold text-[#160d25] outline-none hover:bg-violet-200 focus-visible:ring-2 focus-visible:ring-white"
+        className="inline-flex min-h-12 items-center justify-center rounded-md bg-[var(--duel-a)] px-5 font-bold text-[var(--app-bg)] outline-none hover:brightness-110 focus-visible:ring-2 focus-visible:ring-white"
       >
         Tentar novamente
       </Link>

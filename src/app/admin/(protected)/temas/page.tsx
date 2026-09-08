@@ -22,13 +22,13 @@ export default async function AdminThemesPage({
     <main className="mx-auto w-full max-w-7xl px-5 py-10 sm:px-8 sm:py-14">
       <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-bold tracking-[0.2em] text-violet-300 uppercase">
+          <p className="text-xs font-bold tracking-[0.2em] text-[var(--duel-a)] uppercase">
             Conteúdo
           </p>
           <h1 className="mt-3 text-4xl font-black tracking-[-0.04em] sm:text-5xl">
             Temas
           </h1>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-white/48">
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--app-muted)]">
             Prepare coleções e publique com pelo menos quatro Entradas jogáveis.
             A intenção editorial permanece separada da saúde do catálogo.
           </p>
@@ -38,7 +38,7 @@ export default async function AdminThemesPage({
           href="/admin/temas/novo"
           className={cn(
             buttonVariants({ size: "lg" }),
-            "min-h-11 rounded-xl px-5",
+            "min-h-11 rounded-md px-5",
           )}
         >
           <Plus aria-hidden="true" />
@@ -49,16 +49,16 @@ export default async function AdminThemesPage({
       {query.message ? (
         <div
           role="status"
-          className="mt-7 rounded-xl border border-emerald-300/20 bg-emerald-400/8 px-4 py-3 text-sm text-emerald-100"
+          className="mt-7 rounded-md border border-emerald-300/20 bg-emerald-400/8 px-4 py-3 text-sm text-emerald-100"
         >
           {query.message}
         </div>
       ) : null}
 
       {themeItems.length === 0 ? (
-        <section className="mt-10 rounded-3xl border border-dashed border-white/10 px-6 py-16 text-center">
+        <section className="mt-10 rounded-md border border-dashed border-white/10 px-6 py-16 text-center">
           <Disc3
-            className="mx-auto size-9 text-violet-300"
+            className="mx-auto size-9 text-[var(--duel-a)]"
             aria-hidden="true"
           />
           <h2 className="mt-5 text-xl font-bold">Nenhum tema criado</h2>
@@ -79,13 +79,13 @@ export default async function AdminThemesPage({
             return (
               <article
                 key={theme.id}
-                className="rounded-2xl border border-white/8 bg-[#0d0d18] p-5 sm:p-6"
+                className="rounded-md border border-white/8 bg-[var(--app-surface)] p-5 sm:p-6"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       {theme.editorialState === "draft" && canPublish ? (
-                        <span className="text-xs font-semibold text-violet-200">
+                        <span className="text-xs font-semibold text-[var(--duel-a)]">
                           Pronto para publicar
                         </span>
                       ) : null}
@@ -102,7 +102,7 @@ export default async function AdminThemesPage({
                     href={`/admin/temas/${theme.id}`}
                     className={cn(
                       buttonVariants({ variant: "outline", size: "icon-lg" }),
-                      "min-h-11 min-w-11 rounded-xl border-white/10 bg-white/[0.025]",
+                      "min-h-11 min-w-11 rounded-md border-white/10 bg-white/[0.025]",
                     )}
                     aria-label={`Editar ${theme.name}`}
                   >

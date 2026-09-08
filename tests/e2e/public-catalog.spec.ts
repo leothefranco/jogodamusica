@@ -25,7 +25,7 @@ test("slug com três candidatas mostra somente o estado genérico", async ({
 
   expect(response).not.toBeNull();
   await expect(
-    page.getByRole("heading", { name: "Esta faixa saiu do catálogo" }),
+    page.getByRole("heading", { name: "Não encontramos esta página" }),
   ).toBeVisible();
   await expect(page.locator("body")).not.toContainText("3 músicas");
   await expect(page.locator("body")).not.toContainText(

@@ -1,4 +1,4 @@
-const CACHE_NAME = "jogo-da-musica-shell-v1";
+const CACHE_NAME = "jogo-da-musica-shell-v2";
 const PRECACHE_URLS = [
   "/offline",
   "/icons/icon-192.png",

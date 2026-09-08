@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Dices, LoaderCircle } from "lucide-react";
+import { Dices, LoaderCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -89,13 +89,9 @@ function SongCard({
         onClick={onVote}
         aria-label={`Votar na música ${label}`}
         disabled={!canVote || voting}
-        className="game-vote mt-2 min-h-11 w-full rounded-xl bg-violet-300 px-3 font-bold text-[#160d25] hover:bg-violet-200"
+        className="game-vote mt-2 min-h-11 w-full rounded-xl px-3 font-bold"
       >
-        {voting ? (
-          <LoaderCircle className="animate-spin" aria-hidden="true" />
-        ) : (
-          <Check aria-hidden="true" />
-        )}
+        {voting && <LoaderCircle className="animate-spin" aria-hidden="true" />}
         Votar na música {label}
       </Button>
     </article>
@@ -220,10 +216,10 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
         : "Preparando o próximo confronto...";
 
     return (
-      <main className="grid min-h-screen place-items-center bg-[#17191d] px-5 text-white">
+      <main className="grid min-h-screen place-items-center bg-[var(--background)] px-5 text-white">
         <div role="status" className="text-center">
           <LoaderCircle
-            className="mx-auto size-8 animate-spin text-[#9bb4ff]"
+            className="mx-auto size-8 animate-spin text-[var(--foreground)]"
             aria-hidden="true"
           />
           <p className="mt-4 text-white/60">{transitionMessage}</p>
@@ -245,7 +241,7 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
 
   return (
     <main
-      className="game-screen relative bg-[#17191d] text-white"
+      className="game-screen relative bg-[var(--background)] text-white"
       aria-busy={decisions.isDeciding}
     >
       <div className="game-shell relative mx-auto">
@@ -253,7 +249,7 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
           <div className="min-w-0">
             <Link
               href="/"
-              className="text-xs font-semibold tracking-[0.16em] text-[#9bb4ff] uppercase outline-none focus-visible:ring-2 focus-visible:ring-[#789bff]"
+              className="text-xs font-semibold tracking-[0.16em] text-[var(--foreground)] uppercase outline-none focus-visible:ring-2 focus-visible:ring-[var(--foreground)]"
             >
               Jogo da Música
             </Link>
@@ -299,6 +295,9 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
               voting={decisions.isDeciding}
             />
           ))}
+          <span className="game-versus" aria-hidden="true">
+            VS
+          </span>
         </div>
 
         <section
@@ -337,7 +336,7 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
             className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/8"
           >
             <div
-              className="h-full rounded-full bg-gradient-to-r from-violet-400 to-fuchsia-400 transition-[width]"
+              className="h-full rounded-full bg-gradient-to-r from-[#38BDF8] to-[#FF923D] transition-[width]"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -352,7 +351,7 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
               setIsAbandonConfirmationOpen(true);
             }}
             disabled={isAbandoning || decisions.isDeciding}
-            className="min-h-11 rounded-lg px-4 text-sm text-white/45 outline-none hover:text-white focus-visible:ring-2 focus-visible:ring-[#789bff]"
+            className="min-h-11 rounded-lg px-4 text-sm text-white/45 outline-none hover:text-white focus-visible:ring-2 focus-visible:ring-[var(--foreground)]"
           >
             {isAbandoning
               ? "Abandonando partida..."

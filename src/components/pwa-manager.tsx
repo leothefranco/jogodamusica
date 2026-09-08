@@ -125,15 +125,15 @@ export function PwaManager() {
       aria-label={
         isAdmin ? "Instalar aplicativo administrativo" : "Instalar aplicativo"
       }
-      className={`fixed right-3 bottom-3 left-3 z-50 mx-auto flex max-w-xl items-start gap-3 rounded-2xl border bg-[#11101d]/95 p-4 text-sm text-white shadow-2xl backdrop-blur sm:right-5 sm:bottom-5 sm:left-auto ${
-        isAdmin ? "border-emerald-300/25" : "border-violet-300/25"
+      className={`fixed right-3 bottom-3 left-3 z-50 mx-auto flex max-w-xl items-start gap-3 rounded-md border bg-[var(--app-surface)]/95 p-4 text-sm text-white shadow-2xl backdrop-blur sm:right-5 sm:bottom-5 sm:left-auto ${
+        isAdmin ? "border-[var(--duel-b)]/25" : "border-[var(--duel-a)]/25"
       }`}
     >
       <span
-        className={`grid size-10 shrink-0 place-items-center rounded-xl ${
+        className={`grid size-10 shrink-0 place-items-center rounded-md ${
           isAdmin
-            ? "bg-emerald-300/10 text-emerald-200"
-            : "bg-violet-300/10 text-violet-200"
+            ? "bg-[var(--duel-b)]/10 text-[var(--duel-b)]"
+            : "bg-[var(--duel-a)]/10 text-[var(--duel-a)]"
         }`}
       >
         {showIOSInstructions ? (
@@ -147,7 +147,7 @@ export function PwaManager() {
           Instale o {isAdmin ? "Jogo da Música Admin" : "Jogo da Música"}
         </p>
         {showIOSInstructions ? (
-          <p className="mt-1 leading-5 text-white/60">
+          <p className="mt-1 leading-5 text-[var(--app-muted)]">
             No Safari, toque em Compartilhar e depois em “Adicionar à Tela de
             Início”.
           </p>
@@ -157,8 +157,8 @@ export function PwaManager() {
             onClick={() => void install()}
             className={`mt-2 min-h-11 rounded-lg px-4 font-bold outline-none focus-visible:ring-2 focus-visible:ring-white ${
               isAdmin
-                ? "bg-emerald-300 text-[#052e24] hover:bg-emerald-200"
-                : "bg-violet-300 text-[#160d25] hover:bg-violet-200"
+                ? "bg-[var(--duel-b)] text-[var(--app-bg)] hover:brightness-110"
+                : "bg-[var(--duel-a)] text-[var(--app-bg)] hover:brightness-110"
             }`}
           >
             Instalar aplicativo
@@ -169,10 +169,10 @@ export function PwaManager() {
         type="button"
         onClick={dismiss}
         aria-label="Fechar instrução de instalação"
-        className={`grid size-11 shrink-0 place-items-center rounded-lg text-white/55 outline-none hover:bg-white/10 hover:text-white focus-visible:ring-2 ${
+        className={`grid size-11 shrink-0 place-items-center rounded-lg text-[var(--app-muted)] outline-none hover:bg-white/10 hover:text-white focus-visible:ring-2 ${
           isAdmin
-            ? "focus-visible:ring-emerald-300"
-            : "focus-visible:ring-violet-300"
+            ? "focus-visible:ring-[var(--duel-b)]"
+            : "focus-visible:ring-[var(--duel-a)]"
         }`}
       >
         <X aria-hidden="true" />

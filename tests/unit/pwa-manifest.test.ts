@@ -14,8 +14,8 @@ describe("manifesto da PWA", () => {
       display: "standalone",
       lang: "pt-BR",
       orientation: "any",
-      background_color: "#08080f",
-      theme_color: "#08080f",
+      background_color: "#101216",
+      theme_color: "#101216",
       icons: [
         {
           src: "/icons/icon-192.png",
@@ -42,8 +42,8 @@ describe("manifesto da PWA", () => {
       display: "standalone",
       lang: "pt-BR",
       orientation: "any",
-      background_color: "#08080f",
-      theme_color: "#059669",
+      background_color: "#101216",
+      theme_color: "#181C22",
       icons: [
         {
           src: "/icons/admin-icon-192.png",
