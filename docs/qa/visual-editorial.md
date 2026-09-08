@@ -24,8 +24,12 @@ Fonte: https://github.com/google/fonts/tree/main/ofl/anton (arquivo original e l
 Usuário apontou rolagem excessiva, repetição desnecessária da pergunta, separação A/B enfraquecida e sorteio escondido. Esta revisão substitui a pergunta antes prevista no confronto; a home aprovada permanece intacta.
 
 - Cabeçalho móvel compacto, sem slogan, mantendo Tema e rodada.
-- A com superfície azulada; B com grafite e borda clara. Letras A/B preservadas: identificação não depende só de cor.
+- Proposta azul × grafite rejeitada pelo usuário: parecia seleção versus inatividade. A direção vigente exige dois lados vibrantes de igual peso; ver [plano do duelo](../design/duelo-visual.md). Letras A/B permanecem obrigatórias.
 - Botão visível “Sortear vencedora”, acompanhado de “Escolha aleatória”. Mantém confirmação e sorteio autoritativo existente.
 - Em390×844, confronto e controles cabem sem rolagem no estado normal. Em telas mais baixas ou com fonte ampliada/erros, rolagem natural é permitida para preservar players mínimos200px, toques44px e acesso a todo conteúdo.
 - Feedback de decisão aparece quando há mensagem; sem texto promocional ocupando espaço no estado normal.
 - Teste de regressão mede viewport/altura, botão B visível, superfícies diferentes e confirmação do sorteio; suíte existente cobre players, decisão, erro, pausa, abandono e reduced-motion.
+
+## Direção vigente do duelo
+
+Para alterações de cor, composição, estados de escolha ou separação A/B, seguir [Duelo musical — revisão da direção visual](../design/duelo-visual.md). A proposta azul/cinza não está aprovada para publicação. Os requisitos de compactação, players e clareza do sorteio continuam válidos.
