@@ -303,8 +303,11 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
 
         <section
           aria-label="Estado do confronto"
-          className="game-status mx-auto w-full"
-          hidden={!decisions.message && !message}
+          className={
+            decisions.message || message
+              ? "game-status mx-auto w-full"
+              : "sr-only"
+          }
         >
           <p
             role={message ? "alert" : "status"}
