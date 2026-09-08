@@ -184,7 +184,9 @@ test("mostra dois players com controles nativos e votos fora da mídia", async (
   await expect(
     page.getByRole("button", { name: "Votar na música B" }),
   ).toBeEnabled();
-  await expect(page.getByRole("button", { name: "Desempatar" })).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: "Sortear vencedora do confronto" }),
+  ).toBeEnabled();
   await expect
     .poll(() => page.evaluate(() => window.__youtubeTest.playerVars))
     .toEqual([
@@ -663,7 +665,9 @@ test("confirma o desempate na aplicação e revela a vencedora sorteada pelo ser
   );
   await page.goto("/e2e-test/dois-players");
 
-  await page.getByRole("button", { name: "Desempatar" }).click();
+  await page
+    .getByRole("button", { name: "Sortear vencedora do confronto" })
+    .click();
   const confirmation = page.getByRole("dialog", {
     name: "Confirmar desempate",
   });
@@ -681,7 +685,9 @@ test("confirma o desempate na aplicação e revela a vencedora sorteada pelo ser
   await expect(
     reveal.getByRole("img", { name: "Capa de Canção B, de Artista B" }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Desempatar" })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Sortear vencedora do confronto" }),
+  ).toBeDisabled();
   await expect(
     page.getByRole("button", { name: "Votar na música A" }),
   ).toBeDisabled();
@@ -707,7 +713,9 @@ test("prefers-reduced-motion revela imediatamente sem girar a roleta", async ({
   );
   await page.goto("/e2e-test/dois-players");
 
-  await page.getByRole("button", { name: "Desempatar" }).click();
+  await page
+    .getByRole("button", { name: "Sortear vencedora do confronto" })
+    .click();
   await page
     .getByRole("dialog", { name: "Confirmar desempate" })
     .getByRole("button", { name: "Sortear vencedora" })
@@ -717,4 +725,40 @@ test("prefers-reduced-motion revela imediatamente sem girar a roleta", async ({
   await expect(reveal).toContainText("Desempate concluído");
   await expect(reveal).toContainText("Canção A");
   await expect(reveal).not.toContainText("Roleta em movimento");
+});
+
+test("confronto móvel cabe em 844px e explica o sorteio com lados distintos", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/e2e-test/dois-players");
+  await expect
+    .poll(() => page.evaluate(() => window.__youtubeTest.playerVars.length))
+    .toBe(2);
+  await expect(
+    page.getByRole("heading", { name: "Qual é a melhor?" }),
+  ).toHaveCount(0);
+  const draw = page.getByRole("button", {
+    name: "Sortear vencedora do confronto",
+  });
+  await expect(draw).toBeVisible();
+  await expect(draw).toContainText("Sortear vencedora");
+  await expect(draw).toContainText("Escolha aleatória");
+  await expect(
+    page.getByRole("button", { name: "Votar na música B" }),
+  ).toBeInViewport();
+  const layout = await page.evaluate(() => {
+    const cards = [...document.querySelectorAll(".game-song-card")];
+    return {
+      height: document.documentElement.scrollHeight,
+      viewport: innerHeight,
+      colors: cards.map((card) => getComputedStyle(card).backgroundColor),
+    };
+  });
+  expect(layout.height).toBeLessThanOrEqual(layout.viewport);
+  expect(layout.colors[0]).not.toBe(layout.colors[1]);
+  await draw.click();
+  await expect(
+    page.getByRole("dialog", { name: "Confirmar desempate" }),
+  ).toBeVisible();
 });

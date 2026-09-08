@@ -257,8 +257,7 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
             >
               Jogo da Música
             </Link>
-            <p className="game-theme-name">{state.theme.name}</p>
-            <h1 className="game-question">Qual é a melhor?</h1>
+            <h1 className="game-theme-name">{state.theme.name}</h1>
           </div>
           <p className="shrink-0 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/65">
             {roundLabel}
@@ -268,11 +267,15 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
             variant="secondary"
             onClick={decisions.requestTiebreak}
             disabled={!canVote || decisions.isDeciding}
-            aria-label="Desempatar"
+            aria-label="Sortear vencedora do confronto"
+            aria-describedby="sorteio-descricao"
             className="min-h-11 rounded-xl px-3"
           >
             <Dices aria-hidden="true" />
-            <span className="hidden min-[430px]:inline">Empate</span>
+            <span className="game-draw-label">
+              Sortear vencedora
+              <small id="sorteio-descricao">Escolha aleatória</small>
+            </span>
           </Button>
         </header>
 
@@ -301,15 +304,14 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
         <section
           aria-label="Estado do confronto"
           className="game-status mx-auto w-full"
+          hidden={!decisions.message && !message}
         >
           <p
             role={message ? "alert" : "status"}
             aria-live="polite"
             className="min-h-5 truncate text-center text-xs text-white/55"
           >
-            {decisions.message ??
-              message ??
-              "Compare as duas músicas e escolha a melhor."}
+            {decisions.message ?? message}
           </p>
         </section>
 

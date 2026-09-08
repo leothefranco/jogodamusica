@@ -536,3 +536,169 @@
 .game-youtube-player {
   border-radius: 0;
 }
+
+/* Compact confrontation: clear sides and a named, explained random choice. */
+.game-header {
+  padding: 4px 0 12px;
+  gap: 14px;
+}
+.game-theme-name {
+  margin-top: 5px;
+  font-size: 16px;
+  font-weight: 800;
+  color: #eeefec;
+  line-height: 1.25;
+}
+.game-header > button {
+  height: auto;
+  min-height: 48px;
+  padding: 8px 14px;
+  border: 1px solid #789bff;
+  gap: 8px;
+}
+.game-draw-label {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.3;
+}
+.game-draw-label small {
+  display: block;
+  font-weight: 400;
+  font-size: 10px;
+  color: #c4c9d1;
+  margin-top: 2px;
+}
+.game-matchup {
+  background: none;
+  padding: 0;
+  gap: 16px;
+}
+.game-song-card {
+  padding: 10px;
+  border: 1px solid #526fae;
+  border-top: 3px solid #557aff;
+  background: #1b2640;
+}
+.game-song-card[data-contender="B"] {
+  background: #272b32;
+  border-color: #626872;
+  border-top-color: #eeefec;
+}
+.game-song-card[data-contender="A"] .game-contender-label {
+  background: #244bdf;
+  color: white;
+}
+.game-song-card[data-contender="B"] .game-contender-label {
+  background: #eeefec;
+  color: #17191d;
+}
+.game-song-heading {
+  min-height: 44px;
+  padding-bottom: 8px;
+}
+.game-vote {
+  margin-top: 8px;
+  min-height: 44px;
+}
+.game-progress {
+  padding: 8px 0 0;
+}
+@media (max-width: 899px) {
+  .game-screen {
+    padding: 8px;
+  }
+  .game-shell {
+    gap: 6px;
+    min-height: calc(100dvh - 16px);
+  }
+  .game-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 8px;
+    padding: 0 0 6px;
+  }
+  .game-header a {
+    display: none;
+  }
+  .game-theme-name {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.25;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .game-header > p {
+    font-size: 10px;
+    line-height: 1.25;
+    white-space: normal;
+  }
+  .game-header > button {
+    padding: 6px 8px;
+    min-height: 44px;
+  }
+  .game-draw-label {
+    font-size: 11px;
+  }
+  .game-draw-label small {
+    font-size: 9px;
+  }
+  .game-matchup {
+    gap: 8px;
+    padding: 0;
+  }
+  .game-song-card {
+    padding: 5px;
+    border-top-width: 3px;
+  }
+  .game-song-heading {
+    min-height: 36px;
+    padding: 0 0 4px;
+    gap: 8px;
+  }
+  .game-contender-label {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+  .game-song-heading h2 {
+    font-size: 16px;
+    letter-spacing: -0.3px;
+    line-height: 1.2;
+  }
+  .game-song-heading p {
+    font-size: 10px;
+    line-height: 1.2;
+  }
+  .game-vote {
+    margin-top: 4px;
+    min-height: 44px;
+    font-size: 12px;
+  }
+  .game-player-host {
+    aspect-ratio: 16/9;
+    min-height: 200px;
+  }
+  .game-progress {
+    padding: 4px 0 0;
+  }
+  .game-progress > div:first-child {
+    font-size: 10px;
+    line-height: 1.2;
+  }
+  .game-progress [role="progressbar"] {
+    height: 3px;
+    margin-top: 3px;
+  }
+  .game-abandon button {
+    min-height: 44px;
+    font-size: 11px;
+    padding: 4px 10px;
+  }
+  .game-status p {
+    white-space: normal;
+    font-size: 11px;
+  }
+}
