@@ -35,9 +35,13 @@ type ThemeCreationValues = {
   description: string | null;
   coverUrl: string | null;
   isActive: false;
+  editorialState: "draft";
 };
 
-type ThemeCreationRecord = Omit<ThemeCreationValues, "isActive"> & {
+type ThemeCreationRecord = Omit<
+  ThemeCreationValues,
+  "isActive" | "editorialState"
+> & {
   id: string;
   isActive: boolean;
 };
@@ -422,6 +426,7 @@ export function createThemeCreationWorkflow({
           values = {
             ...input,
             isActive: false,
+            editorialState: "draft",
           };
         } catch (error) {
           if (toAppError(error).code === "THEME_COVER_INSPECTION_FAILED") {
@@ -496,6 +501,7 @@ export function createThemeCreationWorkflow({
       {
         ...input,
         isActive: false,
+        editorialState: "draft",
       },
       repository,
       false,

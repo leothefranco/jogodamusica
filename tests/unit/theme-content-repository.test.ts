@@ -92,6 +92,7 @@ describe("repositório transacional da criação de Tema", () => {
             description: null,
             coverUrl: "https://project.supabase.co/cover.jpg",
             isActive: false,
+            editorialState: "draft",
           });
         } catch (error) {
           insertFailure = error;

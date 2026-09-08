@@ -1,4 +1,5 @@
 import { PGlite } from "@electric-sql/pglite";
+import { readFileSync } from "node:fs";
 import { drizzle, type PgliteDatabase } from "drizzle-orm/pglite";
 import {
   afterAll,
@@ -53,24 +54,28 @@ async function seedCatalog() {
       name: "Apenas três",
       slug: "tema-tres",
       isActive: true,
+      editorialState: "published",
     },
     {
       id: themeIds.four,
       name: "Quatro válidas",
       slug: "tema-quatro",
       isActive: true,
+      editorialState: "published",
     },
     {
       id: themeIds.five,
       name: "Cinco válidas",
       slug: "tema-cinco",
       isActive: true,
+      editorialState: "published",
     },
     {
       id: themeIds.inactive,
       name: "Tema inativo",
       slug: "tema-inativo",
       isActive: false,
+      editorialState: "draft",
     },
   ]);
 
@@ -166,6 +171,10 @@ beforeAll(async () => {
       primary key (theme_id, song_id)
     );
   `);
+  await client.exec("create role anon; create role authenticated;");
+  await client.exec(
+    readFileSync("drizzle/0011_theme_editorial_state.sql", "utf8"),
+  );
   await seedCatalog();
 });
 

@@ -26,6 +26,7 @@ import { SourceAvailabilityStatus } from "@/components/admin/source-availability
 import { ThemeForm } from "@/components/admin/theme-form";
 import { YouTubeSongManager } from "@/components/admin/youtube-song-manager";
 import { SupportedGameModes } from "@/components/admin/supported-game-modes";
+import { ThemeStateStatus } from "@/components/admin/theme-state-status";
 import { Button } from "@/components/ui/button";
 import { AppError } from "@/lib/errors";
 import { countLabel } from "@/lib/language";
@@ -50,7 +51,8 @@ export default async function EditThemePage({
     throw error;
   }
 
-  const { theme, songs, publishability } = editor;
+  const { theme, songs, publishability, state } = editor;
+  const isPublished = theme.editorialState === "published";
   const updateAction = updateThemeAction.bind(null, theme.id);
   const attachAction = attachTrackAction.bind(null, theme.id);
 
@@ -66,30 +68,15 @@ export default async function EditThemePage({
 
       <div className="mt-7 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <div className="flex flex-wrap items-center gap-3">
-            <span
-              className={`inline-flex min-h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-bold ${
-                theme.isActive
-                  ? "border-emerald-300/20 bg-emerald-400/8 text-emerald-200"
-                  : "border-white/8 bg-white/[0.035] text-white/45"
-              }`}
-            >
-              {theme.isActive ? "Publicado" : "Rascunho"}
-            </span>
-            <span className="text-xs text-white/35">
-              {countLabel(
-                theme.activeSongCount,
-                "música ativa",
-                "músicas ativas",
-              )}
-            </span>
-          </div>
           <h1 className="mt-4 text-4xl font-black tracking-[-0.04em] sm:text-5xl">
             {theme.name}
           </h1>
           <p className="mt-2 font-mono text-xs text-white/35">/{theme.slug}</p>
           <div className="mt-4">
-            <SupportedGameModes activeSongCount={theme.activeSongCount} />
+            <ThemeStateStatus state={state} />
+          </div>
+          <div className="mt-4">
+            <SupportedGameModes modes={state.modes} />
           </div>
         </div>
 
@@ -105,18 +92,18 @@ export default async function EditThemePage({
             action={setThemePublicationAction.bind(
               null,
               theme.id,
-              !theme.isActive,
+              !isPublished,
             )}
           >
             <Button
               type="submit"
               size="lg"
-              variant={theme.isActive ? "outline" : "default"}
-              disabled={!theme.isActive && !publishability.canPublish}
+              variant={isPublished ? "outline" : "default"}
+              disabled={!isPublished && !publishability.canPublish}
               className="min-h-11 rounded-xl px-5"
             >
               <CheckCircle2 aria-hidden="true" />
-              {theme.isActive ? "Desativar" : "Publicar tema"}
+              {isPublished ? "Voltar a rascunho" : "Publicar tema"}
             </Button>
           </form>
           <form action={deleteThemeAction.bind(null, theme.id)}>
@@ -151,15 +138,15 @@ export default async function EditThemePage({
         </div>
       ) : null}
 
-      {!theme.isActive && !publishability.canPublish ? (
+      {!isPublished && !publishability.canPublish ? (
         <div className="mt-7 flex gap-3 rounded-xl border border-amber-300/18 bg-amber-300/7 px-4 py-4 text-sm text-amber-100">
           <CircleAlert className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
           <p>
             Faltam{" "}
             {countLabel(
               publishability.missingSongCount,
-              "música ativa",
-              "músicas ativas",
+              "Entrada jogável",
+              "Entradas jogáveis",
             )}{" "}
             para atingir o mínimo de quatro e publicar o tema.
           </p>
@@ -204,7 +191,7 @@ export default async function EditThemePage({
           <h2 className="text-xl font-black">Músicas do tema</h2>
           <p className="mt-2 text-sm text-white/42">
             {countLabel(songs.length, "associada", "associadas")},{" "}
-            {countLabel(theme.activeSongCount, "ativa", "ativas")}.
+            {countLabel(state.counts.activeEntryCount, "ativa", "ativas")}.
           </p>
         </div>
 

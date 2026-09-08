@@ -65,6 +65,7 @@ function createService(options?: {
       description: null,
       coverUrl: null,
       isActive: false,
+      editorialState: "draft" as const,
       activeSongCount: 0,
       totalSongCount: 0,
       updatedAt: new Date(),

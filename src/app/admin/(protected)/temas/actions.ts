@@ -34,6 +34,11 @@ const sourceAvailabilityRevalidationSchema = z.object({
   songId: z.string().uuid(),
 });
 
+const themePublicationSchema = z.object({
+  themeId: z.string().uuid(),
+  isActive: z.boolean(),
+});
+
 function errorState(error: unknown): ContentActionState {
   const appError = toAppError(error);
   return {
@@ -98,12 +103,18 @@ export async function setThemePublicationAction(
   themeId: string,
   isActive: boolean,
 ) {
-  await requireAdmin();
+  const actor = await requireAdmin();
+  const parsed = themePublicationSchema.safeParse({ themeId, isActive });
+  if (!parsed.success) {
+    redirect(
+      "/admin/temas?error=Dados%20de%20publica%C3%A7%C3%A3o%20inv%C3%A1lidos",
+    );
+  }
 
   let message: string;
   try {
-    await setThemePublication(themeId, isActive);
-    message = isActive ? "Tema publicado" : "Tema desativado";
+    await setThemePublication(themeId, isActive, actor.userId);
+    message = isActive ? "Tema publicado" : "Tema voltou a rascunho";
   } catch (error) {
     message = toAppError(error).message;
     redirect(`/admin/temas/${themeId}?error=${encodeURIComponent(message)}`);

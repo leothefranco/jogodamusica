@@ -478,14 +478,7 @@ async function findObservationUsing(
   `);
 
   const row = rows[0] as ObservationRow | undefined;
-  if (!row) {
-    throw new AppError(
-      "SOURCE_AVAILABILITY_WRITE_CONFLICT",
-      "A observação concorrente não pôde ser reconciliada.",
-      409,
-    );
-  }
-  return observationFromRow(row);
+  return row ? observationFromRow(row) : null;
 }
 
 async function findTrackUsing(
@@ -544,6 +537,7 @@ export async function persistSourceAvailabilityObservation(
 ): Promise<{
   songId: string | null;
   observation: SourceAvailabilityObservation;
+  previousObservation: SourceAvailabilityObservation | null;
   applied: boolean;
   track: ResolvedProviderTrack | null;
 }> {
@@ -558,6 +552,11 @@ export async function persistSourceAvailabilityObservation(
       : await findSongIdForUpdate(transaction, input.providerContentId);
 
     if (!songId) {
+      const previousObservation = await findUnboundObservationUsing(
+        transaction,
+        input.providerContentId,
+        input.observation.region,
+      );
       const appliedObservation = await upsertUnboundObservationUsing(
         transaction,
         input.providerContentId,
@@ -566,6 +565,7 @@ export async function persistSourceAvailabilityObservation(
       if (!appliedObservation) {
         return {
           songId: null,
+          previousObservation,
           observation: await findUnboundObservationForWriteUsing(
             transaction,
             input.providerContentId,
@@ -578,6 +578,7 @@ export async function persistSourceAvailabilityObservation(
 
       return {
         songId: null,
+        previousObservation,
         observation: appliedObservation,
         applied: true,
         track: null,
@@ -593,6 +594,13 @@ export async function persistSourceAvailabilityObservation(
       await upsertObservationUsing(transaction, songId, unboundObservation);
     }
 
+    // The candidate replaces this bound predecessor after unbound reconciliation,
+    // under the same identity/song locks as its CAS (null on first observation).
+    const previousObservation = await findObservationUsing(
+      transaction,
+      songId,
+      input.observation.region,
+    );
     const appliedObservation = await upsertObservationUsing(
       transaction,
       songId,
@@ -605,6 +613,13 @@ export async function persistSourceAvailabilityObservation(
         songId,
         input.observation.region,
       );
+      if (!persistedObservation) {
+        throw new AppError(
+          "SOURCE_AVAILABILITY_WRITE_CONFLICT",
+          "A observação concorrente não pôde ser reconciliada.",
+          409,
+        );
+      }
       await removeUnboundObservationUsing(
         transaction,
         input.providerContentId,
@@ -612,6 +627,7 @@ export async function persistSourceAvailabilityObservation(
       );
       return {
         songId,
+        previousObservation,
         observation: persistedObservation,
         applied: false,
         track: await findTrackUsing(transaction, songId, persistedObservation),
@@ -630,6 +646,7 @@ export async function persistSourceAvailabilityObservation(
 
     return {
       songId,
+      previousObservation,
       observation: appliedObservation,
       applied: true,
       track: input.track

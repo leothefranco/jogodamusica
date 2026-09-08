@@ -31,6 +31,7 @@ const theme = {
   description: null,
   coverUrl: null,
   isActive: false,
+  editorialState: "draft" as const,
   activeSongCount: 0,
   totalSongCount: 0,
   updatedAt: now,
@@ -51,6 +52,7 @@ function createService(options: {
   observeResult?: {
     songId: string;
     observation: typeof availableObservation;
+    previousObservation: typeof availableObservation | null;
     availability: {
       state: "available_fresh" | "unavailable" | "unknown";
       playable: boolean;
@@ -76,6 +78,7 @@ function createService(options: {
     options.observeResult ?? {
       songId,
       observation: availableObservation,
+      previousObservation: availableObservation,
       availability: {
         state: "available_fresh",
         playable: true,
@@ -100,6 +103,8 @@ function createService(options: {
     upsertSongAndAssociation: async () => undefined,
     withThemeContentLock: async (_themeId, operation) =>
       operation({
+        assertActiveAdmin: async () => {},
+        listThemeSongs: async () => [associatedTrack],
         findThemeSong: async () => associatedTrack,
         findThemeSongByProviderContentId: async () => null,
         findThemeSummary: async () => theme,
@@ -138,6 +143,7 @@ describe("integração individual da disponibilidade no Tema", () => {
       return {
         songId,
         observation: availableObservation,
+        previousObservation: availableObservation,
         availability: {
           state: "available_fresh" as const,
           playable: true,
@@ -172,6 +178,7 @@ describe("integração individual da disponibilidade no Tema", () => {
       observeResult: {
         songId,
         observation: { ...availableObservation, confirmedState: "unavailable" },
+        previousObservation: availableObservation,
         availability: {
           state: "unavailable",
           playable: false,
@@ -218,6 +225,7 @@ describe("integração individual da disponibilidade no Tema", () => {
       persistObservation: async () => ({
         songId,
         observation: winningObservation,
+        previousObservation: winningObservation,
         applied: false,
         track,
       }),

@@ -18,12 +18,40 @@ Decisão aleatória e definitiva entre as duas músicas de um confronto quando o
 _Avoid_: Novo voto, voto aleatório, sorteio visual
 
 **Modalidade de partida**:
-Quantidade de músicas de uma partida, escolhida pelo jogador entre os tamanhos suportados pelo catálogo ativo do tema. Não é uma configuração do tema.
+Quantidade de músicas de uma partida, escolhida entre os tamanhos suportados pelas Entradas jogáveis do Tema. As principais têm 32 ou 64 músicas; as rápidas têm 4, 8 ou 16; a estendida tem 128.
 _Avoid_: Quantidade de rodadas do tema, chave padrão
 
 **Tema publicável**:
-Tema com pelo menos quatro músicas ativas, quantidade mínima necessária para oferecer uma modalidade de partida.
+Tema com pelo menos quatro Entradas jogáveis, mínimo necessário para sua publicação editorial. Uma queda posterior de saúde preserva a intenção de publicação.
 _Avoid_: Tema configurado, tema com chave padrão
+
+**Entrada de catálogo**:
+Inclusão editorial de uma música em um Tema. Uma Entrada ativa participa da avaliação de saúde desse Tema.
+_Avoid_: Vídeo publicado, música globalmente aprovada
+
+**Entrada jogável**:
+Entrada ativa com disponibilidade confirmada ainda fresca ou em tolerância. Uma Entrada desconhecida é potencial, mas não conta como jogável.
+_Avoid_: Música ativa e incorporável, disponibilidade presumida
+
+**Publicação editorial**:
+Intenção explícita de manter um Tema em rascunho ou publicado, independente da saúde atual. Somente uma decisão editorial o devolve a rascunho.
+_Avoid_: Saúde do Tema, visibilidade
+
+**Visibilidade derivada**:
+Condição visível ou oculta resultante da intenção editorial e da quantidade de Entradas jogáveis. Um Tema publicado com menos de quatro fica oculto até se recuperar.
+_Avoid_: Despublicação automática, intenção editorial
+
+**Estado operacional do Tema**:
+Classificação exclusiva em rascunho editorial, saudável, degradado, suspenso por verificação pendente ou suspenso por Entradas saudáveis insuficientes. Avisos de tolerância, indisponibilidade ou desconhecimento distinguem degradação de saúde plena.
+_Avoid_: Publicação, estado da Fonte
+
+**Suspensão por verificação pendente**:
+Tema publicado com menos de quatro Entradas jogáveis, mas pelo menos quatro potenciais ao incluir as desconhecidas.
+_Avoid_: Insuficiência conhecida, despublicação
+
+**Suspensão por Entradas saudáveis insuficientes**:
+Tema publicado com menos de quatro Entradas potenciais, mesmo incluindo as desconhecidas.
+_Avoid_: Verificação pendente, rascunho
 
 **Metadados de origem**:
 Dados fornecidos pelo provedor de música, como título original, canal, duração e

@@ -4,6 +4,7 @@ import { and, asc, count, desc, eq, sql } from "drizzle-orm";
 
 import { getDatabase } from "@/db";
 import {
+  adminProfiles,
   gameSessions,
   songs,
   sourceAvailabilityObservations,
@@ -15,6 +16,7 @@ import {
 import type { ResolvedPlaylistTrack } from "@/domain/music/provider";
 import { SOURCE_AVAILABILITY_POLICY } from "@/domain/music/source-availability";
 import type { SourceAvailabilityObservation } from "@/domain/music/source-availability";
+import type { ThemeEditorialState } from "@/domain/music/theme-state";
 import { AppError } from "@/lib/errors";
 
 type ThemeContentDatabase = Pick<
@@ -80,6 +82,7 @@ export type ThemeSummary = {
   description: string | null;
   coverUrl: string | null;
   isActive: boolean;
+  editorialState: ThemeEditorialState;
   activeSongCount: number;
   totalSongCount: number;
   updatedAt: Date;
@@ -296,6 +299,7 @@ const themeSummarySelection = {
   description: themes.description,
   coverUrl: themes.coverUrl,
   isActive: themes.isActive,
+  editorialState: themes.editorialState,
   activeSongCount:
     sql<number>`count(${themeSongs.songId}) filter (where ${themeSongs.isActive} = true and ${songs.isEmbeddable} = true)`.mapWith(
       Number,
@@ -588,7 +592,14 @@ export async function findThemeSummary(
 export async function listThemeSongs(
   themeId: string,
 ): Promise<ThemeSongEditorItem[]> {
-  const rows = await getDatabase()
+  return listThemeSongsUsing(getDatabase(), themeId);
+}
+
+async function listThemeSongsUsing(
+  database: ThemeContentDatabase,
+  themeId: string,
+): Promise<ThemeSongEditorItem[]> {
+  const rows = await database
     .select(themeSongEditorSelection)
     .from(themeSongs)
     .innerJoin(songs, eq(songs.id, themeSongs.songId))
@@ -1000,7 +1011,10 @@ export async function updateThemeRecord(
 }
 
 export async function setThemeActiveRecord(themeId: string, isActive: boolean) {
-  return updateThemeRecord(themeId, { isActive });
+  return updateThemeRecord(themeId, {
+    isActive,
+    editorialState: isActive ? "published" : "draft",
+  });
 }
 
 export async function themeHasSessions(themeId: string) {
@@ -1164,6 +1178,8 @@ export async function importPlaylistTracks(
 }
 
 export type LockedThemeContentRepository = {
+  assertActiveAdmin(actorId: string): Promise<void>;
+  listThemeSongs(): Promise<ThemeSongEditorItem[]>;
   findThemeSong(songId: string): Promise<ThemeSongEditorItem | null>;
   findThemeSongByProviderContentId(
     providerContentId: string,
@@ -1193,6 +1209,25 @@ export async function withThemeContentLock<T>(
     );
 
     return operation({
+      assertActiveAdmin: async (actorId) => {
+        const [profile] = await transaction
+          .select({ userId: adminProfiles.userId })
+          .from(adminProfiles)
+          .where(
+            and(
+              eq(adminProfiles.userId, actorId),
+              eq(adminProfiles.isActive, true),
+            ),
+          )
+          .for("share", { noWait: true });
+        if (!profile)
+          throw new AppError(
+            "THEME_PUBLICATION_FORBIDDEN",
+            "Uma sessão administrativa ativa é necessária para publicar ou voltar a rascunho.",
+            403,
+          );
+      },
+      listThemeSongs: () => listThemeSongsUsing(transaction, themeId),
       findThemeSong: (songId) =>
         findThemeSongUsing(transaction, themeId, songId),
       findThemeSongByProviderContentId: (providerContentId) =>
@@ -1205,7 +1240,10 @@ export async function withThemeContentLock<T>(
       removeThemeSongRecord: (songId) =>
         removeThemeSongRecordUsing(transaction, themeId, songId),
       setThemeActiveRecord: (isActive) =>
-        updateThemeRecordUsing(transaction, themeId, { isActive }),
+        updateThemeRecordUsing(transaction, themeId, {
+          isActive,
+          editorialState: isActive ? "published" : "draft",
+        }),
       updateThemeSongAssociation: (input) =>
         updateThemeSongAssociationUsing(transaction, { themeId, ...input }),
       updateThemeRecord: (values) =>

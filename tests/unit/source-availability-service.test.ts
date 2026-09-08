@@ -30,6 +30,7 @@ function createService(overrides: Partial<Dependencies> = {}) {
     persistObservation: async ({ observation }) => ({
       songId,
       observation,
+      previousObservation: null,
       applied: true,
       track,
     }),
@@ -65,7 +66,13 @@ describe("serviço de disponibilidade regional", () => {
         order.push("transaction");
         transactionOpen = true;
         try {
-          return { songId, observation, applied: true, track };
+          return {
+            songId,
+            observation,
+            previousObservation: null,
+            applied: true,
+            track,
+          };
         } finally {
           transactionOpen = false;
         }
@@ -107,6 +114,7 @@ describe("serviço de disponibilidade regional", () => {
     const persistObservation = vi.fn(async ({ observation }) => ({
       songId,
       observation,
+      previousObservation: null,
       applied: true,
       track: blockedTrack,
     }));
@@ -179,6 +187,7 @@ describe("serviço de disponibilidade regional", () => {
     const persistObservation = vi.fn(async ({ observation }) => ({
       songId: null,
       observation,
+      previousObservation: null,
       applied: true,
       track: null,
     }));
@@ -261,6 +270,7 @@ describe("serviço de disponibilidade regional", () => {
       persistObservation: async () => ({
         songId,
         observation: winningObservation,
+        previousObservation: winningObservation,
         applied: false,
         track,
       }),
@@ -296,6 +306,7 @@ describe("serviço de disponibilidade regional", () => {
       });
       await previous;
       try {
+        const previousObservation = stored;
         const sameSemanticObservation =
           stored !== null &&
           JSON.stringify({ ...observation, revision: 0 }) ===
@@ -313,7 +324,13 @@ describe("serviço de disponibilidade regional", () => {
           };
           effects += 1;
         }
-        return { songId, observation: stored!, applied, track };
+        return {
+          songId,
+          observation: stored!,
+          previousObservation,
+          applied,
+          track,
+        };
       } finally {
         release();
       }
@@ -366,6 +383,7 @@ describe("serviço de disponibilidade regional", () => {
       });
       await previous;
       try {
+        const previousObservation = stored;
         const applied =
           stored === null ||
           (observation.revision >= stored.revision &&
@@ -378,7 +396,13 @@ describe("serviço de disponibilidade regional", () => {
           };
           effects += 1;
         }
-        return { songId, observation: stored!, applied, track };
+        return {
+          songId,
+          observation: stored!,
+          previousObservation,
+          applied,
+          track,
+        };
       } finally {
         release();
       }

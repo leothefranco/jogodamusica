@@ -27,6 +27,10 @@ const timestamps = {
 
 export const adminRoleEnum = pgEnum("admin_role", ["admin", "editor"]);
 export const musicProviderEnum = pgEnum("music_provider", ["youtube"]);
+export const themeEditorialStateEnum = pgEnum("theme_editorial_state", [
+  "draft",
+  "published",
+]);
 export const gameStatusEnum = pgEnum("game_status", [
   "active",
   "completed",
@@ -91,11 +95,16 @@ export const themes = pgTable(
     description: text("description"),
     coverUrl: text("cover_url"),
     isActive: boolean("is_active").default(false).notNull(),
+    editorialState: themeEditorialStateEnum("editorial_state").notNull(),
     ...timestamps,
   },
   (table) => [
     uniqueIndex("themes_slug_uidx").on(table.slug),
     index("themes_active_idx").on(table.isActive),
+    check(
+      "themes_editorial_state_check",
+      sql`${table.isActive} = (${table.editorialState} = 'published')`,
+    ),
   ],
 );
 

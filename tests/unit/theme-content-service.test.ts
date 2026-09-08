@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createThemeContentService } from "@/server/services/theme-content-service";
+import { applySourceAvailabilityResult } from "@/domain/music/source-availability";
 
 const resolvedTrack = {
   providerContentId: "dQw4w9WgXcQ",
@@ -21,15 +22,27 @@ const associatedTrack = {
   previewDurationSeconds: 30,
   isActive: true,
   displayOrder: null,
-  sourceAvailability: null,
+  sourceAvailability: applySourceAvailabilityResult({
+    current: null,
+    observedAt: new Date("2026-01-01T00:00:00Z"),
+    result: { type: "available", reason: "available", track: resolvedTrack },
+  }),
 };
 
 type ServiceDependencies = Parameters<typeof createThemeContentService>[0];
 
-function createService(overrides: Partial<ServiceDependencies> = {}) {
-  const { withThemeContentLock: lockOverride, ...boundaryOverrides } =
-    overrides;
+function createService(
+  overrides: Partial<ServiceDependencies> & {
+    entries?: (typeof associatedTrack)[];
+  } = {},
+) {
+  const {
+    withThemeContentLock: lockOverride,
+    entries = Array.from({ length: 4 }, () => associatedTrack),
+    ...boundaryOverrides
+  } = overrides;
   const boundaries: Omit<ServiceDependencies, "withThemeContentLock"> = {
+    clock: () => new Date("2026-01-01T00:00:00Z"),
     deleteThemeRecord: async (themeId) => themeId,
     findThemeSong: async () => associatedTrack,
     findThemeSongByProviderContentId: async () => associatedTrack,
@@ -40,12 +53,14 @@ function createService(overrides: Partial<ServiceDependencies> = {}) {
       description: null,
       coverUrl: null,
       isActive: true,
+      editorialState: "published",
       activeSongCount: 4,
       totalSongCount: 4,
       updatedAt: new Date("2026-01-01T00:00:00Z"),
     }),
     observeSourceAvailability: async () => ({
       songId: associatedTrack.songId,
+      previousObservation: null,
       observation: {
         region: "BR",
         confirmedState: "available",
@@ -94,6 +109,8 @@ function createService(overrides: Partial<ServiceDependencies> = {}) {
 
       try {
         return await operation({
+          assertActiveAdmin: async () => {},
+          listThemeSongs: async () => entries,
           findThemeSong: (songId) => boundaries.findThemeSong(themeId, songId),
           findThemeSongByProviderContentId: (providerContentId) =>
             boundaries.findThemeSongByProviderContentId(
@@ -130,7 +147,7 @@ function createService(overrides: Partial<ServiceDependencies> = {}) {
 }
 
 describe("serviço de conteúdo de temas", () => {
-  it("preserva a quantidade jogável ao reassociar uma música de tema publicado", async () => {
+  it("permite reassociação editorial inativa em tema publicado", async () => {
     let associationWasSaved = false;
     const service = createService({
       upsertSongAndAssociation: async () => {
@@ -147,8 +164,8 @@ describe("serviço de conteúdo de temas", () => {
         previewDurationSeconds: 30,
         isActive: false,
       }),
-    ).rejects.toMatchObject({ code: "THEME_NOT_PLAYABLE", status: 409 });
-    expect(associationWasSaved).toBe(false);
+    ).resolves.toBeUndefined();
+    expect(associationWasSaved).toBe(true);
   });
 
   it("rejeita música individual bloqueada no Brasil antes de associá-la", async () => {
@@ -156,6 +173,7 @@ describe("serviço de conteúdo de temas", () => {
     const service = createService({
       observeSourceAvailability: async () => ({
         songId: associatedTrack.songId,
+        previousObservation: null,
         observation: {
           region: "BR",
           confirmedState: "unavailable",
@@ -201,7 +219,7 @@ describe("serviço de conteúdo de temas", () => {
     expect(associationWasSaved).toBe(false);
   });
 
-  it("preserva a quantidade jogável ao desativar uma música de tema publicado", async () => {
+  it("permite desativação editorial em tema publicado", async () => {
     let associationWasUpdated = false;
     const service = createService({
       updateThemeSongAssociation: async () => {
@@ -222,11 +240,11 @@ describe("serviço de conteúdo de temas", () => {
           isActive: false,
         },
       ),
-    ).rejects.toMatchObject({ code: "THEME_NOT_PLAYABLE", status: 409 });
-    expect(associationWasUpdated).toBe(false);
+    ).resolves.toBeUndefined();
+    expect(associationWasUpdated).toBe(true);
   });
 
-  it("preserva a quantidade jogável ao remover uma música de tema publicado", async () => {
+  it("permite retirada editorial em tema publicado", async () => {
     let associationWasRemoved = false;
     const service = createService({
       removeThemeSongRecord: async () => {
@@ -240,8 +258,8 @@ describe("serviço de conteúdo de temas", () => {
         "10000000-0000-4000-8000-000000000010",
         associatedTrack.songId,
       ),
-    ).rejects.toMatchObject({ code: "THEME_NOT_PLAYABLE", status: 409 });
-    expect(associationWasRemoved).toBe(false);
+    ).resolves.toBeUndefined();
+    expect(associationWasRemoved).toBe(true);
   });
 
   it("permite remover associação ativa não reproduzível sem reduzir o mínimo publicável", async () => {
@@ -268,6 +286,7 @@ describe("serviço de conteúdo de temas", () => {
   it("não publica tema com apenas três músicas ativas e reproduzíveis", async () => {
     let publicationWasSaved = false;
     const service = createService({
+      entries: [associatedTrack, associatedTrack, associatedTrack],
       findThemeSummary: async () => ({
         id: "10000000-0000-4000-8000-000000000010",
         name: "Clássicos",
@@ -275,6 +294,7 @@ describe("serviço de conteúdo de temas", () => {
         description: null,
         coverUrl: null,
         isActive: false,
+        editorialState: "draft",
         activeSongCount: 3,
         totalSongCount: 3,
         updatedAt: new Date("2026-01-01T00:00:00Z"),
@@ -286,7 +306,11 @@ describe("serviço de conteúdo de temas", () => {
     });
 
     await expect(
-      service.setThemePublication("10000000-0000-4000-8000-000000000010", true),
+      service.setThemePublication(
+        "10000000-0000-4000-8000-000000000010",
+        true,
+        "admin",
+      ),
     ).rejects.toMatchObject({ code: "THEME_NOT_PLAYABLE", status: 409 });
     expect(publicationWasSaved).toBe(false);
   });
@@ -301,6 +325,7 @@ describe("serviço de conteúdo de temas", () => {
         description: null,
         coverUrl: null,
         isActive: false,
+        editorialState: "draft",
         activeSongCount: 4,
         totalSongCount: 4,
         updatedAt: new Date("2026-01-01T00:00:00Z"),
@@ -314,6 +339,7 @@ describe("serviço de conteúdo de temas", () => {
     await service.setThemePublication(
       "10000000-0000-4000-8000-000000000010",
       true,
+      "admin",
     );
 
     expect(publicationWasSaved).toBe(true);
@@ -355,7 +381,7 @@ describe("serviço de conteúdo de temas", () => {
     expect(savedTheme).toEqual(input);
   });
 
-  it("serializa desativações concorrentes para preservar uma chave publicada", async () => {
+  it("permite ambas as desativações editoriais concorrentes sem impor o mínimo publicado", async () => {
     let activeSongCount = 5;
     const service = createService({
       findThemeSummary: async () => ({
@@ -365,6 +391,7 @@ describe("serviço de conteúdo de temas", () => {
         description: null,
         coverUrl: null,
         isActive: true,
+        editorialState: "published",
         activeSongCount,
         totalSongCount: 5,
         updatedAt: new Date("2026-01-01T00:00:00Z"),
@@ -396,11 +423,11 @@ describe("serviço de conteúdo de temas", () => {
     ]);
 
     expect(results.filter(({ status }) => status === "fulfilled")).toHaveLength(
-      1,
+      2,
     );
     expect(results.filter(({ status }) => status === "rejected")).toHaveLength(
-      1,
+      0,
     );
-    expect(activeSongCount).toBe(4);
+    expect(activeSongCount).toBe(3);
   });
 });

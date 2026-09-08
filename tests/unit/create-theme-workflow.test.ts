@@ -146,6 +146,7 @@ describe("criação de tema", () => {
       description: null,
       coverUrl: null,
       isActive: false,
+      editorialState: "draft",
     });
     expect(storage.inspect).not.toHaveBeenCalled();
     expect(storage.getPublicUrl).not.toHaveBeenCalled();
@@ -299,6 +300,7 @@ describe("criação de tema", () => {
       description: null,
       coverUrl: canonicalCoverUrl,
       isActive: false,
+      editorialState: "draft",
     });
   });
 

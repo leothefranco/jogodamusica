@@ -55,6 +55,7 @@ test("formulário, upload, action, workflow e leitura pública compartilham a me
         description: string | null;
         coverUrl: string | null;
         isActive: boolean;
+        editorialState: "draft";
       }
     | undefined;
   const repository = {
@@ -65,6 +66,7 @@ test("formulário, upload, action, workflow e leitura pública compartilham a me
       description: string | null;
       coverUrl: string | null;
       isActive: false;
+      editorialState: "draft";
     }) => {
       storedTheme = {
         id: "20000000-0000-4000-8000-000000000002",
@@ -131,6 +133,10 @@ test("formulário, upload, action, workflow e leitura pública compartilham a me
   });
   expect(callOrder).toEqual(["claim", "inspect", "persist"]);
   expect(storedTheme?.coverUrl).toBe(canonicalCoverUrl);
+  expect(storedTheme).toMatchObject({
+    isActive: false,
+    editorialState: "draft",
+  });
 
   const playableTheme = {
     id: storedTheme!.id,

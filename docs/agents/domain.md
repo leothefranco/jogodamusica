@@ -27,6 +27,10 @@ When output names a domain concept, use the term defined in `CONTEXT.md`. Do not
 
 If the required concept is missing, reconsider whether the term belongs to the project or record the gap for `/domain-modeling`.
 
+For Tema publication or health changes, distinguish the glossary's Publicação
+editorial, Visibilidade derivada and Estado operacional. The CAT-04 rollout and
+legacy public-read boundary are documented in `docs/qa/cat-04.md`.
+
 ## Flag ADR conflicts
 
 If proposed work contradicts an existing ADR, surface the conflict explicitly instead of silently overriding the decision.
