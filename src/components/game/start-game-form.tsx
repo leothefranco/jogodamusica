@@ -97,7 +97,7 @@ export function StartGameForm({
         size="lg"
         onClick={startGame}
         disabled={isStarting || bracketSize === null}
-        className="mt-6 min-h-12 w-full rounded-none bg-[var(--duel-b)] font-bold text-[var(--app-bg)] hover:brightness-110"
+        className="mt-6 min-h-12 w-full rounded-none bg-[var(--duel-b)] font-bold text-[var(--app-bg)] hover:bg-[var(--duel-b)] hover:brightness-110"
       >
         {isStarting ? (
           <LoaderCircle className="animate-spin" aria-hidden="true" />

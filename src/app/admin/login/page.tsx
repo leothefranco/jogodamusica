@@ -51,7 +51,7 @@ export default function AdminLoginPage() {
       </section>
 
       <section className="flex items-center justify-center px-5 py-12 sm:px-8">
-        <div className="w-full max-w-md">
+        <div className="w-full max-w-md border-t-4 border-[var(--duel-b)] pt-6">
           <Link
             href="/"
             className="mb-12 flex w-fit items-center gap-3 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-[var(--duel-a)] lg:hidden"
