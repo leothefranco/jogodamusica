@@ -96,7 +96,7 @@ function SongCard({
         ) : (
           <Check aria-hidden="true" />
         )}
-        Escolher música {label}
+        Votar na música {label}
       </Button>
     </article>
   );
