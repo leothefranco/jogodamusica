@@ -241,3 +241,26 @@
     gap: 12px;
   }
 }
+
+/* Compact, neutral fallback for real catalog rows without artwork. */
+.cover {
+  background: #272c35;
+}
+.cover::after {
+  background: none;
+}
+.cover :global(.theme-visual-placeholder) {
+  color: #c6d4ff;
+  gap: 0;
+}
+.cover :global(.theme-visual-placeholder-mark) {
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: #c6d4ff;
+  width: 32px;
+  font-size: 28px;
+}
+.cover :global(.theme-visual-placeholder) > span:last-child {
+  display: none;
+}
