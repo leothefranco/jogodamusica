@@ -82,6 +82,7 @@ export function createSourceAvailabilityFixtureService(fixtureId: string) {
       track: ResolvedProviderTrack | null;
     }) => {
       record.flow.push("persist");
+      const previousObservation = record.source?.observation ?? null;
       record.source = {
         songId,
         providerContentId,
@@ -91,6 +92,7 @@ export function createSourceAvailabilityFixtureService(fixtureId: string) {
       return {
         songId,
         observation,
+        previousObservation,
         applied: true,
         track: observedTrack,
       };

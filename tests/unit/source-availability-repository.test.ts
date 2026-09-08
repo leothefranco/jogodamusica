@@ -85,6 +85,7 @@ describe("repositório de disponibilidade regional", () => {
       [],
       [{ id: songId }],
       [],
+      [],
       [observationRow()],
       [],
       [],
@@ -96,7 +97,13 @@ describe("repositório de disponibilidade regional", () => {
         track,
         observation,
       }),
-    ).resolves.toEqual({ songId, observation, applied: true, track });
+    ).resolves.toEqual({
+      songId,
+      observation,
+      previousObservation: null,
+      applied: true,
+      track,
+    });
 
     expect(databaseMocks.database.transaction).toHaveBeenCalledOnce();
     expect(databaseMocks.database.transactionOpen).toBe(false);
@@ -106,6 +113,7 @@ describe("repositório de disponibilidade regional", () => {
       expect.stringContaining(
         "from public.unbound_source_availability_observations",
       ),
+      expect.stringContaining("from public.source_availability_observations"),
       expect.stringContaining(
         "insert into public.source_availability_observations",
       ),
@@ -115,7 +123,7 @@ describe("repositório de disponibilidade regional", () => {
       expect.stringContaining("update public.songs"),
     ]);
 
-    const cas = normalizedStatements()[3];
+    const cas = normalizedStatements()[4];
     expect(cas).toContain("on conflict (song_id, region) do update");
     expect(cas).toContain("excluded.revision >= current.revision");
     expect(cas).toContain("revision = current.revision + 1");
@@ -128,7 +136,7 @@ describe("repositório de disponibilidade regional", () => {
     const lockParams = compiledStatements()[0].params;
     expect(lockParams).not.toContain(track.providerContentId);
 
-    const casParams = compiledStatements()[3].params;
+    const casParams = compiledStatements()[4].params;
     expect(casParams).not.toContain(track.providerContentId);
     expect(casParams).not.toContain(track.sourceTitle);
     expect(casParams).not.toContain(track.thumbnailUrl);
@@ -180,6 +188,7 @@ describe("repositório de disponibilidade regional", () => {
       [],
       [{ id: songId }],
       [],
+      [current],
       [],
       [current],
       [],
@@ -205,10 +214,11 @@ describe("repositório de disponibilidade regional", () => {
       songId,
       applied: false,
       observation: { revision: 3 },
+      previousObservation: { revision: 3 },
       track,
     });
 
-    expect(normalizedStatements()).toHaveLength(8);
+    expect(normalizedStatements()).toHaveLength(9);
     expect(normalizedStatements().at(-3)).toContain(
       "from public.source_availability_observations",
     );
@@ -227,7 +237,7 @@ describe("repositório de disponibilidade regional", () => {
       observedAt: new Date("2026-01-01T00:00:00.000Z"),
       result: { type: "unavailable", reason: "not_found", track: null },
     });
-    databaseMocks.responses.push([], [], [observationRow(unavailable)]);
+    databaseMocks.responses.push([], [], [], [observationRow(unavailable)]);
 
     await expect(
       persistSourceAvailabilityObservation({
@@ -238,18 +248,22 @@ describe("repositório de disponibilidade regional", () => {
     ).resolves.toMatchObject({
       songId: null,
       observation: unavailable,
+      previousObservation: null,
       applied: true,
     });
-    expect(normalizedStatements()).toHaveLength(3);
+    expect(normalizedStatements()).toHaveLength(4);
     expect(normalizedStatements()[0]).toContain("pg_advisory_xact_lock");
     expect(normalizedStatements()[1]).toContain("from public.songs");
     expect(normalizedStatements()[2]).toContain(
+      "from public.unbound_source_availability_observations",
+    );
+    expect(normalizedStatements()[3]).toContain(
       "insert into public.unbound_source_availability_observations",
     );
-    expect(compiledStatements()[2].params).not.toContain(
+    expect(compiledStatements()[3].params).not.toContain(
       track.providerContentId,
     );
-    const pendingCas = normalizedStatements()[2];
+    const pendingCas = normalizedStatements()[3];
     expect(pendingCas).toContain("excluded.revision >= current.revision");
     expect(pendingCas).toContain("revision = current.revision + 1");
     expect(pendingCas).toContain("is distinct from");
@@ -268,6 +282,7 @@ describe("repositório de disponibilidade regional", () => {
     databaseMocks.responses.push(
       [],
       [{ id: songId }],
+      [observationRow(newerUnavailable)],
       [observationRow(newerUnavailable)],
       [observationRow(newerUnavailable)],
       [],
@@ -294,6 +309,7 @@ describe("repositório de disponibilidade regional", () => {
     ).resolves.toMatchObject({
       songId,
       observation: { confirmationReason: "region_blocked" },
+      previousObservation: { confirmationReason: "region_blocked" },
       applied: false,
     });
 

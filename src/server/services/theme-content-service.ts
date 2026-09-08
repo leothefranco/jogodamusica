@@ -107,17 +107,24 @@ async function captureEditorialChange(
   now: Date,
   mutate: () => Promise<unknown>,
 ) {
+  const previousEntries = await repository.listThemeSongs();
+  const previousBySong = new Map(
+    previousEntries.map((entry) => [entry.songId, entry]),
+  );
   const before = classifyThemeEntries(
     theme.editorialState,
-    await repository.listThemeSongs(),
+    previousEntries,
     now,
   );
   await mutate();
-  const after = classifyThemeEntries(
-    theme.editorialState,
-    await repository.listThemeSongs(),
-    now,
-  );
+  // Vary editorial membership only; a concurrent health write is not editorial.
+  const entries = (await repository.listThemeSongs()).map((entry) => {
+    const previous = previousBySong.get(entry.songId);
+    return previous
+      ? { ...entry, sourceAvailability: previous.sourceAvailability }
+      : entry;
+  });
+  const after = classifyThemeEntries(theme.editorialState, entries, now);
   return deriveThemeStateEvents(before, after, "editorial");
 }
 
@@ -375,14 +382,21 @@ export function createThemeContentService(
               theme.editorialState,
               entries.map((entry) =>
                 entry.songId === songId
-                  ? { ...entry, sourceAvailability: source.sourceAvailability }
+                  ? {
+                      ...entry,
+                      sourceAvailability: observed.previousObservation,
+                    }
                   : entry,
               ),
               decisionAt,
             );
             const after = classifyThemeEntries(
               theme.editorialState,
-              entries,
+              entries.map((entry) =>
+                entry.songId === songId
+                  ? { ...entry, sourceAvailability: observed.observation }
+                  : entry,
+              ),
               decisionAt,
             );
             return deriveThemeStateEvents(before, after, "health");

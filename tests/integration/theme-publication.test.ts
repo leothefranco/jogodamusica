@@ -163,7 +163,7 @@ beforeAll(async () => {
 });
 beforeEach(async () => {
   await client.exec(
-    "delete from themes; delete from songs; delete from admin_profiles;",
+    "delete from themes; delete from songs; delete from admin_profiles; delete from unbound_source_availability_observations;",
   );
   await database
     .insert(schema.adminProfiles)
@@ -264,6 +264,266 @@ describe("publicação administrativa com repositório PostgreSQL real", () => {
       state: { operationalState: "suspended_insufficient_healthy_entries" },
     });
   });
+
+  it("edição de título não atribui a si a perda de saúde ocorrida entre as leituras", async () => {
+    await addEntries(32);
+    await service.setThemePublication(themeId, true, actorId);
+    events.length = 0;
+    // PGlite has one connection: this test-only trigger schedules a real health
+    // write between the editorial reads, without claiming multi-session locking.
+    await client.exec(`
+      create function pg_temp.cat04_health_between_reads() returns trigger
+      language plpgsql as $$
+      begin
+        update source_availability_observations
+        set confirmed_state = 'unavailable', confirmation_reason = 'not_found',
+            valid_until = null, grace_until = null, revision = revision + 1
+        where song_id = new.song_id and region = 'BR';
+        return new;
+      end;
+      $$;
+      create trigger cat04_health_between_reads after update of title on theme_songs
+      for each row execute function pg_temp.cat04_health_between_reads();
+    `);
+    try {
+      await service.updateThemeSong(themeId, songId(32), {
+        title: "Título revisado",
+        artist: "QA",
+        startTimeSeconds: 0,
+        previewDurationSeconds: 30,
+        displayOrder: null,
+        isActive: true,
+      });
+      const editor = await getThemeEditor(themeId);
+      expect(editor).toMatchObject({
+        theme: { editorialState: "published" },
+        state: { operationalState: "degraded", counts: { playableCount: 31 } },
+      });
+      expect(
+        editor.songs.find((song) => song.songId === songId(32)),
+      ).toMatchObject({
+        title: "Título revisado",
+      });
+      expect(events).toEqual([]);
+    } finally {
+      await client.exec(
+        "drop trigger cat04_health_between_reads on theme_songs;",
+      );
+    }
+  });
+
+  it("duas revalidações iniciadas fresh emitem suspensão e recuperação efetivamente aplicadas", async () => {
+    await addEntries(4);
+    await service.setThemePublication(themeId, true, actorId);
+    events.length = 0;
+    let firstEntered!: () => void;
+    let secondEntered!: () => void;
+    let releaseFirst!: () => void;
+    let releaseSecond!: () => void;
+    const firstStarted = new Promise<void>((resolve) => {
+      firstEntered = resolve;
+    });
+    const secondStarted = new Promise<void>((resolve) => {
+      secondEntered = resolve;
+    });
+    const firstResponse = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const secondResponse = new Promise<void>((resolve) => {
+      releaseSecond = resolve;
+    });
+    let requests = 0;
+    const sourceService = createSourceAvailabilityService({
+      clock: () => now,
+      findSource: findSourceAvailabilityByProviderContentId,
+      persistObservation: persistSourceAvailabilityObservation,
+      metrics: { record() {} },
+      provider: {
+        async observe(providerContentId) {
+          expect(transactionDepth).toBe(0);
+          requests += 1;
+          if (requests === 1) {
+            firstEntered();
+            await firstResponse;
+            return { type: "unavailable", reason: "not_found", track: null };
+          }
+          secondEntered();
+          await secondResponse;
+          return {
+            type: "available",
+            reason: "available",
+            track: {
+              providerContentId,
+              sourceTitle: "QA",
+              sourceChannel: "QA",
+              thumbnailUrl: "https://example.com/qa.jpg",
+              durationSeconds: 180,
+              isEmbeddable: true,
+              isRegionAllowed: true,
+            },
+          };
+        },
+      },
+    });
+    const healthService = createThemeContentService({
+      ...repository,
+      clock: () => now,
+      observeSourceAvailability: sourceService.observeSource,
+      recordThemeStateEvent: (event) => {
+        events.push(event);
+      },
+    });
+    const suspension = healthService.revalidateSourceAvailability(
+      themeId,
+      songId(4),
+    );
+    await firstStarted;
+    now = new Date(startedAt.getTime() + 1000);
+    const recovery = healthService.revalidateSourceAvailability(
+      themeId,
+      songId(4),
+    );
+    await secondStarted;
+    releaseFirst();
+    await suspension;
+    expect(events.map(({ type, cause }) => ({ type, cause }))).toEqual([
+      { type: "visibility_changed", cause: "health" },
+      { type: "suspension_changed", cause: "health" },
+    ]);
+    events.length = 0;
+    releaseSecond();
+    await recovery;
+    expect(await getThemeEditor(themeId)).toMatchObject({
+      theme: { editorialState: "published" },
+      state: { operationalState: "healthy", counts: { playableCount: 4 } },
+    });
+    expect(events.map(({ type, cause }) => ({ type, cause }))).toEqual([
+      { type: "visibility_changed", cause: "health" },
+      { type: "suspension_changed", cause: "health" },
+    ]);
+  });
+
+  it("persistência informa ausência, predecessor unbound/bound e escrita stale/no-op sem inventar transição", async () => {
+    const providerContentId = "00000000999";
+    const unavailable = applySourceAvailabilityResult({
+      current: null,
+      observedAt: startedAt,
+      result: { type: "unavailable", reason: "not_found", track: null },
+    });
+    const unbound = await persistSourceAvailabilityObservation({
+      providerContentId,
+      track: null,
+      observation: unavailable,
+    });
+    expect(unbound).toMatchObject({
+      songId: null,
+      applied: true,
+      previousObservation: null,
+      observation: unavailable,
+    });
+    expect(
+      await persistSourceAvailabilityObservation({
+        providerContentId,
+        track: null,
+        observation: unavailable,
+      }),
+    ).toMatchObject({
+      applied: false,
+      previousObservation: unavailable,
+      observation: unavailable,
+    });
+    const track = {
+      providerContentId,
+      sourceTitle: "QA",
+      sourceChannel: "QA",
+      thumbnailUrl: "https://example.com/qa.jpg",
+      durationSeconds: 180,
+      isEmbeddable: true,
+      isRegionAllowed: true,
+    };
+    const available = applySourceAvailabilityResult({
+      current: unbound.observation,
+      observedAt: new Date(startedAt.getTime() + 1000),
+      result: { type: "available", reason: "available", track },
+    });
+    const bound = await persistSourceAvailabilityObservation({
+      providerContentId,
+      track,
+      observation: available,
+    });
+    expect(bound).toMatchObject({
+      applied: true,
+      previousObservation: unavailable,
+      observation: available,
+    });
+    expect(bound.songId).not.toBeNull();
+    for (const candidate of [unavailable, bound.observation]) {
+      expect(
+        await persistSourceAvailabilityObservation({
+          providerContentId,
+          track: null,
+          observation: candidate,
+        }),
+      ).toMatchObject({
+        applied: false,
+        previousObservation: available,
+        observation: available,
+      });
+    }
+    expect(
+      await findSourceAvailabilityByProviderContentId(providerContentId, "BR"),
+    ).toMatchObject({
+      songId: bound.songId,
+      observation: available,
+    });
+  });
+
+  it.each(["stale", "no-op"])(
+    "revalidação %s não emite mudança inexistente",
+    async (scenario) => {
+      await addEntries(4);
+      await service.setThemePublication(themeId, true, actorId);
+      events.length = 0;
+      if (scenario === "stale") now = new Date(startedAt.getTime() - 1000);
+      const sourceService = createSourceAvailabilityService({
+        clock: () => now,
+        findSource: findSourceAvailabilityByProviderContentId,
+        persistObservation: persistSourceAvailabilityObservation,
+        metrics: { record() {} },
+        provider: {
+          async observe(providerContentId) {
+            if (scenario === "stale")
+              return { type: "unavailable", reason: "not_found", track: null };
+            return {
+              type: "available",
+              reason: "available",
+              track: {
+                providerContentId,
+                sourceTitle: "QA",
+                sourceChannel: "QA",
+                thumbnailUrl: "https://example.com/qa.jpg",
+                durationSeconds: 180,
+                isEmbeddable: true,
+                isRegionAllowed: true,
+              },
+            };
+          },
+        },
+      });
+      await createThemeContentService({
+        ...repository,
+        clock: () => now,
+        observeSourceAvailability: sourceService.observeSource,
+        recordThemeStateEvent: (event) => {
+          events.push(event);
+        },
+      }).revalidateSourceAvailability(themeId, songId(4));
+      expect(events).toEqual([]);
+      expect(await getThemeEditor(themeId)).toMatchObject({
+        state: { operationalState: "healthy", counts: { playableCount: 4 } },
+      });
+    },
+  );
 
   it("páginas reais da lista/editor exibem dimensões e retorno a rascunho mesmo após suspensão", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });

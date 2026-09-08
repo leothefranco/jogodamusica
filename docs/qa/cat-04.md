@@ -18,7 +18,12 @@ degradação, suspensão e modalidades principais, com causa, versão e contagen
 O sink opcional do serviço é o ponto de emissão; persistência/exporter e
 propagação a outros Temas ficam fora desta entrega. Na revalidação, associações
 atuais são mantidas fixas na comparação para não atribuir retirada concorrente
-ao provedor. Leituras/expiração pelo relógio não emitem eventos persistidos.
+ao provedor. O par anterior/aplicado vem da persistência sob os locks existentes,
+não da leitura anterior ao I/O nem de uma releitura posterior à aplicação.
+O predecessor é null na primeira observação; no caminho bound, é capturado após
+reconciliação unbound. Escritas stale/no-op não emitem transição. Na curadoria,
+observações são mantidas fixas para comparar somente a mudança editorial.
+Leituras/expiração pelo relógio não emitem eventos persistidos.
 
 ## Migration expansiva e rollback de aplicativo
 
@@ -49,15 +54,23 @@ A fixture E2E usa os serviços/classificador de produção com banco e provider 
 memória. Exige E2E_TEST_MODE e header de teste, e sua página `.e2e.tsx` é excluída
 do build normal. O GET não chama provider. Ela não é prova de ambiente original.
 
-Validação local em 2026-09-08: `npm test` passou 459 testes/58 arquivos e
+Regressões de concorrência executam persistência real em PGlite: duas revalidações
+iniciadas fresh emitem suspensão e recuperação; ausência, unbound/bound e CAS
+stale/no-op preservam o par de observações. Para a corrida editorial, um trigger
+somente do teste agenda uma escrita de saúde entre as leituras. PGlite usa uma
+conexão; esse agendamento não é prova de locking entre sessões independentes.
+
+Validação local após o adendo em 2026-09-08: `npm test` passou 464 testes/58 arquivos e
 16 testes de segurança; lint, typegen/typecheck, Prettier focado, diff-check e
 `drizzle-kit check` passaram. Builds Turbopack normal e E2E passaram com o gate
 Next16.3.3 intacto. Playwright passou 7/7 (jornada CAT-04, catálogo público e
-Disponibilidade), tanto em dev quanto no build otimizado, porta exclusiva3122.
+Disponibilidade) no build otimizado, porta exclusiva3122. O candidato anterior
+ao adendo também passou os mesmos sete cenários em dev.
 
-`format:check` global encontra 185 arquivos CRLF preexistentes: interseção zero
-com o diff, todos equivalentes à base e8a3cf4 após normalização de EOL. A baseline
-foi preservada; CI ainda precisa confirmar o SHA. O primeiro build/typecheck
+No candidato anterior ao adendo, `format:check` global encontrou 185 arquivos CRLF
+preexistentes: interseção zero com aquele diff, todos equivalentes à base e8a3cf4
+após normalização de EOL. A formatação continua focada nos arquivos alterados;
+CI ainda precisa confirmar o SHA. O primeiro build/typecheck
 encontrou truncamento no arquivo gerado `.next/dev/types/routes.d.ts`; o artefato
 foi preservado em tmp, regenerado pelo próprio Next e os gates repetidos passaram.
 

@@ -60,6 +60,7 @@ function createService(
     }),
     observeSourceAvailability: async () => ({
       songId: associatedTrack.songId,
+      previousObservation: null,
       observation: {
         region: "BR",
         confirmedState: "available",
@@ -172,6 +173,7 @@ describe("serviço de conteúdo de temas", () => {
     const service = createService({
       observeSourceAvailability: async () => ({
         songId: associatedTrack.songId,
+        previousObservation: null,
         observation: {
           region: "BR",
           confirmedState: "unavailable",

@@ -116,8 +116,15 @@ function services(record: FixtureRecord) {
         (item) => item.providerContentId === providerContentId,
       );
       if (!entry) throw new Error("Missing fixture entry");
+      const previousObservation = entry.sourceAvailability;
       entry.sourceAvailability = observation;
-      return { songId: entry.songId, observation, applied: true, track };
+      return {
+        songId: entry.songId,
+        observation,
+        previousObservation,
+        applied: true,
+        track,
+      };
     },
     metrics: { record() {} },
     provider: {
