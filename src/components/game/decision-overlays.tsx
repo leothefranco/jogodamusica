@@ -30,7 +30,7 @@ function TiebreakSongCard({
     <div
       className={`overflow-hidden rounded-2xl border text-left transition-all ${
         active
-          ? "scale-[1.02] border-[#789bff] bg-[#244bdf]/15 shadow-[0_0_28px_rgba(196,181,253,0.22)]"
+          ? "scale-[1.02] border-[#789bff] bg-[#244bdf]/15 shadow-[0_0_28px_rgba(85,122,255,0.22)]"
           : "border-white/10 bg-white/5 opacity-60"
       }`}
     >
@@ -194,7 +194,7 @@ export function TiebreakReveal({
     >
       <div className="w-full max-w-md">
         <div
-          className={`mx-auto grid size-24 place-items-center rounded-full border-4 border-white/20 bg-[conic-gradient(#789bff_0_25%,#eeefec_0_50%,#789bff_0_75%,#eeefec_0)] shadow-[0_0_45px_rgba(196,181,253,0.35)] ${reveal.isSpinning ? "animate-[spin_700ms_linear_infinite]" : ""}`}
+          className={`mx-auto grid size-24 place-items-center rounded-full border-4 border-white/20 bg-[conic-gradient(#789bff_0_25%,#eeefec_0_50%,#789bff_0_75%,#eeefec_0)] shadow-[0_0_45px_rgba(85,122,255,0.35)] ${reveal.isSpinning ? "animate-[spin_700ms_linear_infinite]" : ""}`}
           aria-hidden="true"
         >
           <span className="size-5 rounded-full bg-[#17191d] ring-2 ring-white/70" />

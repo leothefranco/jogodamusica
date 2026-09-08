@@ -223,7 +223,7 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
       <main className="grid min-h-screen place-items-center bg-[#17191d] px-5 text-white">
         <div role="status" className="text-center">
           <LoaderCircle
-            className="mx-auto size-8 animate-spin text-violet-300"
+            className="mx-auto size-8 animate-spin text-[#9bb4ff]"
             aria-hidden="true"
           />
           <p className="mt-4 text-white/60">{transitionMessage}</p>
@@ -253,7 +253,7 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
           <div className="min-w-0">
             <Link
               href="/"
-              className="text-xs font-semibold tracking-[0.16em] text-violet-300 uppercase outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
+              className="text-xs font-semibold tracking-[0.16em] text-[#9bb4ff] uppercase outline-none focus-visible:ring-2 focus-visible:ring-[#789bff]"
             >
               Jogo da Música
             </Link>
@@ -347,7 +347,7 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
               setIsAbandonConfirmationOpen(true);
             }}
             disabled={isAbandoning || decisions.isDeciding}
-            className="min-h-11 rounded-lg px-4 text-sm text-white/45 outline-none hover:text-white focus-visible:ring-2 focus-visible:ring-violet-300"
+            className="min-h-11 rounded-lg px-4 text-sm text-white/45 outline-none hover:text-white focus-visible:ring-2 focus-visible:ring-[#789bff]"
           >
             {isAbandoning
               ? "Abandonando partida..."
