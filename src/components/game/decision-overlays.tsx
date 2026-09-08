@@ -30,7 +30,7 @@ function TiebreakSongCard({
     <div
       className={`overflow-hidden rounded-2xl border text-left transition-all ${
         active
-          ? "scale-[1.02] border-violet-300 bg-violet-300/15 shadow-[0_0_28px_rgba(196,181,253,0.22)]"
+          ? "scale-[1.02] border-[#789bff] bg-[#244bdf]/15 shadow-[0_0_28px_rgba(85,122,255,0.22)]"
           : "border-white/10 bg-white/5 opacity-60"
       }`}
     >
@@ -42,11 +42,11 @@ function TiebreakSongCard({
       />
       <div className="p-3">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-xs font-black tracking-widest text-violet-300 uppercase">
+          <span className="text-xs font-black tracking-widest text-[#9bb4ff] uppercase">
             Música {label}
           </span>
           {winner && (
-            <span className="rounded-full bg-violet-300 px-2 py-0.5 text-[0.65rem] font-black tracking-wide text-[#160d25] uppercase">
+            <span className="rounded-full bg-[#789bff] px-2 py-0.5 text-[0.65rem] font-black tracking-wide text-[#160d25] uppercase">
               Vencedora
             </span>
           )}
@@ -85,7 +85,7 @@ export function DecisionConfirmation({
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm" />
         <Dialog.Viewport className="fixed inset-0 z-50 grid place-items-center p-5">
-          <Dialog.Popup className="w-full max-w-sm rounded-2xl border border-white/12 bg-[#15101f] p-5 text-white shadow-2xl">
+          <Dialog.Popup className="game-decision-dialog w-full max-w-sm rounded-none border border-white/12 bg-[#17191d] p-5 text-white shadow-2xl">
             <Dialog.Title className="text-xl font-black">{title}</Dialog.Title>
             <Dialog.Description className="mt-2 text-sm leading-6 text-white/65">
               {isTiebreak
@@ -138,7 +138,7 @@ export function AbandonConfirmation({
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm" />
         <Dialog.Viewport className="fixed inset-0 z-50 grid place-items-center p-5">
-          <Dialog.Popup className="w-full max-w-sm rounded-2xl border border-white/12 bg-[#15101f] p-5 text-white shadow-2xl">
+          <Dialog.Popup className="game-decision-dialog w-full max-w-sm rounded-none border border-white/12 bg-[#17191d] p-5 text-white shadow-2xl">
             <Dialog.Title className="text-xl font-black">
               Abandonar partida?
             </Dialog.Title>
@@ -190,16 +190,16 @@ export function TiebreakReveal({
       role="status"
       aria-label="Roleta de desempate"
       aria-live="assertive"
-      className="fixed inset-0 z-50 grid place-items-center bg-[#08080f]/92 p-5 text-center backdrop-blur-md"
+      className="fixed inset-0 z-50 grid place-items-center bg-[#17191d]/92 p-5 text-center backdrop-blur-md"
     >
       <div className="w-full max-w-md">
         <div
-          className={`mx-auto grid size-24 place-items-center rounded-full border-4 border-white/20 bg-[conic-gradient(#c4b5fd_0_25%,#e879f9_0_50%,#c4b5fd_0_75%,#e879f9_0)] shadow-[0_0_45px_rgba(196,181,253,0.35)] ${reveal.isSpinning ? "animate-[spin_700ms_linear_infinite]" : ""}`}
+          className={`mx-auto grid size-24 place-items-center rounded-full border-4 border-white/20 bg-[conic-gradient(#789bff_0_25%,#eeefec_0_50%,#789bff_0_75%,#eeefec_0)] shadow-[0_0_45px_rgba(85,122,255,0.35)] ${reveal.isSpinning ? "animate-[spin_700ms_linear_infinite]" : ""}`}
           aria-hidden="true"
         >
-          <span className="size-5 rounded-full bg-[#08080f] ring-2 ring-white/70" />
+          <span className="size-5 rounded-full bg-[#17191d] ring-2 ring-white/70" />
         </div>
-        <p className="mt-5 text-sm font-bold tracking-[0.18em] text-violet-300 uppercase">
+        <p className="mt-5 text-sm font-bold tracking-[0.18em] text-[#9bb4ff] uppercase">
           {reveal.isSpinning ? "Roleta em movimento" : "Desempate concluído"}
         </p>
         <p className="mt-2 text-lg font-bold text-white/70">

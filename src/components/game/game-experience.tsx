@@ -220,10 +220,10 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
         : "Preparando o próximo confronto...";
 
     return (
-      <main className="grid min-h-screen place-items-center bg-[#08080f] px-5 text-white">
+      <main className="grid min-h-screen place-items-center bg-[#17191d] px-5 text-white">
         <div role="status" className="text-center">
           <LoaderCircle
-            className="mx-auto size-8 animate-spin text-violet-300"
+            className="mx-auto size-8 animate-spin text-[#9bb4ff]"
             aria-hidden="true"
           />
           <p className="mt-4 text-white/60">{transitionMessage}</p>
@@ -245,20 +245,20 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
 
   return (
     <main
-      className="game-screen relative bg-[#08080f] text-white"
+      className="game-screen relative bg-[#17191d] text-white"
       aria-busy={decisions.isDeciding}
     >
-      <div className="grid-fade pointer-events-none absolute inset-0 opacity-30" />
       <div className="game-shell relative mx-auto">
         <header className="game-header flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.025] px-3 py-2">
           <div className="min-w-0">
             <Link
               href="/"
-              className="text-xs font-semibold tracking-[0.16em] text-violet-300 uppercase outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
+              className="text-xs font-semibold tracking-[0.16em] text-[#9bb4ff] uppercase outline-none focus-visible:ring-2 focus-visible:ring-[#789bff]"
             >
               Jogo da Música
             </Link>
-            <h1 className="truncate text-lg font-black">{state.theme.name}</h1>
+            <p className="game-theme-name">{state.theme.name}</p>
+            <h1 className="game-question">Qual é a melhor?</h1>
           </div>
           <p className="shrink-0 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/65">
             {roundLabel}
@@ -309,7 +309,7 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
           >
             {decisions.message ??
               message ??
-              "Ouça as duas músicas. Quem merece avançar?"}
+              "Compare as duas músicas e escolha a melhor."}
           </p>
         </section>
 
@@ -347,7 +347,7 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
               setIsAbandonConfirmationOpen(true);
             }}
             disabled={isAbandoning || decisions.isDeciding}
-            className="min-h-11 rounded-lg px-4 text-sm text-white/45 outline-none hover:text-white focus-visible:ring-2 focus-visible:ring-violet-300"
+            className="min-h-11 rounded-lg px-4 text-sm text-white/45 outline-none hover:text-white focus-visible:ring-2 focus-visible:ring-[#789bff]"
           >
             {isAbandoning
               ? "Abandonando partida..."
