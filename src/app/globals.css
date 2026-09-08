@@ -327,3 +327,89 @@
     transition: none;
   }
 }
+
+/* Public match presentation; player sizing remains governed by the layout above. */
+.game-screen {
+  background-image: radial-gradient(
+    ellipse at 15% 0%,
+    #8b5cf618,
+    transparent 55%
+  );
+}
+
+.game-song-card {
+  --contender: #c4b5fd;
+  --contender-soft: #a78bfa18;
+  border-color: #c4b5fd30;
+  background: linear-gradient(155deg, var(--contender-soft), #101019 60%);
+  box-shadow: 0 12px 32px #00000026;
+}
+
+.game-song-card[data-contender="B"] {
+  --contender: #a5f3fc;
+  --contender-soft: #67e8f918;
+  border-color: #a5f3fc30;
+}
+
+.game-contender-label {
+  background: var(--contender-soft);
+  color: var(--contender);
+  border: 1px solid color-mix(in srgb, var(--contender) 25%, transparent);
+}
+
+.game-vote {
+  background: var(--contender);
+  color: #171126;
+}
+
+.game-vote:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--contender) 80%, white);
+}
+
+.game-song-heading {
+  min-height: 3rem;
+}
+
+@media (min-width: 900px) {
+  .game-song-card {
+    border-radius: 1.5rem;
+    padding: 1rem;
+  }
+
+  .game-song-heading {
+    padding-bottom: 1rem;
+  }
+
+  .game-vote {
+    min-height: 3.25rem;
+    margin-top: 1rem;
+  }
+}
+
+@media (max-width: 899px) {
+  .game-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 0.75rem;
+    row-gap: 0.25rem;
+  }
+
+  .game-header > div {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .game-header > p {
+    grid-column: 1;
+    grid-row: 2;
+    justify-self: start;
+    border: 0;
+    background: none;
+    padding: 0;
+  }
+
+  .game-header > button {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+}
