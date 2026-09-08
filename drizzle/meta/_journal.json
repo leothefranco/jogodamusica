@@ -78,6 +78,13 @@
       "when": 1787861916487,
       "tag": "0010_source_availability_br",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1788836882482,
+      "tag": "0011_theme_editorial_state",
+      "breakpoints": true
     }
   ]
 }

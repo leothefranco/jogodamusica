@@ -31,6 +31,7 @@ const theme = {
   description: null,
   coverUrl: null,
   isActive: false,
+  editorialState: "draft" as const,
   activeSongCount: 0,
   totalSongCount: 0,
   updatedAt: now,
@@ -100,6 +101,8 @@ function createService(options: {
     upsertSongAndAssociation: async () => undefined,
     withThemeContentLock: async (_themeId, operation) =>
       operation({
+        assertActiveAdmin: async () => {},
+        listThemeSongs: async () => [associatedTrack],
         findThemeSong: async () => associatedTrack,
         findThemeSongByProviderContentId: async () => null,
         findThemeSummary: async () => theme,

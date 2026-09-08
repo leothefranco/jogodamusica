@@ -3,6 +3,12 @@ import "server-only";
 import type { z } from "zod";
 
 import { deriveEffectiveSourceAvailability } from "@/domain/music/source-availability";
+import {
+  classifyThemeState,
+  deriveThemeStateEvents,
+  type ThemeEditorialState,
+  type ThemeStateEvent,
+} from "@/domain/music/theme-state";
 import { getYouTubeEmbedData } from "@/domain/music/youtube";
 import {
   getThemePublishability,
@@ -30,13 +36,44 @@ import {
   withThemeContentLock,
   type ThemeSongEditorItem,
   type ThemeSummary,
+  type LockedThemeContentRepository,
 } from "@/server/repositories/theme-content-repository";
 
 type ThemeInput = z.infer<typeof themeInputSchema>;
 type TrackAssociationInput = z.infer<typeof trackAssociationInputSchema>;
 type ThemeSongInput = z.infer<typeof themeSongInputSchema>;
 
+function classifyThemeEntries(
+  editorialState: ThemeEditorialState,
+  songs: ThemeSongEditorItem[],
+  now: Date,
+) {
+  const counts = {
+    availableFresh: 0,
+    availableGrace: 0,
+    unavailable: 0,
+    unknown: 0,
+  };
+  const countKeys = {
+    available_fresh: "availableFresh",
+    available_grace: "availableGrace",
+    unavailable: "unavailable",
+    unknown: "unknown",
+  } as const;
+  for (const song of songs) {
+    if (!song.isActive) continue;
+    const { state } = deriveEffectiveSourceAvailability(
+      song.sourceAvailability,
+      now,
+    );
+    counts[countKeys[state]] += 1;
+  }
+  return classifyThemeState({ editorialState, counts });
+}
+
 type ThemeContentServiceDependencies = {
+  clock?: () => Date;
+  recordThemeStateEvent?: (event: ThemeStateEvent) => void;
   deleteThemeRecord: typeof deleteThemeRecord;
   findThemeSong: typeof findThemeSong;
   findThemeSummary: typeof findThemeSummary;
@@ -64,28 +101,39 @@ function postgresCode(error: unknown) {
   return null;
 }
 
-function assertPublishedThemeCanLosePlayableSong(
+async function captureEditorialChange(
+  repository: LockedThemeContentRepository,
   theme: ThemeSummary,
-  song: ThemeSongEditorItem | null,
-  willLosePlayableSong: boolean,
-  message: string,
+  now: Date,
+  mutate: () => Promise<unknown>,
 ) {
-  if (
-    !willLosePlayableSong ||
-    !song?.isActive ||
-    !song.isEmbeddable ||
-    !theme.isActive
-  )
-    return;
-
-  const publishability = getThemePublishability(theme.activeSongCount - 1);
-  if (!publishability.canPublish) {
-    throw new AppError("THEME_NOT_PLAYABLE", message, 409);
-  }
+  const before = classifyThemeEntries(
+    theme.editorialState,
+    await repository.listThemeSongs(),
+    now,
+  );
+  await mutate();
+  const after = classifyThemeEntries(
+    theme.editorialState,
+    await repository.listThemeSongs(),
+    now,
+  );
+  return deriveThemeStateEvents(before, after, "editorial");
 }
 
 export async function getAdminThemes() {
-  return listThemeSummaries();
+  const themes = await listThemeSummaries();
+  const now = new Date();
+  return Promise.all(
+    themes.map(async (theme) => ({
+      ...theme,
+      state: classifyThemeEntries(
+        theme.editorialState,
+        await listThemeSongs(theme.id),
+        now,
+      ),
+    })),
+  );
 }
 
 type ThemeEditorServiceDependencies = {
@@ -113,9 +161,14 @@ export function createThemeEditorService(
         now,
       ),
     }));
-    const publishability = getThemePublishability(theme.activeSongCount);
+    const state = classifyThemeEntries(
+      theme.editorialState,
+      themeSongItems,
+      now,
+    );
+    const publishability = getThemePublishability(state.counts.playableCount);
 
-    return { theme, songs, publishability };
+    return { theme, songs, publishability, state };
   };
 }
 
@@ -168,6 +221,10 @@ function unavailableSourceError(
 export function createThemeContentService(
   dependencies: ThemeContentServiceDependencies,
 ) {
+  const clock = dependencies.clock ?? (() => new Date());
+  const emitEvents = (events: ThemeStateEvent[]) => {
+    for (const event of events) dependencies.recordThemeStateEvent?.(event);
+  };
   return {
     async deleteTheme(themeId: string): Promise<void> {
       if (await dependencies.themeHasSessions(themeId)) {
@@ -208,26 +265,45 @@ export function createThemeContentService(
     async setThemePublication(
       themeId: string,
       isActive: boolean,
+      actorId: string,
     ): Promise<void> {
-      await dependencies.withThemeContentLock(themeId, async (repository) => {
-        const theme = await repository.findThemeSummary();
-        if (!theme) {
-          throw new AppError("THEME_NOT_FOUND", "Tema não encontrado.", 404);
-        }
-
-        if (isActive) {
-          const publishability = getThemePublishability(theme.activeSongCount);
-          if (!publishability.canPublish) {
-            throw new AppError(
-              "THEME_NOT_PLAYABLE",
-              `Adicione mais ${countLabel(publishability.missingSongCount, "música ativa", "músicas ativas")} antes de publicar.`,
-              409,
-            );
+      const events = await dependencies.withThemeContentLock(
+        themeId,
+        async (repository) => {
+          await repository.assertActiveAdmin(actorId);
+          const theme = await repository.findThemeSummary();
+          if (!theme) {
+            throw new AppError("THEME_NOT_FOUND", "Tema não encontrado.", 404);
           }
-        }
 
-        await repository.setThemeActiveRecord(isActive);
-      });
+          const entries = await repository.listThemeSongs();
+          const state = classifyThemeEntries(
+            theme.editorialState,
+            entries,
+            clock(),
+          );
+          if (isActive && theme.editorialState === "draft") {
+            const publishability = getThemePublishability(
+              state.counts.playableCount,
+            );
+            if (!publishability.canPublish) {
+              throw new AppError(
+                "THEME_NOT_PLAYABLE",
+                `Confirme mais ${countLabel(publishability.missingSongCount, "Entrada jogável", "Entradas jogáveis")} antes de publicar.`,
+                409,
+              );
+            }
+          }
+
+          await repository.setThemeActiveRecord(isActive);
+          const after = classifyThemeState({
+            editorialState: isActive ? "published" : "draft",
+            counts: state.counts,
+          });
+          return deriveThemeStateEvents(state, after, "editorial");
+        },
+      );
+      emitEvents(events);
     },
     async attachResolvedTrack(
       themeId: string,
@@ -251,31 +327,27 @@ export function createThemeContentService(
         startTimeSeconds: input.startTimeSeconds,
         previewDurationSeconds: input.previewDurationSeconds,
       });
-      await dependencies.withThemeContentLock(themeId, async (repository) => {
-        const [theme, currentAssociation] = await Promise.all([
-          repository.findThemeSummary(),
-          repository.findThemeSongByProviderContentId(input.providerContentId),
-        ]);
-        if (!theme) {
-          throw new AppError("THEME_NOT_FOUND", "Tema não encontrado.", 404);
-        }
+      const events = await dependencies.withThemeContentLock(
+        themeId,
+        async (repository) => {
+          const theme = await repository.findThemeSummary();
+          if (!theme) {
+            throw new AppError("THEME_NOT_FOUND", "Tema não encontrado.", 404);
+          }
 
-        assertPublishedThemeCanLosePlayableSong(
-          theme,
-          currentAssociation,
-          !input.isActive,
-          "Desative o tema antes de reduzir suas músicas ativas abaixo de quatro.",
-        );
-
-        await repository.upsertThemeSongAssociation({
-          songId: observedSongId,
-          title: input.title,
-          artist: input.artist,
-          startTimeSeconds: input.startTimeSeconds,
-          previewDurationSeconds: input.previewDurationSeconds,
-          isActive: input.isActive,
-        });
-      });
+          return captureEditorialChange(repository, theme, clock(), () =>
+            repository.upsertThemeSongAssociation({
+              songId: observedSongId,
+              title: input.title,
+              artist: input.artist,
+              startTimeSeconds: input.startTimeSeconds,
+              previewDurationSeconds: input.previewDurationSeconds,
+              isActive: input.isActive,
+            }),
+          );
+        },
+      );
+      emitEvents(events);
     },
     async revalidateSourceAvailability(themeId: string, songId: string) {
       const source = await dependencies.findThemeSong(themeId, songId);
@@ -290,6 +362,34 @@ export function createThemeContentService(
       const observed = await dependencies.observeSourceAvailability(
         source.providerContentId,
       );
+      if (observed.applied) {
+        const events = await dependencies.withThemeContentLock(
+          themeId,
+          async (repository) => {
+            const theme = await repository.findThemeSummary();
+            if (!theme) return [];
+            const entries = await repository.listThemeSongs();
+            const decisionAt = clock();
+            // Hold editorial membership fixed: a concurrent withdrawal is not a provider incident.
+            const before = classifyThemeEntries(
+              theme.editorialState,
+              entries.map((entry) =>
+                entry.songId === songId
+                  ? { ...entry, sourceAvailability: source.sourceAvailability }
+                  : entry,
+              ),
+              decisionAt,
+            );
+            const after = classifyThemeEntries(
+              theme.editorialState,
+              entries,
+              decisionAt,
+            );
+            return deriveThemeStateEvents(before, after, "health");
+          },
+        );
+        emitEvents(events);
+      }
       return observed.availability;
     },
     async updateThemeSong(
@@ -297,58 +397,56 @@ export function createThemeContentService(
       songId: string,
       input: ThemeSongInput,
     ): Promise<void> {
-      await dependencies.withThemeContentLock(themeId, async (repository) => {
-        const [theme, current] = await Promise.all([
-          repository.findThemeSummary(),
-          repository.findThemeSong(songId),
-        ]);
-        if (!theme || !current) {
-          throw new AppError(
-            "THEME_SONG_NOT_FOUND",
-            "Música associada não encontrada.",
-            404,
+      const events = await dependencies.withThemeContentLock(
+        themeId,
+        async (repository) => {
+          const [theme, current] = await Promise.all([
+            repository.findThemeSummary(),
+            repository.findThemeSong(songId),
+          ]);
+          if (!theme || !current) {
+            throw new AppError(
+              "THEME_SONG_NOT_FOUND",
+              "Música associada não encontrada.",
+              404,
+            );
+          }
+
+          validatePreviewWindow({
+            durationSeconds: current.durationSeconds,
+            startTimeSeconds: input.startTimeSeconds,
+            previewDurationSeconds: input.previewDurationSeconds,
+          });
+
+          return captureEditorialChange(repository, theme, clock(), () =>
+            repository.updateThemeSongAssociation({ songId, ...input }),
           );
-        }
-
-        validatePreviewWindow({
-          durationSeconds: current.durationSeconds,
-          startTimeSeconds: input.startTimeSeconds,
-          previewDurationSeconds: input.previewDurationSeconds,
-        });
-
-        assertPublishedThemeCanLosePlayableSong(
-          theme,
-          current,
-          !input.isActive,
-          "Desative o tema antes de reduzir suas músicas ativas abaixo de quatro.",
-        );
-
-        await repository.updateThemeSongAssociation({ songId, ...input });
-      });
+        },
+      );
+      emitEvents(events);
     },
     async removeThemeSong(themeId: string, songId: string): Promise<void> {
-      await dependencies.withThemeContentLock(themeId, async (repository) => {
-        const [theme, current] = await Promise.all([
-          repository.findThemeSummary(),
-          repository.findThemeSong(songId),
-        ]);
-        if (!theme || !current) {
-          throw new AppError(
-            "THEME_SONG_NOT_FOUND",
-            "Música associada não encontrada.",
-            404,
+      const events = await dependencies.withThemeContentLock(
+        themeId,
+        async (repository) => {
+          const [theme, current] = await Promise.all([
+            repository.findThemeSummary(),
+            repository.findThemeSong(songId),
+          ]);
+          if (!theme || !current) {
+            throw new AppError(
+              "THEME_SONG_NOT_FOUND",
+              "Música associada não encontrada.",
+              404,
+            );
+          }
+
+          return captureEditorialChange(repository, theme, clock(), () =>
+            repository.removeThemeSongRecord(songId),
           );
-        }
-
-        assertPublishedThemeCanLosePlayableSong(
-          theme,
-          current,
-          true,
-          "Desative o tema antes de remover uma música necessária para o chaveamento.",
-        );
-
-        await repository.removeThemeSongRecord(songId);
-      });
+        },
+      );
+      emitEvents(events);
     },
   };
 }

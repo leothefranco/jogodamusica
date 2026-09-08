@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { CheckCircle2, CircleOff, Disc3, Pencil, Plus } from "lucide-react";
+import { Disc3, Pencil, Plus } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { SupportedGameModes } from "@/components/admin/supported-game-modes";
+import { ThemeStateStatus } from "@/components/admin/theme-state-status";
 import { getThemePublishability } from "@/domain/music/content-validation";
 import { cn } from "@/lib/utils";
 import { getAdminThemes } from "@/server/services/theme-content-service";
@@ -28,8 +29,8 @@ export default async function AdminThemesPage({
             Temas
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-white/48">
-            Prepare coleções, associe músicas do YouTube e publique somente
-            quando o chaveamento estiver completo.
+            Prepare coleções e publique com pelo menos quatro Entradas jogáveis.
+            A intenção editorial permanece separada da saúde do catálogo.
           </p>
         </div>
 
@@ -72,7 +73,7 @@ export default async function AdminThemesPage({
         >
           {themeItems.map((theme) => {
             const { canPublish } = getThemePublishability(
-              theme.activeSongCount,
+              theme.state.counts.playableCount,
             );
 
             return (
@@ -83,21 +84,7 @@ export default async function AdminThemesPage({
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span
-                        className={`inline-flex min-h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-bold ${
-                          theme.isActive
-                            ? "border-emerald-300/20 bg-emerald-400/8 text-emerald-200"
-                            : "border-white/8 bg-white/[0.035] text-white/45"
-                        }`}
-                      >
-                        {theme.isActive ? (
-                          <CheckCircle2 className="size-3.5" />
-                        ) : (
-                          <CircleOff className="size-3.5" />
-                        )}
-                        {theme.isActive ? "Publicado" : "Rascunho"}
-                      </span>
-                      {!theme.isActive && canPublish ? (
+                      {theme.editorialState === "draft" && canPublish ? (
                         <span className="text-xs font-semibold text-violet-200">
                           Pronto para publicar
                         </span>
@@ -123,22 +110,11 @@ export default async function AdminThemesPage({
                   </Link>
                 </div>
 
-                <div className="mt-7 grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-white/8 text-center">
-                  <div className="bg-black/25 px-3 py-4">
-                    <strong className="block text-lg">
-                      {theme.activeSongCount}
-                    </strong>
-                    <span className="text-[0.68rem] text-white/38">ativas</span>
-                  </div>
-                  <div className="bg-black/25 px-3 py-4">
-                    <strong className="block text-lg">
-                      {theme.totalSongCount}
-                    </strong>
-                    <span className="text-[0.68rem] text-white/38">total</span>
-                  </div>
+                <div className="mt-7">
+                  <ThemeStateStatus state={theme.state} />
                 </div>
                 <div className="mt-4">
-                  <SupportedGameModes activeSongCount={theme.activeSongCount} />
+                  <SupportedGameModes modes={theme.state.modes} />
                 </div>
               </article>
             );
