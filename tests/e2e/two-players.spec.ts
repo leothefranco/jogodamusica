@@ -233,7 +233,10 @@ test("mostra dois players com controles nativos e votos fora da mídia", async (
       () => document.documentElement.scrollHeight > window.innerHeight,
     ),
   ).toBe(true);
-  await page.keyboard.press("End");
+  await page
+    .getByRole("button", { name: "Sortear vencedora do confronto" })
+    .focus();
+  await page.keyboard.press("PageDown");
   await expect
     .poll(() => page.evaluate(() => window.scrollY))
     .toBeGreaterThan(0);
@@ -727,7 +730,7 @@ test("prefers-reduced-motion revela imediatamente sem girar a roleta", async ({
   await expect(reveal).not.toContainText("Roleta em movimento");
 });
 
-test("confronto móvel cabe em 844px e explica o sorteio com lados distintos", async ({
+test("confronto móvel permite rolagem e explica o sorteio com lados distintos", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -744,18 +747,15 @@ test("confronto móvel cabe em 844px e explica o sorteio com lados distintos", a
   await expect(draw).toBeVisible();
   await expect(draw).toContainText("Sortear vencedora");
   await expect(draw).toContainText("Escolha aleatória");
-  await expect(
-    page.getByRole("button", { name: "Votar na música B" }),
-  ).toBeInViewport();
   const layout = await page.evaluate(() => {
     const cards = [...document.querySelectorAll(".game-song-card")];
     return {
-      height: document.documentElement.scrollHeight,
-      viewport: innerHeight,
+      width: document.documentElement.scrollWidth,
+      viewport: document.documentElement.clientWidth,
       colors: cards.map((card) => getComputedStyle(card).backgroundColor),
     };
   });
-  expect(layout.height).toBeLessThanOrEqual(layout.viewport);
+  expect(layout.width).toBeLessThanOrEqual(layout.viewport);
   expect(layout.colors[0]).not.toBe(layout.colors[1]);
   const contenders = page.locator(".game-song-card");
   const metrics = await contenders.evaluateAll((cards) =>
@@ -779,7 +779,7 @@ test("confronto móvel cabe em 844px e explica o sorteio com lados distintos", a
     }),
   );
   for (const side of metrics) {
-    expect(side.buttonHeight).toBeGreaterThanOrEqual(44);
+    expect(side.buttonHeight).toBeGreaterThanOrEqual(48);
     expect(side.playerWidth).toBeGreaterThanOrEqual(200);
     expect(side.playerHeight).toBeGreaterThanOrEqual(200);
     expect(side.hasCheck).toBe(false);
@@ -801,4 +801,432 @@ test("confronto móvel cabe em 844px e explica o sorteio com lados distintos", a
   await expect(
     page.getByRole("dialog", { name: "Confirmar desempate" }),
   ).toBeVisible();
+});
+
+test("VS circular separa os adversários sem obstruir a mídia ou os votos", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/e2e-test/dois-players");
+  const contenders = page.getByRole("article");
+  const versus = page.getByText("VS", { exact: true });
+  const [first, second, badge] = await Promise.all([
+    contenders.nth(0).boundingBox(),
+    contenders.nth(1).boundingBox(),
+    versus.boundingBox(),
+  ]);
+  expect(first).not.toBeNull();
+  expect(second).not.toBeNull();
+  expect(badge).not.toBeNull();
+  expect(badge!.width).toBeGreaterThanOrEqual(48);
+  expect(badge!.width).toBeLessThanOrEqual(56);
+  expect(badge!.height).toBeCloseTo(badge!.width, 0);
+  expect(badge!.y).toBeGreaterThanOrEqual(first!.y + first!.height + 12);
+  expect(badge!.y + badge!.height + 12).toBeLessThanOrEqual(second!.y);
+  expect(badge!.x + badge!.width / 2).toBeCloseTo(195, 0);
+  const radius = await versus.evaluate((element) =>
+    Number.parseFloat(getComputedStyle(element).borderTopLeftRadius),
+  );
+  expect(radius).toBeGreaterThanOrEqual(24);
+});
+
+test("cards e ações arredondados preservam respiro e alvos de toque equivalentes", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 740 });
+  await page.goto("/e2e-test/dois-players");
+  const cards = page.getByRole("article");
+  for (const label of ["A", "B"]) {
+    const card = cards.filter({
+      has: page.getByRole("button", { name: `Votar na música ${label}` }),
+    });
+    const radius = await card.evaluate((element) =>
+      Number.parseFloat(getComputedStyle(element).borderTopLeftRadius),
+    );
+    expect(radius).toBeGreaterThanOrEqual(18);
+    expect(radius).toBeLessThanOrEqual(20);
+    const vote = page.getByRole("button", { name: `Votar na música ${label}` });
+    const player = page.getByLabel(`Player da música ${label}`);
+    const [voteBox, playerBox] = await Promise.all([
+      vote.boundingBox(),
+      player.boundingBox(),
+    ]);
+    expect(voteBox!.height).toBeGreaterThanOrEqual(48);
+    expect(
+      voteBox!.y - playerBox!.y - playerBox!.height,
+    ).toBeGreaterThanOrEqual(12);
+    expect(playerBox!.width).toBeGreaterThanOrEqual(200);
+    expect(playerBox!.height).toBeGreaterThanOrEqual(200);
+  }
+  for (const button of [
+    page.getByRole("button", { name: "Votar na música A" }),
+    page.getByRole("button", { name: "Votar na música B" }),
+    page.getByRole("button", { name: "Sortear vencedora do confronto" }),
+  ]) {
+    const radius = await button.evaluate((element) =>
+      Number.parseFloat(getComputedStyle(element).borderTopLeftRadius),
+    );
+    expect(radius).toBeGreaterThanOrEqual(12);
+    expect(radius).toBeLessThanOrEqual(14);
+    expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(48);
+  }
+});
+
+test("erro de reprodução fica legível fora da área dos controles nativos", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 740 });
+  await page.route("**/player-errors", (route) =>
+    route.fulfill({ status: 204 }),
+  );
+  await page.goto("/e2e-test/dois-players");
+  await expect
+    .poll(() => page.evaluate(() => window.__youtubeTest.playerVars.length))
+    .toBe(2);
+  await page.evaluate(() => window.__youtubeTest.emitError(0, 101));
+  const error = page.getByRole("article").first().getByRole("alert");
+  await expect(error).toContainText("Tente novamente");
+  const [errorBox, playerBox, voteBox] = await Promise.all([
+    error.boundingBox(),
+    page.getByLabel("Player da música A").boundingBox(),
+    page.getByRole("button", { name: "Votar na música A" }).boundingBox(),
+  ]);
+  expect(errorBox!.y).toBeGreaterThanOrEqual(playerBox!.y + playerBox!.height);
+  expect(errorBox!.y + errorBox!.height).toBeLessThanOrEqual(voteBox!.y);
+  await expect(
+    page.getByRole("button", { name: "Votar na música A" }),
+  ).toBeEnabled();
+});
+
+for (const width of [320, 360, 390]) {
+  for (const swapped of [false, true]) {
+    test(`nomes longos e texto ampliado permanecem completos em${width}px, invertidos=${swapped}`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: 740 });
+      await page.route("**/player-errors", (route) =>
+        route.fulfill({ status: 204 }),
+      );
+      await page.goto(
+        `/e2e-test/dois-players?longNames=1&swapped=${swapped ? "1" : "0"}`,
+      );
+      await expect
+        .poll(() => page.evaluate(() => window.__youtubeTest.playerVars.length))
+        .toBe(2);
+      const title = page.getByRole("heading", {
+        name: /^Uma canção com um título/,
+      });
+      const isComplete = () =>
+        title.evaluate(
+          (element) =>
+            element.scrollWidth <= element.clientWidth &&
+            element.scrollHeight <= element.clientHeight + 1,
+        );
+      expect(await isComplete()).toBe(true);
+      const normalFontSize = await title.evaluate((element) =>
+        Number.parseFloat(getComputedStyle(element).fontSize),
+      );
+      await page.screenshot({
+        path: testInfo.outputPath("long-names.png"),
+        fullPage: true,
+      });
+      await page.addStyleTag({ content: "html { font-size: 200%; }" });
+      expect(
+        await title.evaluate((element) =>
+          Number.parseFloat(getComputedStyle(element).fontSize),
+        ),
+      ).toBeGreaterThanOrEqual(normalFontSize * 2);
+      expect(await isComplete()).toBe(true);
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth),
+      ).toBeLessThanOrEqual(width);
+      await page.evaluate(() => window.__youtubeTest.emitError(0, 101));
+      const error = page.getByRole("article").first().getByRole("alert");
+      await expect(error).toContainText("Tente novamente");
+      const [errorBox, playerBox] = await Promise.all([
+        error.boundingBox(),
+        page.getByLabel("Player da música A").boundingBox(),
+      ]);
+      expect(errorBox!.y).toBeGreaterThanOrEqual(
+        playerBox!.y + playerBox!.height,
+      );
+      const abandon = page.getByRole("button", {
+        name: "Abandonar partida e voltar ao tema",
+      });
+      await abandon.scrollIntoViewIfNeeded();
+      await expect(abandon).toBeInViewport();
+      await page.evaluate(() =>
+        window.scrollTo({ top: 0, behavior: "instant" }),
+      );
+      await page.screenshot({
+        path: testInfo.outputPath("text-200-error.png"),
+        fullPage: true,
+      });
+    });
+  }
+}
+
+for (const viewport of [
+  { width: 320, height: 740 },
+  { width: 360, height: 800 },
+  { width: 390, height: 844 },
+  { width: 844, height: 390 },
+  { width: 1280, height: 800 },
+  { width: 1440, height: 900 },
+]) {
+  for (const swapped of [false, true]) {
+    test(`composição acessível ${viewport.width}x${viewport.height}, lados ${swapped ? "invertidos" : "originais"}`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize(viewport);
+      await page.goto(`/e2e-test/dois-players${swapped ? "?swapped=1" : ""}`);
+      await expect
+        .poll(() => page.evaluate(() => window.__youtubeTest.playerVars.length))
+        .toBe(2);
+      await page.evaluate(() => document.fonts.ready);
+      const cards = await page.getByRole("article").evaluateAll((elements) =>
+        elements.map((element) => {
+          const player = element.querySelector(
+            '[aria-label^="Player da música"]',
+          )!;
+          const vote = element.querySelector("button")!;
+          const label = element.querySelector('[aria-label^="Música "]')!;
+          return {
+            card: element.getBoundingClientRect().toJSON(),
+            player: player.getBoundingClientRect().toJSON(),
+            vote: vote.getBoundingClientRect().toJSON(),
+            cardRadius: Number.parseFloat(
+              getComputedStyle(element).borderTopLeftRadius,
+            ),
+            voteRadius: Number.parseFloat(
+              getComputedStyle(vote).borderTopLeftRadius,
+            ),
+            labelRadius: Number.parseFloat(
+              getComputedStyle(label).borderTopLeftRadius,
+            ),
+          };
+        }),
+      );
+      const versus = await page.getByText("VS", { exact: true }).boundingBox();
+      expect(versus).not.toBeNull();
+      const [a, b] = cards;
+      expect(versus!.width).toBeGreaterThanOrEqual(48);
+      expect(versus!.width).toBeLessThanOrEqual(56);
+      expect(versus!.height).toBeCloseTo(versus!.width, 0);
+      if (viewport.width < 900) {
+        expect(versus!.y).toBeGreaterThanOrEqual(a.card.bottom + 12);
+        expect(versus!.y + versus!.height + 12).toBeLessThanOrEqual(b.card.top);
+        expect(versus!.x + versus!.width / 2).toBeCloseTo(
+          viewport.width / 2,
+          0,
+        );
+      } else {
+        expect(versus!.x).toBeGreaterThanOrEqual(a.card.right + 12);
+        expect(versus!.x + versus!.width + 12).toBeLessThanOrEqual(b.card.left);
+        expect(a.player.top).toBeCloseTo(b.player.top, 0);
+      }
+      for (const side of cards) {
+        expect(side.cardRadius).toBeGreaterThanOrEqual(18);
+        expect(side.cardRadius).toBeLessThanOrEqual(20);
+        expect(side.voteRadius).toBeGreaterThanOrEqual(12);
+        expect(side.voteRadius).toBeLessThanOrEqual(14);
+        expect(side.labelRadius).toBeGreaterThanOrEqual(12);
+        expect(side.player.width).toBeGreaterThanOrEqual(200);
+        expect(side.player.height).toBeGreaterThanOrEqual(200);
+        expect(side.vote.height).toBeGreaterThanOrEqual(48);
+        expect(side.vote.top - side.player.bottom).toBeGreaterThanOrEqual(12);
+      }
+      for (const surface of ["card", "player", "vote"] as const) {
+        expect(a[surface].width).toBeCloseTo(b[surface].width, 0);
+        expect(a[surface].height).toBeCloseTo(b[surface].height, 0);
+      }
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth),
+      ).toBeLessThanOrEqual(viewport.width);
+      const abandon = page.getByRole("button", {
+        name: "Abandonar partida e voltar ao tema",
+      });
+      await abandon.scrollIntoViewIfNeeded();
+      await expect(abandon).toBeInViewport();
+      await page.evaluate(() =>
+        window.scrollTo({ top: 0, behavior: "instant" }),
+      );
+      await page.screenshot({
+        path: testInfo.outputPath("duel.png"),
+        fullPage: true,
+      });
+      await testInfo.attach("layout", {
+        body: JSON.stringify({ viewport, swapped, cards, versus }, null, 2),
+        contentType: "application/json",
+      });
+    });
+  }
+}
+
+for (const swapped of [false, true]) {
+  test(`títulos de tamanhos diferentes preservam alinhamento desktop, invertidos=${swapped}`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto(
+      `/e2e-test/dois-players?longNames=1&swapped=${swapped ? "1" : "0"}`,
+    );
+    const [a, b] = await Promise.all([
+      page.getByLabel("Player da música A").boundingBox(),
+      page.getByLabel("Player da música B").boundingBox(),
+    ]);
+    expect(a!.y).toBeCloseTo(b!.y, 0);
+    expect(a!.width).toBeCloseTo(b!.width, 0);
+    expect(a!.height).toBeCloseTo(b!.height, 0);
+    await page.screenshot({
+      path: testInfo.outputPath("duel-long-desktop.png"),
+      fullPage: true,
+    });
+  });
+}
+
+test("teclado percorre A e B e devolve foco sem registrar decisões canceladas", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  let decisions = 0;
+  await page.route("**/decision", (route) => {
+    decisions += 1;
+    return route.fulfill({ status: 500 });
+  });
+  await page.goto("/e2e-test/dois-players");
+  await expect
+    .poll(() => page.evaluate(() => window.__youtubeTest.playerVars.length))
+    .toBe(2);
+  await page.keyboard.press("Tab");
+  await expect(
+    page.getByRole("link", { name: "Pular para o conteúdo" }),
+  ).toBeFocused();
+  await page.keyboard.press("Tab");
+  const draw = page.getByRole("button", {
+    name: "Sortear vencedora do confronto",
+  });
+  await expect(draw).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("dialog", { name: "Confirmar desempate" }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(draw).toBeFocused();
+  for (const label of ["A", "B"]) {
+    await page.keyboard.press("Tab");
+    await expect(
+      page.getByLabel(`Player da música ${label}`).locator("iframe"),
+    ).toBeFocused();
+    await page.keyboard.press("Tab");
+    const vote = page.getByRole("button", { name: `Votar na música ${label}` });
+    await expect(vote).toBeFocused();
+    const focusStyle = await vote.evaluate((element) => ({
+      width: Number.parseFloat(getComputedStyle(element).outlineWidth),
+      style: getComputedStyle(element).outlineStyle,
+    }));
+    expect(focusStyle.width).toBeGreaterThanOrEqual(2);
+    expect(focusStyle.style).not.toBe("none");
+    await page.screenshot({ path: testInfo.outputPath(`focus-${label}.png`) });
+    await page.keyboard.press("Enter");
+    const dialog = page.getByRole("dialog", { name: "Confirmar voto" });
+    await expect(
+      dialog.getByRole("button", { name: "Cancelar" }),
+    ).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(vote).toBeFocused();
+  }
+  await page.keyboard.press("Tab");
+  const abandon = page.getByRole("button", {
+    name: "Abandonar partida e voltar ao tema",
+  });
+  await expect(abandon).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("dialog", { name: "Abandonar partida?" }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(abandon).toBeFocused();
+  expect(decisions).toBe(0);
+});
+
+test("texto e foco mantêm contraste nos dois lados e no sorteio", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/e2e-test/dois-players");
+  const measure = () =>
+    page.evaluate(() => {
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 1;
+      const context = canvas.getContext("2d")!;
+      function rgb(color: string) {
+        context.clearRect(0, 0, 1, 1);
+        context.fillStyle = color;
+        context.fillRect(0, 0, 1, 1);
+        return [...context.getImageData(0, 0, 1, 1).data].slice(0, 3);
+      }
+      function ratio(foreground: string, background: string) {
+        function luminance(color: string) {
+          const channels = rgb(color).map((channel) => {
+            const value = channel / 255;
+            return value <= 0.04045
+              ? value / 12.92
+              : ((value + 0.055) / 1.055) ** 2.4;
+          });
+          return (
+            channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722
+          );
+        }
+        const a = luminance(foreground),
+          b = luminance(background);
+        return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+      }
+      const cards = [...document.querySelectorAll("article")].map((card) => {
+        const vote = getComputedStyle(card.querySelector("button")!);
+        const title = getComputedStyle(card.querySelector("h2")!);
+        const artist = getComputedStyle(card.querySelector("p")!);
+        const background = getComputedStyle(card).backgroundColor;
+        return {
+          vote: ratio(vote.color, vote.backgroundColor),
+          title: ratio(title.color, background),
+          artist: ratio(artist.color, background),
+          focus: ratio("#f5f3ed", background),
+        };
+      });
+      const draw = document.querySelector<HTMLButtonElement>(
+        '[aria-label="Sortear vencedora do confronto"]',
+      )!;
+      const drawStyle = getComputedStyle(draw);
+      return {
+        cards,
+        draw: ratio(drawStyle.color, drawStyle.backgroundColor),
+        drawDescription: ratio(
+          getComputedStyle(draw.querySelector("small")!).color,
+          drawStyle.backgroundColor,
+        ),
+      };
+    });
+  const normal = await measure();
+  for (const label of ["A", "B"]) {
+    await page
+      .getByRole("button", { name: `Votar na música ${label}` })
+      .hover();
+    const hovered = await measure();
+    expect(hovered.cards[label === "A" ? 0 : 1].vote).toBeGreaterThanOrEqual(
+      4.5,
+    );
+  }
+  for (const card of normal.cards) {
+    expect(card.vote).toBeGreaterThanOrEqual(4.5);
+    expect(card.title).toBeGreaterThanOrEqual(4.5);
+    expect(card.artist).toBeGreaterThanOrEqual(4.5);
+    expect(card.focus).toBeGreaterThanOrEqual(3);
+  }
+  expect(normal.draw).toBeGreaterThanOrEqual(4.5);
+  expect(normal.drawDescription).toBeGreaterThanOrEqual(4.5);
+  await testInfo.attach("contrast", {
+    body: JSON.stringify(normal, null, 2),
+    contentType: "application/json",
+  });
 });

@@ -56,13 +56,10 @@ function SongCard({
           {label}
         </span>
         <div className="min-w-0">
-          <h2
-            className="truncate text-sm font-bold sm:text-base"
-            title={song.title}
-          >
+          <h2 className="text-sm font-bold sm:text-base" title={song.title}>
             {song.title}
           </h2>
-          <p className="truncate text-xs text-white/65" title={song.artist}>
+          <p className="text-xs text-white/65" title={song.artist}>
             {song.artist}
           </p>
         </div>
@@ -79,7 +76,7 @@ function SongCard({
         <p
           role={playerError ? "alert" : "status"}
           aria-live="polite"
-          className="pointer-events-none absolute inset-x-2 top-2 z-10 rounded-lg bg-black/85 px-2 text-xs text-rose-100 empty:hidden"
+          className="game-player-feedback mt-3 rounded-xl bg-black/40 p-3 text-sm text-rose-100 empty:hidden"
         >
           {playerError}
         </p>
@@ -296,7 +293,7 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
             />
           ))}
           <span className="game-versus" aria-hidden="true">
-            VS
+            <span className="game-versus-badge">VS</span>
           </span>
         </div>
 
