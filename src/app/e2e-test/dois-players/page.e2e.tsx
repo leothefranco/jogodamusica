@@ -77,16 +77,48 @@ const fixture: GameState = {
 export default async function TwoPlayersFixturePage({
   searchParams,
 }: {
-  searchParams: Promise<{ completed?: string }>;
+  searchParams: Promise<{
+    completed?: string;
+    longNames?: string;
+    swapped?: string;
+  }>;
 }) {
   const requestHeaders = await headers();
   if (requestHeaders.get("x-e2e-test") !== "two-players") notFound();
 
-  const { completed } = await searchParams;
+  const { completed, longNames, swapped } = await searchParams;
+  const match = {
+    ...fixture.matches[0],
+    songAId: swapped === "1" ? "song-b" : "song-a",
+    songBId: swapped === "1" ? "song-a" : "song-b",
+  };
+  const scenario: GameState = {
+    ...fixture,
+    theme:
+      longNames === "1"
+        ? {
+            ...fixture.theme,
+            name: "Clássicos e descobertas de todas as gerações",
+          }
+        : fixture.theme,
+    songs: fixture.songs.map((song, index) => ({
+      ...song,
+      title:
+        longNames === "1" && index === 0
+          ? "Uma canção com um título muito longo para celebrar encontros e histórias inesquecíveis"
+          : song.title,
+      artist:
+        longNames === "1" && index === 0
+          ? "Orquestra dos encontros com participação especial de grandes vozes"
+          : song.artist,
+    })),
+    matches: [match],
+    currentMatch: match,
+  };
   const initialState: GameState =
     completed === "1"
       ? {
-          ...fixture,
+          ...scenario,
           session: {
             ...fixture.session,
             status: "completed",
@@ -95,7 +127,7 @@ export default async function TwoPlayersFixturePage({
           },
           currentMatch: null,
         }
-      : fixture;
+      : scenario;
 
   return <GameExperience initialState={initialState} />;
 }
