@@ -126,7 +126,7 @@ export function PlaylistImportManager({
     <div className="space-y-6">
       <form
         onSubmit={generatePreview}
-        className="rounded-md border border-white/8 bg-[var(--app-surface)] p-5 sm:p-7"
+        className="rounded-2xl border border-white/8 bg-[var(--app-surface)] p-5 sm:p-7"
       >
         <label
           htmlFor="playlist-input"
@@ -174,7 +174,7 @@ export function PlaylistImportManager({
       ) : null}
 
       {preview ? (
-        <section className="rounded-md border border-white/8 bg-[var(--app-surface)] p-5 sm:p-7">
+        <section className="rounded-2xl border border-white/8 bg-[var(--app-surface)] p-5 sm:p-7">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <p className="text-xs font-bold tracking-[0.16em] text-[var(--duel-a)] uppercase">

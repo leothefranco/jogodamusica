@@ -125,7 +125,7 @@ export function PwaManager() {
       aria-label={
         isAdmin ? "Instalar aplicativo administrativo" : "Instalar aplicativo"
       }
-      className={`fixed right-3 bottom-3 left-3 z-50 mx-auto flex max-w-xl items-start gap-3 rounded-md border bg-[var(--app-surface)]/95 p-4 text-sm text-white shadow-2xl backdrop-blur sm:right-5 sm:bottom-5 sm:left-auto ${
+      className={`fixed right-3 bottom-3 left-3 z-50 mx-auto flex max-w-xl items-start gap-3 rounded-2xl border bg-[var(--app-surface)]/95 p-4 text-sm text-white shadow-2xl backdrop-blur sm:right-5 sm:bottom-5 sm:left-auto ${
         isAdmin ? "border-[var(--duel-b)]/25" : "border-[var(--duel-a)]/25"
       }`}
     >

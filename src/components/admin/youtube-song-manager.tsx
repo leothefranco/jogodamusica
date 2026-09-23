@@ -121,7 +121,7 @@ export function YouTubeSongManager({ action }: YouTubeSongManagerProps) {
       <div className="grid gap-5 lg:grid-cols-2">
         <form
           onSubmit={search}
-          className="rounded-md border border-white/8 bg-black/15 p-5"
+          className="rounded-2xl border border-white/8 bg-black/15 p-5"
         >
           <div className="grid gap-2 text-sm font-semibold">
             <label htmlFor="youtube-search-query">Pesquisar no YouTube</label>
@@ -158,7 +158,7 @@ export function YouTubeSongManager({ action }: YouTubeSongManagerProps) {
 
         <form
           onSubmit={resolve}
-          className="rounded-md border border-white/8 bg-black/15 p-5"
+          className="rounded-2xl border border-white/8 bg-black/15 p-5"
         >
           <div className="grid gap-2 text-sm font-semibold">
             <label htmlFor="youtube-video-input">Colar URL ou ID</label>
@@ -243,10 +243,10 @@ export function YouTubeSongManager({ action }: YouTubeSongManagerProps) {
         <form
           key={selected.providerContentId}
           action={formAction}
-          className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,32rem),1fr))] gap-6 rounded-md border border-[var(--duel-a)]/18 bg-[var(--duel-a)]/[0.045] p-5 sm:p-6"
+          className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,32rem),1fr))] gap-6 rounded-2xl border border-[var(--duel-a)]/18 bg-[var(--duel-a)]/[0.045] p-5 sm:p-6"
         >
           <div className="min-w-0">
-            <div className="aspect-video w-full overflow-hidden rounded-md bg-black">
+            <div className="aspect-video w-full bg-black">
               <iframe
                 src={selected.embedUrl}
                 title={`Prévia de ${selected.sourceTitle}`}
@@ -359,7 +359,7 @@ export function YouTubeSongManager({ action }: YouTubeSongManagerProps) {
           </div>
         </form>
       ) : (
-        <div className="rounded-md border border-dashed border-white/10 px-5 py-10 text-center text-sm text-white/38">
+        <div className="rounded-2xl border border-dashed border-white/10 px-5 py-10 text-center text-sm text-white/38">
           Pesquise ou informe uma URL para visualizar e configurar a música.
         </div>
       )}

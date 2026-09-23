@@ -38,7 +38,7 @@ export function SourceAvailabilityStatus({
   observation: SourceAvailabilityObservation | null;
 }) {
   return (
-    <div className="mt-4 rounded-md border border-white/8 bg-white/[0.025] p-4">
+    <div className="mt-4 rounded-2xl border border-white/8 bg-white/[0.025] p-4">
       <div className="flex flex-wrap items-center gap-2">
         <span
           className={`rounded-full border px-2.5 py-1 text-[0.68rem] font-bold ${tones[availability.state]}`}

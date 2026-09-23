@@ -1,5 +1,10 @@
 # UI-REFINO-01 — confronto responsivo (fase A)
 
+> Histórico: UI-REFINO-02 supera a permissão de rolagem no estado normal390×844.
+> Nessa resolução/100%, nomes normais e sem erro, todos os controles devem caber
+> sem scroll. Nomes longos, texto200%, erro e telas menores continuam podendo
+> rolar para preservar mídia e acessibilidade. Ver `ui-complete-refinement.md`.
+
 Base: `9fb72f759b1654dd980266b06144861870e84350`.
 Branch: `codex/ui-duel-mobile-refinement`. Catálogo/fase B suspenso.
 

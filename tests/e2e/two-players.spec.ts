@@ -1,5 +1,8 @@
 import { expect, test } from "playwright/test";
 
+// HTTP seams must not be bypassed by the production service worker.
+test.use({ serviceWorkers: "block" });
+
 type PlayerCall = {
   player: number;
   method: string;
@@ -163,6 +166,132 @@ test.beforeEach(async ({ page }) => {
       },
     };
   });
+});
+
+test("jornada visual home → tema → confronto → resultado usa componentes reais", async ({
+  page,
+}) => {
+  await page.setExtraHTTPHeaders({ "x-e2e-test": "ui-complete" });
+  await page.route("**/api/**", (route) => route.abort());
+  await page.route("**/e2e-images/**", (route) =>
+    route.fulfill({
+      contentType: "image/svg+xml",
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60"><rect width="60" height="60" fill="#526779"/></svg>',
+    }),
+  );
+  await page.route("**/tema/ui-capas*", (route) =>
+    route.fulfill({
+      status: 307,
+      headers: { location: "/e2e-test/ui-complete?screen=theme" },
+    }),
+  );
+  await page.route("**/e2e-test/dois-players*", (route) =>
+    route.continue({
+      headers: { ...route.request().headers(), "x-e2e-test": "two-players" },
+    }),
+  );
+  await page.route("**/api/games", (route) =>
+    route.fulfill({ status: 201, json: { url: "/e2e-test/dois-players" } }),
+  );
+  const completed = completedTiebreakState("song-a");
+  await page.route("**/decision", (route) =>
+    route.fulfill({
+      json: {
+        ...completed,
+        session: {
+          ...completed.session,
+          status: "completed",
+          championSongId: "song-a",
+        },
+      },
+    }),
+  );
+  await page.route(
+    "**/resultado/00000000-0000-4000-8000-000000000001*",
+    (route) =>
+      route.fulfill({
+        status: 307,
+        headers: { location: "/e2e-test/ui-complete?screen=result" },
+      }),
+  );
+  await page.route("**/api/resultados/*/imagem*", (route) =>
+    route.fulfill({
+      contentType: "image/svg+xml",
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60"/>',
+    }),
+  );
+  await page.goto("/e2e-test/ui-complete?count=4");
+  await page.getByRole("link", { name: /Tema das quatro capas/ }).click();
+  await page.getByRole("radio", { name: /4 músicas/ }).check();
+  const started = page.waitForRequest(
+    (request) =>
+      request.method() === "POST" && request.url().endsWith("/api/games"),
+  );
+  await page.getByRole("button", { name: "Iniciar partida" }).click();
+  expect((await started).postDataJSON()).toEqual({
+    themeId: "00000000-0000-4000-8000-000000000002",
+    bracketSize: 4,
+  });
+  await page.getByRole("button", { name: "Votar na música A" }).click();
+  const dialog = page.getByRole("dialog", { name: "Confirmar voto" });
+  expect(
+    await dialog.evaluate((element) =>
+      Number.parseFloat(getComputedStyle(element).borderRadius),
+    ),
+  ).toBe(20);
+  for (const button of await dialog.getByRole("button").all()) {
+    expect(
+      await button.evaluate((element) =>
+        Number.parseFloat(getComputedStyle(element).borderRadius),
+      ),
+    ).toBe(12);
+  }
+  await dialog.getByRole("button", { name: "Confirmar voto" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Canção A", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Chaveamento completo" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Jogar novamente" }),
+  ).toHaveAttribute("href", "/tema/ui-capas");
+});
+
+test("votação normal completa cabe em390x844 sem rolagem", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/e2e-test/dois-players");
+  await expect
+    .poll(() => page.evaluate(() => window.__youtubeTest.playerVars.length))
+    .toBe(2);
+  await page.evaluate(() => document.fonts.ready);
+  await page.screenshot({
+    path: testInfo.outputPath("normal-390.png"),
+    fullPage: true,
+  });
+  expect(
+    await page.evaluate(() => document.documentElement.scrollHeight),
+  ).toBeLessThanOrEqual(845);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(390);
+  for (const control of [
+    page.getByRole("button", { name: "Sortear vencedora do confronto" }),
+    page.getByLabel("Player da música A"),
+    page.getByLabel("Player da música B"),
+    page.getByRole("button", { name: "Votar na música A" }),
+    page.getByRole("button", { name: "Votar na música B" }),
+    page.getByText("VS", { exact: true }),
+    page.getByRole("region", { name: "Progresso da partida" }),
+    page.getByRole("button", { name: "Abandonar partida e voltar ao tema" }),
+  ]) {
+    const box = await control.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.y).toBeGreaterThanOrEqual(0);
+    expect(box!.y + box!.height).toBeLessThanOrEqual(845);
+  }
 });
 
 test("mostra dois players com controles nativos e votos fora da mídia", async ({
@@ -821,8 +950,8 @@ test("VS circular separa os adversários sem obstruir a mídia ou os votos", asy
   expect(badge!.width).toBeGreaterThanOrEqual(48);
   expect(badge!.width).toBeLessThanOrEqual(56);
   expect(badge!.height).toBeCloseTo(badge!.width, 0);
-  expect(badge!.y).toBeGreaterThanOrEqual(first!.y + first!.height + 12);
-  expect(badge!.y + badge!.height + 12).toBeLessThanOrEqual(second!.y);
+  expect(badge!.y).toBeGreaterThanOrEqual(first!.y + first!.height + 8);
+  expect(badge!.y + badge!.height + 8).toBeLessThanOrEqual(second!.y);
   expect(badge!.x + badge!.width / 2).toBeCloseTo(195, 0);
   const radius = await versus.evaluate((element) =>
     Number.parseFloat(getComputedStyle(element).borderTopLeftRadius),
@@ -1014,8 +1143,8 @@ for (const viewport of [
       expect(versus!.width).toBeLessThanOrEqual(56);
       expect(versus!.height).toBeCloseTo(versus!.width, 0);
       if (viewport.width < 900) {
-        expect(versus!.y).toBeGreaterThanOrEqual(a.card.bottom + 12);
-        expect(versus!.y + versus!.height + 12).toBeLessThanOrEqual(b.card.top);
+        expect(versus!.y).toBeGreaterThanOrEqual(a.card.bottom + 8);
+        expect(versus!.y + versus!.height + 8).toBeLessThanOrEqual(b.card.top);
         expect(versus!.x + versus!.width / 2).toBeCloseTo(
           viewport.width / 2,
           0,

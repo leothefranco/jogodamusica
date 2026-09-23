@@ -56,7 +56,7 @@ export default async function AdminThemesPage({
       ) : null}
 
       {themeItems.length === 0 ? (
-        <section className="mt-10 rounded-md border border-dashed border-white/10 px-6 py-16 text-center">
+        <section className="mt-10 rounded-2xl border border-dashed border-white/10 px-6 py-16 text-center">
           <Disc3
             className="mx-auto size-9 text-[var(--duel-a)]"
             aria-hidden="true"
@@ -79,7 +79,7 @@ export default async function AdminThemesPage({
             return (
               <article
                 key={theme.id}
-                className="rounded-md border border-white/8 bg-[var(--app-surface)] p-5 sm:p-6"
+                className="rounded-2xl border border-white/8 bg-[var(--app-surface)] p-5 sm:p-6"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
