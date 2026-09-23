@@ -154,7 +154,7 @@ export default async function EditThemePage({
       ) : null}
 
       <div className="mt-10 grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-        <section className="rounded-md border border-white/8 bg-[var(--app-surface)] p-5 sm:p-7">
+        <section className="rounded-2xl border border-white/8 bg-[var(--app-surface)] p-5 sm:p-7">
           <h2 className="text-xl font-black">Dados do tema</h2>
           <p className="mt-2 text-sm leading-6 text-white/42">
             Nome, endereço e apresentação do catálogo musical.
@@ -174,7 +174,7 @@ export default async function EditThemePage({
           </div>
         </section>
 
-        <section className="rounded-md border border-white/8 bg-[var(--app-surface)] p-5 sm:p-7">
+        <section className="rounded-2xl border border-white/8 bg-[var(--app-surface)] p-5 sm:p-7">
           <h2 className="text-xl font-black">Adicionar música</h2>
           <p className="mt-2 text-sm leading-6 text-white/42">
             Pesquise somente no painel ou cole uma URL. Os metadados são
@@ -186,7 +186,7 @@ export default async function EditThemePage({
         </section>
       </div>
 
-      <section className="mt-6 rounded-md border border-white/8 bg-[var(--app-surface)] p-5 sm:p-7">
+      <section className="mt-6 rounded-2xl border border-white/8 bg-[var(--app-surface)] p-5 sm:p-7">
         <div>
           <h2 className="text-xl font-black">Músicas do tema</h2>
           <p className="mt-2 text-sm text-white/42">
@@ -196,7 +196,7 @@ export default async function EditThemePage({
         </div>
 
         {songs.length === 0 ? (
-          <div className="mt-7 rounded-md border border-dashed border-white/10 px-5 py-10 text-center text-sm text-white/38">
+          <div className="mt-7 rounded-2xl border border-dashed border-white/10 px-5 py-10 text-center text-sm text-white/38">
             Nenhuma música associada ainda.
           </div>
         ) : (
@@ -204,7 +204,7 @@ export default async function EditThemePage({
             {songs.map((song) => (
               <article
                 key={song.songId}
-                className="rounded-md border border-white/8 bg-black/15 p-5"
+                className="rounded-2xl border border-white/8 bg-black/15 p-5"
               >
                 <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0">

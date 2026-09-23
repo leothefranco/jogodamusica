@@ -82,6 +82,7 @@ export function HomeExperience({ themes }: { themes: PublicTheme[] }) {
                       ) : null}
                     </div>
                     <ThemeThumbnailStack
+                      variant="catalog"
                       thumbnailUrls={theme.thumbnailUrls}
                       fallbackCoverUrl={theme.coverUrl}
                       className={styles.cover}

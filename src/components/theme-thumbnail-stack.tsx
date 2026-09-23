@@ -15,6 +15,7 @@ type ThemeThumbnailStackProps = {
   thumbnailUrls: string[];
   fallbackCoverUrl?: string | null;
   className?: string;
+  variant?: "stack" | "catalog";
 };
 
 type ThemeVisualCandidateProps = Pick<
@@ -62,6 +63,7 @@ export function ThemeThumbnailStack({
   thumbnailUrls,
   fallbackCoverUrl,
   className,
+  variant = "stack",
 }: ThemeThumbnailStackProps) {
   const [failures, setFailures] = useState(createThemeVisualFailures);
   const imageElements = useRef(new Map<string, HTMLImageElement>());
@@ -70,11 +72,13 @@ export function ThemeThumbnailStack({
     failures,
   );
   const candidateSignature =
-    candidates.kind === "cover"
-      ? `cover:${candidates.url}`
-      : candidates.kind === "thumbnails"
-        ? `thumbnails:${candidates.urls.join("\n")}`
-        : "placeholder";
+    variant === "catalog"
+      ? `catalog:${thumbnailUrls.join("\n")}`
+      : candidates.kind === "cover"
+        ? `cover:${candidates.url}`
+        : candidates.kind === "thumbnails"
+          ? `thumbnails:${candidates.urls.join("\n")}`
+          : "placeholder";
 
   const recordFailure = useCallback((failedUrl: string) => {
     setFailures((currentFailures) =>
@@ -103,6 +107,40 @@ export function ThemeThumbnailStack({
       if (event.currentTarget.naturalWidth === 0) recordFailure(imageUrl);
     },
   });
+
+  if (variant === "catalog") {
+    const slots = [...new Set(thumbnailUrls)].slice(0, 4);
+    return (
+      <div
+        className={cn("theme-thumbnail-row", className)}
+        data-theme-visual="catalog"
+        aria-hidden="true"
+      >
+        {Array.from({ length: 4 }, (_, index) => {
+          const url = slots[index];
+          return (
+            <span
+              key={url ?? `empty-${index}`}
+              className="theme-thumbnail-slot"
+            >
+              {url && !failures.has(url) ? (
+                // Same validated thumbnail URLs and failure handling as the stack.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  {...imageProps(url)}
+                  src={url}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <span className="theme-thumbnail-empty">♫</span>
+              )}
+            </span>
+          );
+        })}
+      </div>
+    );
+  }
 
   return (
     <div

@@ -28,7 +28,7 @@ export default function NewThemePage() {
         </p>
       </div>
 
-      <section className="mt-9 rounded-md border border-white/8 bg-[var(--app-surface)] p-5 sm:p-7">
+      <section className="mt-9 rounded-2xl border border-white/8 bg-[var(--app-surface)] p-5 sm:p-7">
         <ThemeForm
           action={createThemeAction}
           mode="create"

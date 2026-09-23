@@ -52,7 +52,7 @@ export default async function ThemePage({ params }: ThemePageProps) {
             <ThemeThumbnailStack
               thumbnailUrls={theme.thumbnailUrls}
               fallbackCoverUrl={theme.coverUrl}
-              className="mt-8 aspect-[16/9] max-w-2xl rounded-none border-r-4 border-l-4 border-r-[var(--duel-b)] border-l-[var(--duel-a)]"
+              className="mt-8 aspect-[16/9] max-w-2xl rounded-2xl border-r-4 border-l-4 border-r-[var(--duel-b)] border-l-[var(--duel-a)]"
             />
           </div>
 

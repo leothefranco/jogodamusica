@@ -263,7 +263,7 @@ export function ThemeForm({
           />
         )}
         {defaults?.coverUrl ? (
-          <div className="overflow-hidden rounded-md border border-white/10 bg-black/20">
+          <div className="overflow-hidden rounded-sm border border-white/10 bg-black/20">
             {/* A URL já foi validada antes de ser persistida. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img

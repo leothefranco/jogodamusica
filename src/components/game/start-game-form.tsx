@@ -60,7 +60,7 @@ export function StartGameForm({
   }
 
   return (
-    <div className="rounded-none border-t-4 border-[var(--duel-b)] bg-[var(--app-surface)] p-5 sm:p-7">
+    <div className="rounded-2xl border-t-4 border-[var(--duel-b)] bg-[var(--app-surface)] p-5 sm:p-7">
       <fieldset>
         <legend className="text-2xl font-black">Quantas rodadas?</legend>
         <p className="mt-2 text-sm leading-6 text-[var(--app-muted)]">
@@ -71,7 +71,7 @@ export function StartGameForm({
           {supportedBracketSizes.map((size) => (
             <label
               key={size}
-              className="flex min-h-16 cursor-pointer items-center gap-3 rounded-none border border-white/10 bg-black/20 px-4 transition-colors has-checked:border-white has-checked:bg-white/10"
+              className="flex min-h-16 cursor-pointer items-center gap-3 rounded-md border border-white/10 bg-black/20 px-4 transition-colors has-checked:border-white has-checked:bg-white/10"
             >
               <input
                 type="radio"
@@ -97,7 +97,7 @@ export function StartGameForm({
         size="lg"
         onClick={startGame}
         disabled={isStarting || bracketSize === null}
-        className="mt-6 min-h-12 w-full rounded-none bg-[var(--duel-b)] font-bold text-[var(--app-bg)] hover:bg-[var(--duel-b)] hover:brightness-110"
+        className="mt-6 min-h-12 w-full rounded-md bg-[var(--duel-b)] font-bold text-[var(--app-bg)] hover:bg-[var(--duel-b)] hover:brightness-110"
       >
         {isStarting ? (
           <LoaderCircle className="animate-spin" aria-hidden="true" />

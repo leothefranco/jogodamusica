@@ -58,7 +58,7 @@ export default async function AdminPage() {
 
       <section
         aria-label="Resumo do conteúdo"
-        className="mt-10 grid gap-px overflow-hidden rounded-md border border-white/8 bg-white/8 md:grid-cols-3"
+        className="mt-10 grid gap-px overflow-hidden rounded-2xl border border-white/8 bg-white/8 md:grid-cols-3"
       >
         {[
           {
@@ -88,7 +88,7 @@ export default async function AdminPage() {
       </section>
 
       {themes.length === 0 ? (
-        <div className="mt-6 flex gap-3 rounded-md border border-white/8 bg-white/[0.025] p-5 text-sm text-white/45">
+        <div className="mt-6 flex gap-3 rounded-xl border border-white/8 bg-white/[0.025] p-5 text-sm text-white/45">
           <CircleOff className="size-5 shrink-0 text-[var(--duel-a)]" />
           Crie um tema para iniciar a preparação do conteúdo jogável.
         </div>

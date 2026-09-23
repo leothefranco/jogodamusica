@@ -29,7 +29,7 @@ function TiebreakSongCard({
   return (
     <div
       data-contender={label}
-      className={`game-reveal-card overflow-hidden rounded-none border text-left transition-all ${
+      className={`game-reveal-card overflow-hidden rounded-2xl border text-left transition-all ${
         active
           ? "scale-[1.02] border-white bg-white/10"
           : "border-white/10 bg-white/5 opacity-60"
@@ -86,7 +86,7 @@ export function DecisionConfirmation({
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm" />
         <Dialog.Viewport className="fixed inset-0 z-50 grid place-items-center p-5">
-          <Dialog.Popup className="game-decision-dialog w-full max-w-sm rounded-none border border-white/12 bg-[#101216] p-5 text-white shadow-2xl">
+          <Dialog.Popup className="game-decision-dialog w-full max-w-sm rounded-2xl border border-white/12 bg-[#101216] p-5 text-white shadow-2xl">
             <Dialog.Title className="text-xl font-black">{title}</Dialog.Title>
             <Dialog.Description className="mt-2 text-sm leading-6 text-white/65">
               {isTiebreak
@@ -139,7 +139,7 @@ export function AbandonConfirmation({
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm" />
         <Dialog.Viewport className="fixed inset-0 z-50 grid place-items-center p-5">
-          <Dialog.Popup className="game-decision-dialog w-full max-w-sm rounded-none border border-white/12 bg-[#101216] p-5 text-white shadow-2xl">
+          <Dialog.Popup className="game-decision-dialog w-full max-w-sm rounded-2xl border border-white/12 bg-[#101216] p-5 text-white shadow-2xl">
             <Dialog.Title className="text-xl font-black">
               Abandonar partida?
             </Dialog.Title>
