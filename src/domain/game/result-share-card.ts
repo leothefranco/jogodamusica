@@ -52,7 +52,7 @@ export function createResultShareCard(
   return {
     artist: champion.artist,
     resultUrl: resultUrl.toString(),
-    siteLabel: baseUrl.host,
+    siteLabel: "jogodamusica.vercel.app",
     themeName: state.theme.name,
     thumbnailUrl: getSafeThumbnailUrl(champion.thumbnailUrl),
     title: champion.title,

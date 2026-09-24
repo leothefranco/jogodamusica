@@ -23,7 +23,9 @@
   font-weight: 950;
   letter-spacing: -1.5px;
   line-height: 0.88;
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   min-height: 44px;
 }
 .brand span {

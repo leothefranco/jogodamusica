@@ -79,6 +79,7 @@ export default async function TwoPlayersFixturePage({
 }: {
   searchParams: Promise<{
     completed?: string;
+    bracket?: string;
     longNames?: string;
     swapped?: string;
   }>;
@@ -86,7 +87,8 @@ export default async function TwoPlayersFixturePage({
   const requestHeaders = await headers();
   if (requestHeaders.get("x-e2e-test") !== "two-players") notFound();
 
-  const { completed, longNames, swapped } = await searchParams;
+  const { completed, longNames, swapped, bracket } = await searchParams;
+  const bracketSize = bracket === "16" ? 16 : bracket === "8" ? 8 : 4;
   const match = {
     ...fixture.matches[0],
     songAId: swapped === "1" ? "song-b" : "song-a",
@@ -94,6 +96,12 @@ export default async function TwoPlayersFixturePage({
   };
   const scenario: GameState = {
     ...fixture,
+    session: { ...fixture.session, bracketSize },
+    progress: {
+      ...fixture.progress,
+      totalMatches: bracketSize - 1,
+      roundCount: Math.log2(bracketSize),
+    },
     theme:
       longNames === "1"
         ? {

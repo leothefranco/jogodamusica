@@ -58,7 +58,7 @@ describe("createResultShareCard", () => {
       artist: "Artista",
       resultUrl:
         "https://jogodamusica.com.br/resultado/10000000-0000-4000-8000-000000000001",
-      siteLabel: "jogodamusica.com.br",
+      siteLabel: "jogodamusica.vercel.app",
       themeName: "Anos 2000",
       thumbnailUrl: "https://i.ytimg.com/vi/example/hqdefault.jpg",
       title: "A música campeã",

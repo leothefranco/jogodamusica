@@ -178,7 +178,7 @@ export function useGameDecisions({
         await wait(TIEBREAK_RESULT_HOLD_MS);
       }
       send({ type: "completed" });
-      applyState(payload);
+      if (mountedRef.current) applyState(payload);
     } catch (caught) {
       send({
         type: "failed",

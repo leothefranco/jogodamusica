@@ -8,13 +8,19 @@ const roundNames = new Map<number, string>([
   [1, "Final"],
 ]);
 
+export function getRoundName(bracketSize: BracketSize, roundNumber: number) {
+  return (
+    roundNames.get(bracketSize / 2 ** roundNumber) ?? `Rodada ${roundNumber}`
+  );
+}
+
 export function getRoundLabel(input: {
   bracketSize: BracketSize;
   roundNumber: number;
   matchPosition: number;
 }) {
   const matchCount = input.bracketSize / 2 ** input.roundNumber;
-  const roundName = roundNames.get(matchCount) ?? `Rodada ${input.roundNumber}`;
+  const roundName = getRoundName(input.bracketSize, input.roundNumber);
 
   return `${roundName} · confronto ${input.matchPosition} de ${matchCount}`;
 }

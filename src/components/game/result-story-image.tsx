@@ -1,3 +1,4 @@
+import { BrandMark } from "@/components/brand-mark";
 import { ImageResponse } from "next/og";
 
 import type { ResultShareCard } from "@/domain/game/result-share-card";
@@ -29,28 +30,6 @@ function CrownIcon() {
         strokeWidth="5"
         strokeLinecap="round"
       />
-    </svg>
-  );
-}
-
-function MusicMark() {
-  return (
-    <svg
-      width="58"
-      height="58"
-      viewBox="0 0 58 58"
-      fill="none"
-      aria-hidden="true"
-    >
-      <path
-        d="M23 39.5V14l24-5v26.5M23 20l24-5"
-        stroke="#38BDF8"
-        strokeWidth="5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <ellipse cx="15" cy="42" rx="9" ry="7" fill="#38BDF8" />
-      <ellipse cx="39" cy="38" rx="9" ry="7" fill="#38BDF8" />
     </svg>
   );
 }
@@ -121,7 +100,7 @@ export function createResultStoryImage(
               width: 82,
             }}
           >
-            <MusicMark />
+            <BrandMark size={72} />
           </div>
           <div
             style={{
@@ -242,7 +221,7 @@ export function createResultStoryImage(
               width: "100%",
             }}
           >
-            <MusicMark />
+            <BrandMark size={72} />
           </div>
         )}
         <div
