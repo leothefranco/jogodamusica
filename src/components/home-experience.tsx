@@ -1,3 +1,4 @@
+import { BrandMark } from "@/components/brand-mark";
 import { ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 import { ThemeThumbnailStack } from "@/components/theme-thumbnail-stack";
@@ -14,9 +15,12 @@ export function HomeExperience({ themes }: { themes: PublicTheme[] }) {
           className={styles.brand}
           aria-label="Jogo da Música — início"
         >
-          JOGO DA
-          <br />
-          MÚSICA<span aria-hidden="true">●</span>
+          <BrandMark size={56} />
+          <div>
+            JOGO DA
+            <br />
+            MÚSICA<span aria-hidden="true">●</span>
+          </div>
         </a>
         <p className={styles.about}>
           UM APARELHO · JOGO EM GRUPO

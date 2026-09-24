@@ -14,6 +14,7 @@ import {
   DecisionConfirmation,
   TiebreakReveal,
 } from "@/components/game/decision-overlays";
+import { RoundTransition } from "@/components/game/round-transition";
 import { useGameDecisions } from "@/components/game/use-game-decisions";
 import { Button } from "@/components/ui/button";
 import { getRoundLabel } from "@/domain/game/experience";
@@ -98,6 +99,8 @@ function SongCard({
 export function GameExperience({ initialState }: { initialState: GameState }) {
   const router = useRouter();
   const [state, setState] = useState(initialState);
+  const [nextStage, setNextStage] = useState<GameState | null>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
   const playerARef = useRef<YouTubePlayerHandle>(null);
   const playerBRef = useRef<YouTubePlayerHandle>(null);
   const [playerErrors, setPlayerErrors] = useState<
@@ -119,9 +122,26 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
     playerARef.current?.pause();
     playerBRef.current?.pause();
   }, []);
-  const applyDecisionState = useCallback((payload: GameState) => {
-    setState(payload);
-  }, []);
+  const applyDecisionState = useCallback(
+    (payload: GameState) => {
+      if (
+        payload.currentMatch &&
+        currentMatch &&
+        payload.currentMatch.roundNumber > currentMatch.roundNumber
+      ) {
+        setNextStage(payload);
+      } else {
+        setState(payload);
+      }
+    },
+    [currentMatch],
+  );
+  const finishStageTransition = useCallback(() => {
+    if (!nextStage) return;
+    setState(nextStage);
+    setNextStage(null);
+    requestAnimationFrame(() => headingRef.current?.focus());
+  }, [nextStage]);
   const decisions = useGameDecisions({
     gameState: state,
     pausePlayback,
@@ -206,6 +226,16 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
     }
   }
 
+  if (nextStage?.currentMatch) {
+    return (
+      <RoundTransition
+        bracketSize={nextStage.session.bracketSize}
+        roundNumber={nextStage.currentMatch.roundNumber}
+        onComplete={finishStageTransition}
+      />
+    );
+  }
+
   if (!currentMatch || !songA || !songB) {
     const transitionMessage =
       state.session.status === "completed"
@@ -250,7 +280,9 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
             >
               Jogo da Música
             </Link>
-            <h1 className="game-theme-name">{state.theme.name}</h1>
+            <h1 ref={headingRef} tabIndex={-1} className="game-theme-name">
+              {state.theme.name}
+            </h1>
           </div>
           <p className="shrink-0 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/65">
             {roundLabel}

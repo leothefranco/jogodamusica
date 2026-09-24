@@ -1359,3 +1359,122 @@ test("texto e foco mantêm contraste nos dois lados e no sorteio", async ({
     contentType: "application/json",
   });
 });
+
+for (const scenario of [
+  { bracket: 16, label: "Quartas de final", action: "vote", reduced: false },
+  { bracket: 8, label: "Semifinal", action: "vote", reduced: false },
+  { bracket: 4, label: "Grande final", action: "vote", reduced: false },
+  { bracket: 4, label: "Grande final", action: "tiebreak", reduced: true },
+]) {
+  test(`transição de etapa: ${scenario.label}, ${scenario.action}`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({
+      reducedMotion: scenario.reduced ? "reduce" : "no-preference",
+    });
+    const sessionId = "00000000-0000-4000-8000-000000000001";
+    const currentMatch = {
+      id: "next-round",
+      sessionId,
+      roundNumber: 2,
+      position: 1,
+      songAId: "song-a",
+      songBId: "song-b",
+      winnerSongId: null,
+      status: "ready",
+      completedAt: null,
+    };
+    await page.route("**/decision", (route) =>
+      route.fulfill({
+        json: {
+          ...completedTiebreakState("song-a"),
+          session: {
+            ...completedTiebreakState("song-a").session,
+            bracketSize: scenario.bracket,
+            currentRound: 2,
+          },
+          songs: ["a", "b"].map((letter, index) => ({
+            sessionId,
+            songId: `song-${letter}`,
+            seed: index + 1,
+            title: `Canção ${letter.toUpperCase()}`,
+            artist: `Artista ${letter.toUpperCase()}`,
+            thumbnailUrl: "/icon.svg",
+            provider: "youtube",
+            providerContentId: `youtube-${letter}`,
+            startTimeSeconds: 0,
+            previewDurationSeconds: 30,
+          })),
+          matches: [...completedTiebreakState("song-a").matches, currentMatch],
+          currentMatch,
+          progress: {
+            completedMatches: scenario.bracket / 2,
+            totalMatches: scenario.bracket - 1,
+            currentRound: 2,
+            roundCount: Math.log2(scenario.bracket),
+          },
+        },
+      }),
+    );
+    await page.goto(`/e2e-test/dois-players?bracket=${scenario.bracket}`);
+    await expect(
+      page.getByRole("heading", { name: scenario.label, exact: true }),
+    ).toHaveCount(0);
+    if (scenario.action === "tiebreak") {
+      await page
+        .getByRole("button", { name: "Sortear vencedora do confronto" })
+        .click();
+      await page
+        .getByRole("dialog", { name: "Confirmar desempate" })
+        .getByRole("button", { name: "Sortear vencedora" })
+        .click();
+      await expect(
+        page.getByText("Música A: Canção A avança", { exact: true }),
+      ).toBeVisible();
+    } else {
+      await page.getByRole("button", { name: "Votar na música A" }).click();
+      await page
+        .getByRole("dialog", { name: "Confirmar voto" })
+        .getByRole("button", { name: "Confirmar voto" })
+        .click();
+    }
+    const title = page.getByRole("heading", {
+      name: scenario.label,
+      exact: true,
+    });
+    await expect(title).toBeVisible();
+    await expect(title).toBeFocused();
+    await expect(
+      page.getByRole("button", { name: "Votar na música A" }),
+    ).toHaveCount(0);
+    await expect(page.locator("iframe")).toHaveCount(0);
+    if (!scenario.reduced) {
+      await page.screenshot({
+        path: testInfo.outputPath("stage-mobile.png"),
+        animations: "disabled",
+      });
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      await page
+        .getByRole("button", {
+          name: scenario.bracket === 4 ? "Ir para a final" : "Continuar",
+          exact: true,
+        })
+        .click();
+    }
+    await expect(title).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Votar na música A" }),
+    ).toBeEnabled();
+    await expect(
+      page.getByRole("heading", { name: "Clássicos do teste" }),
+    ).toBeFocused();
+    await expect(
+      page.getByText("confronto 1 de", { exact: false }),
+    ).toBeVisible();
+  });
+}
