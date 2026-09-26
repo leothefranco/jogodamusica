@@ -3,11 +3,13 @@
 Aplicação web para grupos compararem músicas em confrontos eliminatórios, usando
 um único aparelho, até eleger uma campeã.
 
-O código das Fases 0–5 está concluído. A **Fase 6 — Qualidade e deploy** possui
-Playwright e um gate de integração contínua; a promoção do primeiro beta para
-produção depende da aprovação do QA externo e do
-[checklist de produção](./docs/checklist-producao.md), conforme a
-[especificação](./jogo-da-musica-especificacao-codex.md).
+O código das Fases 0–5 está concluído. A **Fase 6 — Qualidade e deploy** já possui
+Playwright, integração contínua e deployments de produção. A execução de
+2026-09-24 aprovou o CI e o deployment do commit `63b0fa5`.
+Isso não substitui a validação externa de dispositivos, player real e PWA.
+O [estado de implementação](./docs/estado-implementacao.md) reúne as entregas,
+pendências e a próxima frente; o [checklist de produção](./docs/checklist-producao.md)
+continua sendo o runbook de release.
 
 ## Requisitos no Windows
 

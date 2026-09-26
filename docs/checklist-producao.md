@@ -1,5 +1,7 @@
 # Checklist de produção — Fase 6
 
+Este arquivo é um modelo de execução por release; caixas vazias não indicam ausência de deployment. Os registros conferidos e as lacunas de evidência estão no [estado de implementação](./estado-implementacao.md). Preencha uma cópia por commit candidato, mantendo distintas as provas de CI, deployment e QA externo.
+
 Este runbook controla o primeiro beta pessoal e não comercial do Jogo da
 Música. O alvo inicial é Vercel Hobby, no domínio provisório `vercel.app`, com
 projetos Supabase independentes para Preview/QA e Production.
