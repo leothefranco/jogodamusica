@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Seis opções de ícone — Last Track Standing</title>
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      main {
+        max-width: none;
+        padding: 45px 54px 25px;
+      }
+      .intro {
+        grid-template-columns: 1.25fr 1fr;
+        gap: 70px;
+      }
+      h1 {
+        font-size: 49px;
+      }
+      .reference {
+        padding: 20px;
+        flex-direction: row;
+        text-align: left;
+        gap: 20px;
+      }
+      .reference svg {
+        width: 112px;
+        height: 112px;
+      }
+      .lead {
+        max-width: 600px;
+        margin-top: 16px;
+      }
+      .options {
+        margin-top: 34px;
+        gap: 20px;
+      }
+      .option {
+        padding: 22px 24px;
+        cursor: default;
+      }
+      .icon-stage {
+        padding: 16px 0 10px;
+      }
+      .icon-stage svg {
+        width: 165px;
+        height: 165px;
+      }
+      .option p {
+        min-height: 39px;
+        font-size: 11px;
+      }
+      .option h2 {
+        font-size: 20px;
+      }
+      .card-footer {
+        margin-top: 14px;
+        padding-top: 13px;
+      }
+      .card-footer .lockup {
+        font-size: 9px;
+      }
+      .card-footer .lockup svg {
+        width: 36px;
+        height: 36px;
+      }
+      .card-footer .lockup > span:last-child {
+        font-size: 8px;
+      }
+      footer {
+        margin-top: 25px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="intro">
+        <div>
+          <p class="eyebrow">LAST TRACK STANDING / IDENTIDADE C — ENCORE</p>
+          <h1>Seis caminhos.<br /><em>Nenhuma coroa.</em></h1>
+          <p class="lead">
+            Evoluções do ícone atual e novas leituras de música, vinil e
+            competição.
+          </p>
+        </div>
+        <aside class="reference">
+          <div id="reference"></div>
+          <div>
+            <p class="eyebrow">PONTO DE PARTIDA</p>
+            <h2>O ícone atual</h2>
+            <p>
+              Original do projeto, sem alterações.<br />Azul e laranja em uma
+              forma de onda.
+            </p>
+          </div>
+        </aside>
+      </section>
+      <section id="board" class="options"></section>
+      <footer>
+        <span
+          >01–02 / continuidade · 03–04 / pulso e sobrevivência · 05–06 / vinil
+          e chaveamento</span
+        ><span
+          >SVG vetorial · versões de uma cor · prévia em tamanhos pequenos</span
+        >
+      </footer>
+    </main>
+    <script src="icons.js"></script>
+    <script>
+      document.getElementById("reference").innerHTML = iconSvg("original");
+      document.getElementById("board").innerHTML = iconOptions
+        .map(
+          (o) =>
+            `<article class="option"><div class="option-head"><b>${o.id}</b><span>${o.tag}</span></div><div class="icon-stage">${iconSvg(o.id)}</div><h2>${o.name}</h2><p>${o.description}</p><div class="card-footer"><div class="lockup">${iconSvg(o.id, { size: 36 })}<span>LAST<br>TRACK<br>STANDING</span></div><div class="tiny-icons">${[16, 24, 32].map((size) => iconSvg(o.id, { size })).join("")}</div></div></article>`,
+        )
+        .join("");
+    </script>
+  </body>
+</html>

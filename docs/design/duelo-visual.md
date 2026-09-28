@@ -1,5 +1,7 @@
 # Duelo musical — revisão da direção visual
 
+Decisão posterior, 28/09/2026: a próxima implementação segue o [plano Last Track Standing](../plano-last-track-standing.md), com identidade C / Encore e ícone original verde elétrico. O conteúdo abaixo documenta a interface integrada anterior; os contratos funcionais permanecem válidos.
+
 Estado reconciliado em 26/09/2026: identidade azul × laranja, refinamento mobile,
 UI-REFINO-02 e transições de rodada foram integrados nas PRs #47–#50.
 O [contrato visual vigente](./ui-complete-refinement.md) e a

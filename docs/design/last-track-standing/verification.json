@@ -1,0 +1,20 @@
+{
+  "date": "2026-09-27T00:40:11.362Z",
+  "screens": 36,
+  "identities": 3,
+  "viewports": ["1280×960", "390×844"],
+  "exports": 216,
+  "issues": [],
+  "interactions": [
+    "identity switch",
+    "comparison toggle",
+    "mode selection",
+    "vote cancel",
+    "tiebreak confirmation",
+    "playlist selection",
+    "mobile switch",
+    "vote B confirmation",
+    "unconfigured login disabled",
+    "108 atlas links"
+  ]
+}

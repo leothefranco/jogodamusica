@@ -11,6 +11,8 @@ O [estado de implementação](./docs/estado-implementacao.md) reúne as entregas
 pendências e a próxima frente; o [checklist de produção](./docs/checklist-producao.md)
 continua sendo o runbook de release.
 
+O [índice dos planos](./docs/planos.md) consolida o roadmap, as especificações e a continuidade do PM. A próxima direção de marca e idiomas está no [plano Last Track Standing](./docs/plano-last-track-standing.md): identidade C / Encore e ícone original verde elétrico.
+
 ## Requisitos no Windows
 
 - Git
