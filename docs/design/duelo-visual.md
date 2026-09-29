@@ -1,5 +1,15 @@
 # Duelo musical — revisão da direção visual
 
+Decisão posterior, 28/09/2026: a próxima implementação segue o [plano Last Track Standing](../plano-last-track-standing.md), com identidade C / Encore e ícone original verde elétrico. O conteúdo abaixo documenta a interface integrada anterior; os contratos funcionais permanecem válidos.
+
+Estado reconciliado em 26/09/2026: identidade azul × laranja, refinamento mobile,
+UI-REFINO-02 e transições de rodada foram integrados nas PRs #47–#50.
+O [contrato visual vigente](./ui-complete-refinement.md) e a
+[prova de QA](../qa/ui-complete-refinement.md) prevalecem sobre o histórico abaixo:
+quatro capas, controles arredondados e votação sem rolagem normal em 390×844,
+com rolagem acessível nos estados excepcionais. A sequência histórica que adiava
+as capas até CAT-05 foi superada pela entrega UI-REFINO-02.
+
 ## Estado e decisão
 
 Plano atualizado a partir das duas referências visuais enviadas pelo usuário. Substitui a proposta azul × cinza do commit3f22634, que permanece local e não deve ser publicada como solução visual final.
@@ -75,3 +85,17 @@ O teste anterior de fundos diferentes é insuficiente: incluir geometria equival
 Conferir contraste em hover, disabled e foco; avaliação visual em escala de cinza e simulação de deficiência de visão de cores.
 Validar teclado na ordem A→B, retorno de foco nos diálogos, texto ampliado e erros. Cancelar voto ou sorteio não envia decisão. Reprodução não deve parecer seleção ou vitória.
 Relatórios distinguem explicitamente capturas com players simulados de verificação de players reais.
+
+## Refinamento aprovado em 2026-09-12 — execução por fases
+
+O usuário aprovou a prancha abaixo e autorizou iniciar o desenvolvimento. Este é complemento da identidade azul × laranja já integrada, não um novo redesign do app inteiro.
+
+![Prancha aprovada: catálogo e confronto](references/mobile-capas-duelo-2026-09-12.png)
+
+Contrato/AC/autoridade: [UI-REFINO-01](../../tmp/agent-dispatch/20260912T172937Z/UI-REFINO-01.md).
+Sequência/ownership/WIP: [plano PM](../../tmp/agent-dispatch/20260912T172937Z/plan.md).
+
+Prevalece sobre os trechos históricos acima, nas duas telas: quatro capas quadradas sem sobreposição no catálogo; cards18–20px, botões12–14px e alvos>=48px; VS48–56px em selo circular entre adversários. Rolagem vertical é aceitável inclusive em390×844 para preservar capas, nomes, player e controles. As exigências antigas de VS pequeno, alvo44px e zero scroll não governam este refinamento.
+
+FaseA: confronto agora em worktree exclusiva; faseB: catálogo após reconciliar/integrar #13, preservando seu contrato de thumbnails e sem cutover público. Não mudar dados, lógica de partida ou player YouTube por causa da ilustração.
+Prancha preservada sem edição, SHA2560C222D7CD0D7C70B86329A209C210C4FF091CBAAE016869905DA58032BB271CD; origem tarefa01a096a0-3b9f-7433-b00f-bbad75ca57f9.

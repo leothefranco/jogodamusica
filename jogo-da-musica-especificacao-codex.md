@@ -3,7 +3,7 @@
 **Documento de execução para Codex**  
 **Versão:** 1.1
 **Data:** 28 de julho de 2026
-**Status:** Fases 0, 1, 2, 2.1 e 3 concluídas
+**Status:** código das Fases 0–5 concluído; Fase 6 com CI/E2E e deployment de produção, validação externa ainda não consolidada. Consulte o [estado reconciliado em 26/09/2026](./docs/estado-implementacao.md).
 
 ---
 
@@ -864,18 +864,18 @@ O MVP será considerado pronto quando:
 
 ## 21. Fases de implementação para o Codex
 
-Progresso verificado no repositório em 28 de julho de 2026:
+Progresso reconciliado em 26 de setembro de 2026. Estas são as fases do MVP original; a Fase 0 do plano de evolução de agosto é outro conjunto de tickets.
 
 | Fase | Estado | Evidência principal |
 |---|---|---|
 | 0 — Fundação | Concluída | Next.js, TypeScript, Tailwind, scripts, layout público, lint, testes e build configurados |
 | 1 — Banco e autenticação | Concluída | Esquema Drizzle, migrações, seed, Supabase SSR e proteção administrativa |
 | 2 — Administração de conteúdo | Concluída | CRUD de temas, busca/resolução do YouTube, músicas, trechos e regras de publicação |
-| 2.1 — Playlist e catálogo flexível | Próxima | Nova demanda; ainda sem implementação |
-| 3 — Domínio do torneio | Pendente | Estruturas no banco existem; serviços e regras do chaveamento ainda não |
-| 4 — Experiência de jogo | Pendente | A página atual é institucional e não inicia partidas |
+| 2.1 — Playlist e catálogo flexível | Código concluído; QA externo não consolidado | Importação com prévia/revisão e modalidades de 4 a 128 músicas implementadas |
+| 3 — Domínio do torneio | Concluída | Criação, decisões, sorteio persistido de rodada e conclusão implementados e testados |
+| 4 — Experiência de jogo | Concluída | Dois players, confirmação de voto, desempate, resultado e refinamentos visuais integrados |
 | 5 — PWA, acessibilidade e robustez | Concluída; validação externa pendente | Manifest, ícones, service worker seguro, estados globais, acessibilidade e cabeçalhos concluídos |
-| 6 — Qualidade e deploy | Pendente | Testes unitários/integração existem; E2E, CI e deploy ainda pendentes |
+| 6 — Qualidade e deploy | CI/E2E e deployment implementados; QA externo não consolidado | Quality gate e deployment Production aprovados em `63b0fa5`; checklist externo permanece separado |
 
 ### Fase 0 — Fundação
 
@@ -975,7 +975,7 @@ atômica do lote.
 
 ### Fase 6 — Qualidade e deploy
 
-**Estado:** pendente.
+**Estado:** infraestrutura implementada e deployment de produção confirmado; aprovação integral do roteiro de QA externo não comprovada pelo checklist versionado. Consulte o [estado atual](./docs/estado-implementacao.md).
 
 - Playwright.
 - GitHub Actions.
