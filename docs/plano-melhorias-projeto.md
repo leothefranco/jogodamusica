@@ -2,6 +2,8 @@
 
 Data da auditoria: 11 de agosto de 2026.
 
+Este documento preserva o diagnóstico daquela data. As falhas, versões, estimativas e resultados abaixo não são uma verificação do código atual. Consulte o [estado reconciliado de implementação](./estado-implementacao.md) para as entregas integradas e a sequência vigente do plano de evolução de 24 de agosto.
+
 ## Objetivo
 
 Evoluir o Jogo da Música sem perder as garantias atuais de domínio, acessibilidade e atomicidade. O plano cobre UI, UX, design, performance, segurança, correção de bugs, arquitetura, testes e operação.

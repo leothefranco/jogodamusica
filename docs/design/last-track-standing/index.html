@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Last Track Standing — 3 identidades</title>
+    <link rel="stylesheet" href="gallery.css" />
+  </head>
+  <body>
+    <header class="studio-header">
+      <a class="studio-brand" href="index.html"
+        >LTS <span>DESIGN STUDY / 01</span></a
+      ><span class="prototype-tag">Mockups · dados demonstrativos</span
+      ><a class="download-link" href="icons/index.html">Opções de ícone ↗</a
+      ><a class="download-link" href="overview.html">Todas as telas ↗</a>
+    </header>
+    <aside class="sidebar">
+      <p class="small-label">EXPLORAR O SISTEMA</p>
+      <h1>Uma marca.<br />Três caminhos.</h1>
+      <p class="sidebar-intro">
+        Selecione uma tela e compare sua identidade em desktop ou mobile.
+      </p>
+      <nav id="screen-nav" aria-label="Telas do sistema"></nav>
+      <p class="sidebar-footer">
+        Vinil · Pódio · Chaveamento<br />Marca em inglês / interface em
+        português
+      </p>
+    </aside>
+    <main class="workspace">
+      <section class="identity-controls" aria-label="Identidade visual">
+        <button data-identity="a" class="identity-tab">
+          <span class="swatch electric"></span
+          ><span
+            ><b>A / Electric</b><small>Verde elétrico + marfim</small></span
+          >
+        </button>
+        <button data-identity="b" class="identity-tab">
+          <span class="swatch arena"></span
+          ><span><b>B / Arena</b><small>Azul + laranja</small></span>
+        </button>
+        <button data-identity="c" class="identity-tab">
+          <span class="swatch encore"></span
+          ><span
+            ><b>C / Encore</b
+            ><small>Verde na marca + duelo em cores</small></span
+          >
+        </button>
+      </section>
+      <section class="view-toolbar">
+        <div>
+          <h2 id="screen-title"></h2>
+          <p id="screen-route"></p>
+        </div>
+        <div class="view-actions">
+          <button id="compare" aria-pressed="false">Comparar as 3</button>
+          <div class="device-toggle">
+            <button data-device="desktop">Desktop</button
+            ><button data-device="mobile">Mobile</button>
+          </div>
+          <a id="direct" target="_blank" rel="noopener">Abrir tela ↗</a>
+        </div>
+      </section>
+      <p id="screen-note" class="screen-note"></p>
+      <section
+        id="frames"
+        class="frames"
+        aria-label="Prévia dos mockups"
+      ></section>
+      <footer class="workspace-footer">
+        <span id="coverage"></span
+        ><span>Use as setas ← → para percorrer as telas.</span>
+      </footer>
+    </main>
+    <script src="catalog.js"></script>
+    <script src="gallery.js"></script>
+  </body>
+</html>

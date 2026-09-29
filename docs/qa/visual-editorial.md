@@ -1,5 +1,7 @@
 # Reformulação editorial — home e confronto
 
+Registro histórico. O [QA de UI-REFINO-02](./ui-complete-refinement.md), integrado pela PR #49, prevalece no catálogo e confronto: quatro capas, alvos de toque de pelo menos 48 px e votação sem rolagem normal em 390×844. Estados excepcionais mantêm rolagem acessível. As capturas determinísticas não certificam player real ou dispositivos físicos.
+
 ## Direção aprovada
 
 Usuário aprovou composição combinada D do protótipo, paleta carvão/branco suave/azul-cobalto. Após crítica ao espaço vazio do desktop, aprovou pergunta à esquerda e catálogo à direita. Texto central: "Qual é a melhor música?". Objetivo é eleger a melhor, não sugerir o que ouvir.
