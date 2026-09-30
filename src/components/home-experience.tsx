@@ -1,4 +1,5 @@
 import { BrandMark } from "@/components/brand-mark";
+import { buttonVariants } from "@/components/ui/button";
 import { ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 import { ThemeThumbnailStack } from "@/components/theme-thumbnail-stack";
@@ -6,7 +7,15 @@ import { countLabel } from "@/lib/language";
 import type { PublicTheme } from "@/server/services/public-theme-service";
 import styles from "./home-experience.module.css";
 
-export function HomeExperience({ themes }: { themes: PublicTheme[] }) {
+export function HomeExperience({
+  themes,
+  nextPage = null,
+  catalogPage = 1,
+}: {
+  themes: PublicTheme[];
+  nextPage?: number | null;
+  catalogPage?: number;
+}) {
   return (
     <main className={styles.page}>
       <header className={styles.header}>
@@ -98,9 +107,34 @@ export function HomeExperience({ themes }: { themes: PublicTheme[] }) {
             </ol>
           ) : (
             <p className={styles.empty}>
-              Ainda não há temas publicados. Volte em breve.
+              {nextPage || catalogPage > 1
+                ? "Nenhum tema disponível nesta página."
+                : "Ainda não há temas publicados. Volte em breve."}
             </p>
           )}
+          {nextPage || catalogPage > 1 ? (
+            <nav
+              aria-label="Páginas do catálogo"
+              className="mt-6 flex flex-wrap gap-4"
+            >
+              {catalogPage > 1 ? (
+                <Link
+                  className={buttonVariants({ variant: "outline" })}
+                  href={`/?page=${catalogPage - 1}#temas`}
+                >
+                  Página anterior
+                </Link>
+              ) : null}
+              {nextPage ? (
+                <Link
+                  className={buttonVariants({ variant: "outline" })}
+                  href={`/?page=${nextPage}#temas`}
+                >
+                  Próxima página de temas
+                </Link>
+              ) : null}
+            </nav>
+          ) : null}
         </section>
       </div>
       <footer className={styles.footer}>

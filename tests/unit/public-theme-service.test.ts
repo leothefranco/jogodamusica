@@ -25,6 +25,45 @@ function themeWithCount(activeSongCount: number) {
 }
 
 describe("catálogo público de temas", () => {
+  it("remove campos internos acidentais também no guardrail legado e mede sem inventar saúde", async () => {
+    const events: unknown[] = [];
+    const internal = {
+      ...theme,
+      region: "BR",
+      sourceIds: ["private-source"],
+      confirmedState: "unavailable",
+      policyVersion: 999,
+      revision: 100,
+    };
+    const service = createPublicThemeService({
+      listPlayableThemes: async () => [internal],
+      findPlayableThemeBySlug: async () => internal,
+      metrics: {
+        record(event) {
+          events.push(event);
+        },
+      },
+    });
+    expect(await service.listThemes()).toEqual([
+      { ...theme, supportedBracketSizes: [4, 8] },
+    ]);
+    expect(await service.getTheme(theme.slug)).toEqual({
+      ...theme,
+      supportedBracketSizes: [4, 8],
+    });
+    expect(events).toEqual(
+      [0, 1].map(() => ({
+        metric: "public_catalog_read",
+        mode: "legacy_guardrail",
+        policyVersion: 1,
+        durationMs: expect.any(Number),
+        examinedThemes: 1,
+        visibleThemes: 1,
+        states: null,
+      })),
+    );
+  });
+
   it("expõe modalidades compatíveis sem escolher um padrão", async () => {
     const service = createPublicThemeService({
       listPlayableThemes: vi.fn().mockResolvedValue([theme]),

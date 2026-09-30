@@ -60,6 +60,7 @@ export default async function ThemePage({ params }: ThemePageProps) {
             themeId={theme.id}
             activeSongCount={theme.activeSongCount}
             supportedBracketSizes={theme.supportedBracketSizes}
+            modeGroups={theme.modeGroups}
           />
         </section>
       </div>
