@@ -8,7 +8,8 @@ const gameService = vi.hoisted(() => ({
   reportGamePlaybackError: vi.fn(),
 }));
 const publicThemeService = vi.hoisted(() => ({
-  getPublicThemes: vi.fn(),
+  getPublicCatalogPage: vi.fn(),
+  parsePublicCatalogPage: () => 1,
 }));
 const rateLimitService = vi.hoisted(() => ({
   enforcePublicRateLimit: vi.fn(),
@@ -163,7 +164,10 @@ describe("contratos públicos de partida", () => {
         supportedBracketSizes: [4, 8],
       },
     ];
-    publicThemeService.getPublicThemes.mockResolvedValue(themes);
+    publicThemeService.getPublicCatalogPage.mockResolvedValue({
+      themes,
+      nextPage: null,
+    });
 
     const response = await getThemes();
 

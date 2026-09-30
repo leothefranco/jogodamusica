@@ -12,17 +12,30 @@ type StartGameFormProps = {
   themeId: string;
   activeSongCount: number;
   supportedBracketSizes: BracketSize[];
+  modeGroups?: {
+    primary: BracketSize[];
+    quick: BracketSize[];
+    extended: BracketSize[];
+  };
 };
 
 export function StartGameForm({
   themeId,
   activeSongCount,
   supportedBracketSizes,
+  modeGroups,
 }: StartGameFormProps) {
   const router = useRouter();
   const [bracketSize, setBracketSize] = useState<BracketSize | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
+  const sections = modeGroups
+    ? [
+        { title: "Principais", sizes: modeGroups.primary },
+        { title: "Rápidas", sizes: modeGroups.quick },
+        { title: "Mais opções", sizes: modeGroups.extended },
+      ]
+    : [{ title: null, sizes: supportedBracketSizes }];
 
   async function startGame() {
     if (bracketSize === null) {
@@ -67,29 +80,47 @@ export function StartGameForm({
           O tema tem {activeSongCount} músicas disponíveis. A partida sorteia
           somente a quantidade escolhida.
         </p>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          {supportedBracketSizes.map((size) => (
-            <label
-              key={size}
-              className="flex min-h-16 cursor-pointer items-center gap-3 rounded-md border border-white/10 bg-black/20 px-4 transition-colors has-checked:border-white has-checked:bg-white/10"
+        {sections
+          .filter((section) => section.sizes.length > 0)
+          .map((section) => (
+            <div
+              key={section.title ?? "modalidades"}
+              className="mt-5 grid gap-3 sm:grid-cols-2"
             >
-              <input
-                type="radio"
-                name="bracketSize"
-                value={size}
-                checked={bracketSize === size}
-                onChange={() => setBracketSize(size)}
-                className="size-4 accent-white"
-              />
-              <span className="font-semibold">
-                {roundCountFromBracketSize(size)} rodadas
-                <span className="block text-sm font-normal text-[var(--app-muted)]">
-                  {size} músicas
-                </span>
-              </span>
-            </label>
+              {section.title ? (
+                <h3
+                  className={
+                    section.title === "Mais opções"
+                      ? "text-sm text-white/55 sm:col-span-2"
+                      : "font-semibold sm:col-span-2"
+                  }
+                >
+                  {section.title}
+                </h3>
+              ) : null}
+              {section.sizes.map((size) => (
+                <label
+                  key={size}
+                  className="flex min-h-16 cursor-pointer items-center gap-3 rounded-md border border-white/10 bg-black/20 px-4 transition-colors has-checked:border-white has-checked:bg-white/10"
+                >
+                  <input
+                    type="radio"
+                    name="bracketSize"
+                    value={size}
+                    checked={bracketSize === size}
+                    onChange={() => setBracketSize(size)}
+                    className="size-4 accent-white"
+                  />
+                  <span className="font-semibold">
+                    {roundCountFromBracketSize(size)} rodadas
+                    <span className="block text-sm font-normal text-[var(--app-muted)]">
+                      {size} músicas
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
           ))}
-        </div>
       </fieldset>
 
       <Button
