@@ -3,6 +3,7 @@ import { ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 import { ThemeThumbnailStack } from "@/components/theme-thumbnail-stack";
 import { countLabel } from "@/lib/language";
+import { siteConfig } from "@/lib/site";
 import type { PublicTheme } from "@/server/services/public-theme-service";
 import styles from "./home-experience.module.css";
 
@@ -13,13 +14,14 @@ export function HomeExperience({ themes }: { themes: PublicTheme[] }) {
         <a
           href="#inicio"
           className={styles.brand}
-          aria-label="Jogo da Música — início"
+          aria-label={`${siteConfig.name} — início`}
         >
           <BrandMark size={56} />
           <div>
-            JOGO DA
+            {siteConfig.shortName}
             <br />
-            MÚSICA<span aria-hidden="true">●</span>
+            {siteConfig.name.slice(siteConfig.shortName.length).trim()}
+            <span aria-hidden="true">●</span>
           </div>
         </a>
         <p className={styles.about}>
@@ -104,7 +106,7 @@ export function HomeExperience({ themes }: { themes: PublicTheme[] }) {
         </section>
       </div>
       <footer className={styles.footer}>
-        <span>JOGO DA MÚSICA</span>
+        <span>{siteConfig.name}</span>
         <p>Escolha o tema. Compare as músicas. Eleja a melhor.</p>
       </footer>
     </main>

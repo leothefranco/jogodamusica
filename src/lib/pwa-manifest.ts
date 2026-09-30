@@ -25,6 +25,18 @@ export function createPublicManifest(): MetadataRoute.Manifest {
         sizes: "512x512",
         type: "image/png",
       },
+      {
+        src: "/icons/icon-maskable-192.png",
+        sizes: "192x192",
+        type: "image/png",
+        purpose: "maskable",
+      },
+      {
+        src: "/icons/icon-maskable-512.png",
+        sizes: "512x512",
+        type: "image/png",
+        purpose: "maskable",
+      },
     ],
   };
 }
@@ -32,9 +44,9 @@ export function createPublicManifest(): MetadataRoute.Manifest {
 export function createAdminManifest(): MetadataRoute.Manifest {
   return {
     id: "/admin",
-    name: "Jogo da Música Admin",
-    short_name: "Jogo da Música Admin",
-    description: "Administre temas e músicas do Jogo da Música.",
+    name: siteConfig.adminName,
+    short_name: siteConfig.adminShortName,
+    description: `Administre temas e músicas do ${siteConfig.name}.`,
     start_url: "/admin",
     scope: "/admin",
     display: "standalone",
@@ -56,13 +68,13 @@ export function createAdminManifest(): MetadataRoute.Manifest {
         purpose: "any",
       },
       {
-        src: "/icons/admin-icon-192.png",
+        src: "/icons/admin-icon-maskable-192.png",
         sizes: "192x192",
         type: "image/png",
         purpose: "maskable",
       },
       {
-        src: "/icons/admin-icon-512.png",
+        src: "/icons/admin-icon-maskable-512.png",
         sizes: "512x512",
         type: "image/png",
         purpose: "maskable",

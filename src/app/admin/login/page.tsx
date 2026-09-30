@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AudioLines, Database, ShieldCheck } from "lucide-react";
 
 import { getOptionalPublicSupabaseEnv } from "@/lib/public-env";
+import { siteConfig } from "@/lib/site";
 
 import { LoginForm } from "./login-form";
 
@@ -29,7 +30,7 @@ export default function AdminLoginPage() {
           <span className="grid size-10 place-items-center rounded-md border border-[var(--duel-a)]/25 bg-[var(--duel-a)]/10 text-[var(--duel-a)]">
             <AudioLines className="size-5" aria-hidden="true" />
           </span>
-          <span className="font-bold">Jogo da Música</span>
+          <span className="font-bold">{siteConfig.name}</span>
         </Link>
 
         <div className="relative max-w-lg">
@@ -59,7 +60,7 @@ export default function AdminLoginPage() {
             <span className="grid size-10 place-items-center rounded-md border border-[var(--duel-a)]/25 bg-[var(--duel-a)]/10 text-[var(--duel-a)]">
               <AudioLines className="size-5" aria-hidden="true" />
             </span>
-            <span className="font-bold">Jogo da Música</span>
+            <span className="font-bold">{siteConfig.name}</span>
           </Link>
 
           <div className="flex size-12 items-center justify-center rounded-md border border-white/10 bg-white/[0.04] text-[var(--duel-a)]">
