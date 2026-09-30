@@ -5,8 +5,8 @@ import { createAdminManifest, createPublicManifest } from "@/lib/pwa-manifest";
 describe("manifesto da PWA", () => {
   it("expõe a identidade instalável e os dois ícones obrigatórios", () => {
     expect(createPublicManifest()).toEqual({
-      name: "Jogo da Música",
-      short_name: "Jogo da Música",
+      name: "Last Track Standing",
+      short_name: "Last Track",
       description:
         "Compare músicas em confrontos eliminatórios e descubra a campeã do grupo.",
       start_url: "/",
@@ -27,6 +27,18 @@ describe("manifesto da PWA", () => {
           sizes: "512x512",
           type: "image/png",
         },
+        {
+          src: "/icons/icon-maskable-192.png",
+          sizes: "192x192",
+          type: "image/png",
+          purpose: "maskable",
+        },
+        {
+          src: "/icons/icon-maskable-512.png",
+          sizes: "512x512",
+          type: "image/png",
+          purpose: "maskable",
+        },
       ],
     });
   });
@@ -34,9 +46,9 @@ describe("manifesto da PWA", () => {
   it("separa a instalação administrativa por nome, escopo e cor", () => {
     expect(createAdminManifest()).toEqual({
       id: "/admin",
-      name: "Jogo da Música Admin",
-      short_name: "Jogo da Música Admin",
-      description: "Administre temas e músicas do Jogo da Música.",
+      name: "Last Track Standing Admin",
+      short_name: "LTS Admin",
+      description: "Administre temas e músicas do Last Track Standing.",
       start_url: "/admin",
       scope: "/admin",
       display: "standalone",
@@ -58,13 +70,13 @@ describe("manifesto da PWA", () => {
           purpose: "any",
         },
         {
-          src: "/icons/admin-icon-192.png",
+          src: "/icons/admin-icon-maskable-192.png",
           sizes: "192x192",
           type: "image/png",
           purpose: "maskable",
         },
         {
-          src: "/icons/admin-icon-512.png",
+          src: "/icons/admin-icon-maskable-512.png",
           sizes: "512x512",
           type: "image/png",
           purpose: "maskable",

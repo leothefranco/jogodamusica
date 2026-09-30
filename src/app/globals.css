@@ -49,10 +49,14 @@
 }
 
 :root {
+  --brand: #d4ff46;
   --app-bg: #101216;
   --app-surface: #181c22;
   --app-text: #f5f3ed;
   --app-muted: #b8bec8;
+  --app-focus: #f5f3ed;
+  --app-success: #6ee7b7;
+  --app-error: #ff8792;
   --duel-a: #38bdf8;
   --duel-b: #ff923d;
   --background: var(--app-bg);
@@ -61,7 +65,7 @@
   --card-foreground: var(--app-text);
   --popover: var(--app-surface);
   --popover-foreground: var(--app-text);
-  --primary: var(--duel-a);
+  --primary: var(--brand);
   --primary-foreground: var(--app-bg);
   --secondary: #292f38;
   --secondary-foreground: var(--app-text);
@@ -69,10 +73,10 @@
   --muted-foreground: var(--app-muted);
   --accent: #26343e;
   --accent-foreground: var(--app-text);
-  --destructive: #ff8792;
+  --destructive: var(--app-error);
   --border: #414954;
   --input: #515b68;
-  --ring: var(--app-text);
+  --ring: var(--app-focus);
   --chart-1: var(--duel-a);
   --chart-2: var(--duel-b);
   --chart-3: #b8bec8;
@@ -81,12 +85,12 @@
   --radius: 14px;
   --sidebar: var(--app-surface);
   --sidebar-foreground: var(--app-text);
-  --sidebar-primary: var(--duel-a);
+  --sidebar-primary: var(--brand);
   --sidebar-primary-foreground: var(--app-bg);
   --sidebar-accent: #26343e;
   --sidebar-accent-foreground: var(--app-text);
   --sidebar-border: var(--border);
-  --sidebar-ring: var(--app-text);
+  --sidebar-ring: var(--app-focus);
 }
 
 @layer base {

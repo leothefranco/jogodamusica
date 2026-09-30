@@ -199,7 +199,7 @@ test("falha de todas as imagens termina no placeholder editorial", async ({
     const visual = page.getByTestId(testId);
     await expect(
       visual.locator('[data-theme-visual="placeholder"]'),
-    ).toContainText("Jogo da Música");
+    ).toContainText("Last Track Standing");
     await expect(visual.locator("img")).toHaveCount(0);
   }
 });
