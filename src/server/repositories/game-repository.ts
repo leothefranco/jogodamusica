@@ -1,17 +1,29 @@
 import "server-only";
 
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, or, gte, sql } from "drizzle-orm";
 
+import {
+  recordGameCreationMetric,
+  type GameCreationMetric,
+  type GameCreationMetrics,
+} from "@/server/repositories/game-creation-metrics";
+import type { BracketSize } from "@/domain/music/content-validation";
+import {
+  coordinateGameCreation,
+  retryCatalogTransaction,
+} from "@/server/repositories/catalog-transaction";
 import { getDatabase } from "@/db";
 import {
   gameMatches,
   gameSessions,
   sessionSongs,
+  sourceAvailabilityObservations as observations,
   songs,
   themes,
   themeSongs,
 } from "@/db/schema";
 import { bracketSizeSchema } from "@/domain/music/content-validation";
+import { SOURCE_AVAILABILITY_POLICY } from "@/domain/music/source-availability";
 import { AppError } from "@/lib/errors";
 import type {
   GameState,
@@ -25,7 +37,13 @@ import type {
   NewGameSession,
 } from "@/server/repositories/game-repository-contract";
 
-type Database = ReturnType<typeof getDatabase>;
+type Database = Pick<
+  import("drizzle-orm/pg-core").PgDatabase<
+    import("drizzle-orm/pg-core").PgQueryResultHKT,
+    typeof import("@/db/schema")
+  >,
+  "select" | "transaction"
+>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type ReadDatabase = Pick<Database, "select">;
 
@@ -126,8 +144,8 @@ async function getMatchUsing(
 
 export async function getGameStateRecord(
   sessionId: string,
+  database: Database = getDatabase(),
 ): Promise<GameState | null> {
-  const database = getDatabase();
   const [session, theme, snapshots, matches] = await Promise.all([
     getSessionUsing(database, sessionId),
     database
@@ -170,63 +188,172 @@ export async function getGameStateRecord(
 export async function withGameCreationTransaction<T>(
   themeId: string,
   operation: (repository: GameCreationRepository) => Promise<T>,
+  options: {
+    authoritative?: boolean;
+    clock?: () => Date;
+    bracketSize?: BracketSize;
+    metrics?: GameCreationMetrics;
+  } = {},
+  database: Database = getDatabase(),
 ): Promise<T> {
-  return getDatabase().transaction(async (transaction) => {
-    await transaction.execute(
-      sql`select ${themes.id} from ${themes} where ${themes.id} = ${themeId} for update`,
+  const authoritative =
+    options.authoritative ??
+    ((process.env.VERCEL_ENV === "preview" ||
+      (process.env.VERCEL_ENV !== "production" &&
+        process.env.NODE_ENV !== "production")) &&
+      process.env.PUBLIC_CATALOG_READ_MODE === "authoritative_direct");
+  const began = performance.now();
+  const durations = { lockMs: 0, readMs: 0, persistMs: 0 };
+  const record = (result: GameCreationMetric["result"]) =>
+    recordGameCreationMetric(
+      {
+        metric: "game_creation",
+        result,
+        bracketSize: options.bracketSize ?? null,
+        mode: authoritative ? "authoritative_direct" : "legacy_guardrail",
+        policyVersion: SOURCE_AVAILABILITY_POLICY.version,
+        durationMs: performance.now() - began,
+        ...durations,
+      },
+      options.metrics,
     );
+  try {
+    const result = await retryCatalogTransaction(
+      () =>
+        database.transaction(async (transaction) => {
+          const context = {
+            authoritative,
+            now: options.clock?.() ?? new Date(),
+            policy: SOURCE_AVAILABILITY_POLICY,
+          };
+          const lockStarted = performance.now();
+          try {
+            if (authoritative)
+              await coordinateGameCreation(
+                transaction,
+                themeId,
+                context.policy.region,
+              );
+            else
+              await transaction.execute(
+                sql`select ${themes.id} from ${themes} where ${themes.id} = ${themeId} for update`,
+              );
+          } finally {
+            durations.lockMs += performance.now() - lockStarted;
+          }
+          return operation({
+            creationContext: context,
+            getThemeWithActiveSongs: async () => {
+              const readStarted = performance.now();
+              try {
+                const [theme] = await transaction
+                  .select({
+                    id: themes.id,
+                    isActive: themes.isActive,
+                    editorialState: themes.editorialState,
+                  })
+                  .from(themes)
+                  .where(eq(themes.id, themeId))
+                  .limit(1);
+                if (!theme) return null;
 
-    return operation({
-      getThemeWithActiveSongs: async () => {
-        const [theme] = await transaction
-          .select({ id: themes.id, isActive: themes.isActive })
-          .from(themes)
-          .where(eq(themes.id, themeId))
-          .limit(1);
-        if (!theme) return null;
+                const activeSongs = await transaction
+                  .select({
+                    songId: songs.id,
+                    title: themeSongs.title,
+                    artist: themeSongs.artist,
+                    thumbnailUrl: songs.thumbnailUrl,
+                    provider: songs.provider,
+                    providerContentId: songs.providerContentId,
+                    startTimeSeconds: themeSongs.startTimeSeconds,
+                    previewDurationSeconds: themeSongs.previewDurationSeconds,
+                  })
+                  .from(themeSongs)
+                  .innerJoin(songs, eq(songs.id, themeSongs.songId))
+                  .leftJoin(
+                    observations,
+                    and(
+                      eq(observations.songId, songs.id),
+                      eq(observations.region, context.policy.region),
+                    ),
+                  )
+                  .where(
+                    and(
+                      eq(themeSongs.themeId, themeId),
+                      eq(themeSongs.isActive, true),
+                      authoritative
+                        ? and(
+                            eq(observations.confirmedState, "available"),
+                            or(
+                              gte(observations.validUntil, context.now),
+                              gte(observations.graceUntil, context.now),
+                            ),
+                          )
+                        : eq(songs.isEmbeddable, true),
+                    ),
+                  )
+                  .orderBy(
+                    sql`${themeSongs.displayOrder} asc nulls last`,
+                    asc(themeSongs.createdAt),
+                    asc(themeSongs.songId),
+                  );
 
-        const activeSongs = await transaction
-          .select({
-            songId: songs.id,
-            title: themeSongs.title,
-            artist: themeSongs.artist,
-            thumbnailUrl: songs.thumbnailUrl,
-            provider: songs.provider,
-            providerContentId: songs.providerContentId,
-            startTimeSeconds: themeSongs.startTimeSeconds,
-            previewDurationSeconds: themeSongs.previewDurationSeconds,
-          })
-          .from(themeSongs)
-          .innerJoin(songs, eq(songs.id, themeSongs.songId))
-          .where(
-            and(
-              eq(themeSongs.themeId, themeId),
-              eq(themeSongs.isActive, true),
-              eq(songs.isEmbeddable, true),
-            ),
-          )
-          .orderBy(
-            sql`${themeSongs.displayOrder} asc nulls last`,
-            asc(themeSongs.createdAt),
-            asc(themeSongs.songId),
-          );
-
-        return { ...theme, songs: activeSongs };
-      },
-      async createGame(plan) {
-        const sessionId = await insertSessionUsing(transaction, plan.session);
-        await insertSessionSongsUsing(
-          transaction,
-          plan.songs.map((song) => ({ ...song, sessionId })),
-        );
-        await insertMatchesUsing(
-          transaction,
-          plan.matches.map((match) => ({ ...match, sessionId })),
-        );
-        return sessionId;
-      },
-    });
-  });
+                return {
+                  id: theme.id,
+                  isActive: authoritative
+                    ? theme.editorialState === "published"
+                    : theme.isActive,
+                  songs: activeSongs,
+                };
+              } finally {
+                durations.readMs += performance.now() - readStarted;
+              }
+            },
+            async createGame(plan) {
+              const persistStarted = performance.now();
+              try {
+                const sessionId = await insertSessionUsing(
+                  transaction,
+                  plan.session,
+                );
+                await insertSessionSongsUsing(
+                  transaction,
+                  plan.songs.map((song) => ({ ...song, sessionId })),
+                );
+                await insertMatchesUsing(
+                  transaction,
+                  plan.matches.map((match) => ({ ...match, sessionId })),
+                );
+                return sessionId;
+              } finally {
+                durations.persistMs += performance.now() - persistStarted;
+              }
+            },
+          });
+        }),
+      () => record("contention_retry"),
+    );
+    record("created");
+    return result;
+  } catch (error) {
+    record(
+      error instanceof AppError &&
+        [
+          "INSUFFICIENT_ACTIVE_SONGS",
+          "THEME_NOT_PLAYABLE",
+          "THEME_NOT_FOUND",
+        ].includes(error.code)
+        ? "insufficient"
+        : "failed",
+    );
+    if (error instanceof AppError) throw error;
+    // Do not pass SQL, bind values or driver causes to the public diagnostic logger.
+    throw new AppError(
+      "GAME_CREATION_FAILED",
+      "Não foi possível iniciar a partida. Tente novamente.",
+      500,
+    );
+  }
 }
 
 export async function withGameDecisionTransaction<T>(

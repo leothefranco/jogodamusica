@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { bracketSizeSchema } from "@/domain/music/content-validation";
 
-export const createGameInputSchema = z.object({
+export const createGameInputSchema = z.strictObject({
   themeId: z.string().uuid(),
   bracketSize: bracketSizeSchema,
 });

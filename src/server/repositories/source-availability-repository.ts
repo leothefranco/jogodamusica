@@ -3,6 +3,10 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { sql } from "drizzle-orm";
 
+import {
+  coordinateSourceHealth,
+  retryCatalogTransaction,
+} from "@/server/repositories/catalog-transaction";
 import { getDatabase } from "@/db";
 import type { ResolvedProviderTrack } from "@/domain/music/provider";
 import type {
@@ -284,17 +288,6 @@ async function findSourceUsing(
   };
 }
 
-async function lockSourceAvailabilityIdentity(
-  database: SourceAvailabilityDatabase,
-  providerContentId: string,
-  region: string,
-) {
-  const lockIdentity = `${sourceKeyHash(providerContentId)}:${region}`;
-  await database.execute(
-    sql`select pg_advisory_xact_lock(hashtextextended(${lockIdentity}, 0))`,
-  );
-}
-
 async function findSongIdForUpdate(
   database: SourceAvailabilityDatabase,
   providerContentId: string,
@@ -541,121 +534,130 @@ export async function persistSourceAvailabilityObservation(
   applied: boolean;
   track: ResolvedProviderTrack | null;
 }> {
-  return getDatabase().transaction(async (transaction) => {
-    await lockSourceAvailabilityIdentity(
-      transaction,
-      input.providerContentId,
-      input.observation.region,
-    );
-    const songId = input.track
-      ? await resolveSongId(transaction, input)
-      : await findSongIdForUpdate(transaction, input.providerContentId);
-
-    if (!songId) {
-      const previousObservation = await findUnboundObservationUsing(
+  return retryCatalogTransaction(() =>
+    getDatabase().transaction(async (transaction) => {
+      const recheckDependencies = await coordinateSourceHealth(
         transaction,
         input.providerContentId,
         input.observation.region,
       );
-      const appliedObservation = await upsertUnboundObservationUsing(
-        transaction,
-        input.providerContentId,
-        input.observation,
-      );
-      if (!appliedObservation) {
+      const songId = input.track
+        ? await resolveSongId(transaction, input)
+        : await findSongIdForUpdate(transaction, input.providerContentId);
+      // A legacy writer may have materialized a previously missing Fonte while
+      // locks were being acquired. The resolved row now protects FK inserts.
+      await recheckDependencies();
+
+      if (!songId) {
+        const previousObservation = await findUnboundObservationUsing(
+          transaction,
+          input.providerContentId,
+          input.observation.region,
+        );
+        const appliedObservation = await upsertUnboundObservationUsing(
+          transaction,
+          input.providerContentId,
+          input.observation,
+        );
+        if (!appliedObservation) {
+          return {
+            songId: null,
+            previousObservation,
+            observation: await findUnboundObservationForWriteUsing(
+              transaction,
+              input.providerContentId,
+              input.observation.region,
+            ),
+            applied: false,
+            track: null,
+          };
+        }
+
         return {
           songId: null,
           previousObservation,
-          observation: await findUnboundObservationForWriteUsing(
-            transaction,
-            input.providerContentId,
-            input.observation.region,
-          ),
-          applied: false,
+          observation: appliedObservation,
+          applied: true,
           track: null,
         };
       }
 
-      return {
-        songId: null,
-        previousObservation,
-        observation: appliedObservation,
-        applied: true,
-        track: null,
-      };
-    }
+      const unboundObservation = await findUnboundObservationForUpdateUsing(
+        transaction,
+        input.providerContentId,
+        input.observation.region,
+      );
+      if (unboundObservation) {
+        await upsertObservationUsing(transaction, songId, unboundObservation);
+      }
 
-    const unboundObservation = await findUnboundObservationForUpdateUsing(
-      transaction,
-      input.providerContentId,
-      input.observation.region,
-    );
-    if (unboundObservation) {
-      await upsertObservationUsing(transaction, songId, unboundObservation);
-    }
-
-    // The candidate replaces this bound predecessor after unbound reconciliation,
-    // under the same identity/song locks as its CAS (null on first observation).
-    const previousObservation = await findObservationUsing(
-      transaction,
-      songId,
-      input.observation.region,
-    );
-    const appliedObservation = await upsertObservationUsing(
-      transaction,
-      songId,
-      input.observation,
-    );
-
-    if (!appliedObservation) {
-      const persistedObservation = await findObservationUsing(
+      // The candidate replaces this bound predecessor after unbound reconciliation,
+      // under the same identity/song locks as its CAS (null on first observation).
+      const previousObservation = await findObservationUsing(
         transaction,
         songId,
         input.observation.region,
       );
-      if (!persistedObservation) {
-        throw new AppError(
-          "SOURCE_AVAILABILITY_WRITE_CONFLICT",
-          "A observação concorrente não pôde ser reconciliada.",
-          409,
+      const appliedObservation = await upsertObservationUsing(
+        transaction,
+        songId,
+        input.observation,
+      );
+
+      if (!appliedObservation) {
+        const persistedObservation = await findObservationUsing(
+          transaction,
+          songId,
+          input.observation.region,
         );
+        if (!persistedObservation) {
+          throw new AppError(
+            "SOURCE_AVAILABILITY_WRITE_CONFLICT",
+            "A observação concorrente não pôde ser reconciliada.",
+            409,
+          );
+        }
+        await removeUnboundObservationUsing(
+          transaction,
+          input.providerContentId,
+          input.observation.region,
+        );
+        return {
+          songId,
+          previousObservation,
+          observation: persistedObservation,
+          applied: false,
+          track: await findTrackUsing(
+            transaction,
+            songId,
+            persistedObservation,
+          ),
+        };
       }
+
       await removeUnboundObservationUsing(
         transaction,
         input.providerContentId,
         input.observation.region,
       );
+
+      if (input.track) {
+        await updateSourceMetadata(transaction, songId, input.track);
+      }
+
       return {
         songId,
         previousObservation,
-        observation: persistedObservation,
-        applied: false,
-        track: await findTrackUsing(transaction, songId, persistedObservation),
+        observation: appliedObservation,
+        applied: true,
+        track: input.track
+          ? {
+              ...input.track,
+              isRegionAllowed:
+                appliedObservation.confirmationReason !== "region_blocked",
+            }
+          : await findTrackUsing(transaction, songId, appliedObservation),
       };
-    }
-
-    await removeUnboundObservationUsing(
-      transaction,
-      input.providerContentId,
-      input.observation.region,
-    );
-
-    if (input.track) {
-      await updateSourceMetadata(transaction, songId, input.track);
-    }
-
-    return {
-      songId,
-      previousObservation,
-      observation: appliedObservation,
-      applied: true,
-      track: input.track
-        ? {
-            ...input.track,
-            isRegionAllowed:
-              appliedObservation.confirmationReason !== "region_blocked",
-          }
-        : await findTrackUsing(transaction, songId, appliedObservation),
-    };
-  });
+    }),
+  );
 }

@@ -24,6 +24,11 @@ export type GameCreationPlan = {
 };
 
 export type GameCreationRepository = {
+  creationContext?: {
+    authoritative: boolean;
+    now: Date;
+    policy: { version: number; region: string };
+  };
   getThemeWithActiveSongs(): Promise<GameTheme | null>;
   createGame(plan: GameCreationPlan): Promise<string>;
 };
