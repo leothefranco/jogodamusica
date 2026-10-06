@@ -1,5 +1,7 @@
 "use client";
 
+import { BrandMark } from "@/components/brand-mark";
+
 import { Dices, LoaderCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -283,6 +285,12 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
               {siteConfig.shortName}
             </Link>
             <h1 ref={headingRef} tabIndex={-1} className="game-theme-name">
+              <span
+                className="mr-1.5 inline-block align-middle"
+                aria-hidden="true"
+              >
+                <BrandMark size={18} />
+              </span>
               {state.theme.name}
             </h1>
           </div>

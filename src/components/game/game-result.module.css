@@ -1,0 +1,45 @@
+.page {
+  min-height: 100dvh;
+  overflow: hidden;
+  background: var(--app-bg);
+  color: var(--app-text);
+  padding: 24px 20px 48px;
+}
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #454950;
+  font-weight: 800;
+  font-size: 14px;
+}
+.champion {
+  position: relative;
+  isolation: isolate;
+  padding: 32px 0;
+  text-align: center;
+  border-bottom: 1px solid #454950;
+}
+.encore {
+  position: absolute;
+  top: 12px;
+  right: -40px;
+  width: min(34vw, 240px);
+  z-index: -1;
+  opacity: 0.32;
+}
+.encore img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+@media (min-width: 768px) {
+  .page {
+    padding: 32px 32px 64px;
+  }
+  .encore {
+    right: 0;
+    opacity: 0.6;
+  }
+}

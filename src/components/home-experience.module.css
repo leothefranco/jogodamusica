@@ -5,7 +5,7 @@
   padding: 0 max(20px, 5vw) 48px;
 }
 .page a:focus-visible {
-  outline: 3px solid var(--duel-a);
+  outline: 3px solid #d4ff46;
   outline-offset: 5px;
 }
 .header {
@@ -30,7 +30,7 @@
 }
 .brand span {
   font-size: 14px;
-  color: var(--duel-a);
+  color: #d4ff46;
   margin-left: 3px;
 }
 .about {
@@ -68,13 +68,13 @@
 .intro h1 {
   font-family: "JDM Anton", Impact, "Arial Narrow", sans-serif;
   font-weight: 400;
-  font-size: clamp(70px, 7.3vw, 116px);
+  font-size: clamp(58px, 6.5vw, 96px);
   letter-spacing: -0.035em;
   line-height: 0.98;
   margin: 28px 0;
 }
 .intro h1 span {
-  color: var(--duel-a);
+  color: #d4ff46;
 }
 .description {
   font-size: 16px;
@@ -122,7 +122,7 @@
   text-underline-offset: 5px;
 }
 .number {
-  color: var(--duel-a);
+  color: #d4ff46;
   font-size: 13px;
 }
 .themeText {
@@ -212,7 +212,7 @@
     gap: 22px;
   }
   .intro h1 {
-    font-size: clamp(58px, 17vw, 88px);
+    font-size: clamp(50px, 14.8vw, 80px);
     margin: 14px 0;
   }
   .description {
@@ -265,14 +265,14 @@
   background: none;
 }
 .cover :global(.theme-visual-placeholder) {
-  color: var(--duel-a);
+  color: #d4ff46;
   gap: 0;
 }
 .cover :global(.theme-visual-placeholder-mark) {
   border: 0;
   border-radius: 0;
   background: none;
-  color: var(--duel-a);
+  color: #d4ff46;
   width: 32px;
   font-size: 28px;
 }
@@ -280,52 +280,54 @@
   display: none;
 }
 
-/* Opposing accents introduce the same musical duel as the game. */
-.header {
-  border-bottom: 4px solid;
-  border-image: linear-gradient(90deg, var(--duel-a) 50%, var(--duel-b) 50%) 1;
+.intro {
+  position: relative;
+  isolation: isolate;
+  padding-bottom: 24px;
+}
+.intro h1 {
+  position: relative;
+  z-index: 1;
 }
 .intro h1 .questionEnd {
-  color: var(--duel-b);
+  color: var(--app-text);
 }
-.duelRule {
-  display: flex;
+.encore {
+  display: block;
+  width: min(100%, 360px);
+  margin: -16px auto 12px;
+}
+.encore img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.choose {
+  display: inline-flex;
   align-items: center;
-  gap: 12px;
-  margin: 24px 0;
-  font-weight: 900;
-  font-size: 14px;
+  justify-content: space-between;
+  gap: 32px;
+  min-height: 48px;
+  padding: 12px 20px;
+  margin-top: 20px;
+  border-radius: 10px;
+  background: #d4ff46;
+  color: #101216;
+  font-weight: 800;
 }
-.duelRule::before,
-.duelRule::after {
-  content: "";
-  height: 6px;
-  flex: 1;
-}
-.duelRule::before {
-  background: var(--duel-a);
-}
-.duelRule::after {
-  background: var(--duel-b);
-}
-.list > li:nth-child(even) .number,
-.list > li:nth-child(even) .arrow {
-  color: var(--duel-b);
-}
-.list > li:nth-child(odd) .arrow {
-  color: var(--duel-a);
-}
-.theme {
-  border-color: color-mix(in srgb, var(--duel-a) 30%, #454950);
-}
-.list > li:nth-child(even) .theme {
-  border-color: color-mix(in srgb, var(--duel-b) 30%, #454950);
+.choose svg {
+  width: 22px;
+  height: 22px;
 }
 .theme:hover {
-  background: var(--app-surface);
+  border-color: #d4ff46;
 }
 @media (max-width: 600px) {
-  .duelRule {
-    margin: 12px 0;
+  .encore {
+    width: 240px;
+    margin: -8px auto 8px;
+  }
+  .choose {
+    width: 100%;
   }
 }
