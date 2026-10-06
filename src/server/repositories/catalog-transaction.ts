@@ -66,6 +66,7 @@ export async function lockCatalogSources(
   database: Executor,
   providerContentIds: string[],
   region: string,
+  options: { observations?: boolean } = {},
 ) {
   // Global source order is provider_content_id (the current provider is YouTube).
   // Each identity also covers missing observation/source rows during first insert.
@@ -79,9 +80,10 @@ export async function lockCatalogSources(
     await database.execute(
       sql`select id from public.songs where provider = 'youtube' and provider_content_id = ${id} for update`,
     );
-    await database.execute(
-      sql`select o.song_id from public.source_availability_observations o inner join public.songs s on s.id = o.song_id where s.provider = 'youtube' and s.provider_content_id = ${id} and o.region = ${region} for update of o`,
-    );
+    if (options.observations !== false)
+      await database.execute(
+        sql`select o.song_id from public.source_availability_observations o inner join public.songs s on s.id = o.song_id where s.provider = 'youtube' and s.provider_content_id = ${id} and o.region = ${region} for update of o`,
+      );
   }
 }
 async function themeSources(database: Executor, themeId: string) {

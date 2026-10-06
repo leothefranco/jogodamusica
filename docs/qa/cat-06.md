@@ -2,8 +2,8 @@
 
 Issue: https://github.com/leothefranco/jogodamusica/issues/14.
 Base desta rodada: `5d41b3a3a51994fa008272717ecb9101695860ca`.
-Estado: implementação local; **não ready-for-pm** até a prova PostgreSQL real e
-revisão independente de segurança/dados sobre SHA fixo. Sem cutover ou deploy.
+Estado: implementação local com dez cenários PostgreSQL reais aprovados na R2;
+**aguarda revisão independente de segurança/dados sobre o SHA final**. Sem cutover ou deploy.
 
 ## Contrato e implementação
 
@@ -33,7 +33,8 @@ confronto e a leitura de snapshots permanecem existentes.
 
 ## Coordenação
 
-`catalog-transaction.ts` é compartilhado por criação e persistência de saúde:
+`catalog-transaction.ts` é compartilhado por criação, persistência de saúde e
+importação editorial de múltiplas Fontes:
 
 1. `SET LOCAL lock_timeout = '2000ms'`.
 2. Temas distintos por UUID crescente, `FOR UPDATE`.
@@ -45,8 +46,11 @@ confronto e a leitura de snapshots permanecem existentes.
 
 A identidade inclui o hash SHA-256 de provider+content-id e região; protege também
 Fonte/observação ainda inexistentes. Criação descobre Fontes sob o lock do Tema;
-saúde descobre todos os Temas da Fonte antes de bloquear e valida novamente. Os
-fluxos editoriais existentes já mantêm o lock do Tema. Nenhum provider é chamado
+saúde descobre todos os Temas da Fonte antes de bloquear e valida novamente. A
+importação editorial mantém o lock do Tema e adquire todas as identidades e linhas
+de Fonte na mesma ordem global antes dos upserts. Não bloqueia nem consulta
+observações, pois não as escreve e precisa funcionar no schema legado. Os upserts
+continuam na ordem original da playlist; Entradas existentes preservam curadoria. Nenhum provider é chamado
 pela transação; a observação continua sendo buscada antes de persistir saúde.
 
 Há no máximo três tentativas para mudança de dependências ou SQLSTATE 55P03,
@@ -61,20 +65,20 @@ alegação de SLO ou de equivalência entre PGlite e PostgreSQL concorrente.
 
 ## Critérios → provas
 
-| Critério                                                                | Evidência                                                                                  |
-| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Published e N−1/N, sem linhas parciais                                  | `authoritative-game-creation.test.ts`: cada tamanho e conflito uniforme                    |
-| Uma sessão, N snapshots, N−1 confrontos distintos                       | Mesmo teste: seis modalidades, consulta de estado persistido                               |
-| Projeção incorreta não autoriza                                         | Tabela de projeção deliberadamente adulterada no harness                                   |
-| Fresh/grace inclusivos; exclui unknown/unavailable/inativa/outra região | Matriz de nove candidatas em SQL descartável                                               |
-| Rollback depois da sessão e depois de snapshots                         | Triggers de falha antes de `session_songs` e `game_matches`                                |
-| Degradação não altera títulos, trechos, pares ou decisão                | Criação → decisão real → persistência real de unavailable → edição do catálogo → releitura |
-| Relógio/política únicos, sem provider, allowlist/telemetria             | Relógio injetado, fetch proibido, exportador que lança após commit, allowlists explícitas  |
-| POST estrito, anônimo, rate limit, erro seguro                          | Rota real + serviço + repositório + rate limiter em SQL efêmero                            |
-| Retry limitado/sem repetição ambígua                                    | Falhas SQLSTATE no limite do banco e contagem de sessões persistidas                       |
-| 32/64 principais e seleção explícita                                    | Tracer `authoritative-game-creation.spec.ts`, componentes existentes                       |
-| Corrida real/ordem/retry/novo vínculo                                   | `tests/qa/cat06-postgres.test.ts` — **execução PostgreSQL pendente**                       |
-| RLS sem novas exposições                                                | Nenhuma alteração de schema/policies; migrations reais aplicadas aos harnesses             |
+| Critério                                                                | Evidência                                                                                      |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Published e N−1/N, sem linhas parciais                                  | `authoritative-game-creation.test.ts`: cada tamanho e conflito uniforme                        |
+| Uma sessão, N snapshots, N−1 confrontos distintos                       | Mesmo teste: seis modalidades, consulta de estado persistido                                   |
+| Projeção incorreta não autoriza                                         | Tabela de projeção deliberadamente adulterada no harness                                       |
+| Fresh/grace inclusivos; exclui unknown/unavailable/inativa/outra região | Matriz de nove candidatas em SQL descartável                                                   |
+| Rollback depois da sessão e depois de snapshots                         | Triggers de falha antes de `session_songs` e `game_matches`                                    |
+| Degradação não altera títulos, trechos, pares ou decisão                | Criação → decisão real → persistência real de unavailable → edição do catálogo → releitura     |
+| Relógio/política únicos, sem provider, allowlist/telemetria             | Relógio injetado, fetch proibido, exportador que lança após commit, allowlists explícitas      |
+| POST estrito, anônimo, rate limit, erro seguro                          | Rota real + serviço + repositório + rate limiter em SQL efêmero                                |
+| Retry limitado/sem repetição ambígua                                    | Falhas SQLSTATE no limite do banco e contagem de sessões persistidas                           |
+| 32/64 principais e seleção explícita                                    | Tracer `authoritative-game-creation.spec.ts`, componentes existentes                           |
+| Corrida real/ordem/retry/novo vínculo                                   | `tests/qa/cat06-postgres.test.ts` — **10/10 PostgreSQL real na R2; revisão do delta pendente** |
+| RLS sem novas exposições                                                | Nenhuma alteração de schema/policies; migrations reais aplicadas aos harnesses                 |
 
 O teste existente do repositório de saúde deixou de afirmar a sequência privada
 de SQL mockado. Os mesmos cinco comportamentos CAS/reconciliação são exercitados
@@ -94,7 +98,7 @@ Rotas adicionais somente em build `E2E_TEST_MODE=1`, exigindo header
 excluir `/e2e-test/authoritative-catalog/games` e `/jogo/[sessionId]` dessa fixture.
 Porta exclusiva da rodada: 3146.
 
-## PostgreSQL QA: gate pendente
+## PostgreSQL QA
 
 O harness é opt-in e recusa hosts externos. Exige `CAT06_QA_DISPOSABLE=1` e
 `CAT06_POSTGRES_ADMIN_URL` apontando para PostgreSQL **descartável em loopback**
@@ -110,10 +114,16 @@ Com o ambiente descartável disponibilizado e autorizado:
 node node_modules/vitest/vitest.mjs run --config tests/qa/vitest.config.ts
 ```
 
-Sem as variáveis, sete testes ficam explicitamente skipped; exit 0 nesse cenário
+Sem as variáveis, dez testes ficam explicitamente skipped; exit 0 nesse cenário
 **não** satisfaz o gate. Os testes usam barreiras de commit e `pg_stat_activity`
 para observar espera real: criação primeiro, saúde primeiro, 32/64, timeout real
-e mudança de vínculo durante aquisição. Não ajustar timeouts para fazê-los passar.
+e mudança de vínculo durante aquisição. A corrida de criação primeiro usa N
+candidatas, inclusive para 32, e entropia fixa válida: a Fonte degradada é sempre
+participante. Os dois cenários adicionais serializam criação A e importação B
+com Fontes compartilhadas em ordem inversa, verificando ausência de deadlock/retry,
+contagens completas e imutabilidade do snapshot depois de novas importações. O
+décimo cenário verifica datas e reconciliação de Fonte/observação inicialmente
+ausentes com o driver real. Não ajustar timeouts para fazê-los passar.
 
 ## Rollout, rollback e revisão
 
@@ -124,3 +134,31 @@ direta e a revalidação transacional. Não reescrever sessões/snapshots.
 Antes de ready-for-pm: executar PostgreSQL QA, revisar o SHA final com independência
 em segurança/dados e aceitar os gates do handoff. Esta rodada não autoriza push,
 PR, tracker, merge, deploy, migrations externas ou envio a outros chats.
+
+## Correções da revisão (R2)
+
+F1: o ramo legado constrói SQL sem editorial_state nem Disponibilidade. Duas
+regressões SQL com migrations 0–6 (e 0–6 + somente 0011) criam uma sessão, quatro
+snapshots distintos e três confrontos. Guardrails de produção continuam cobertos.
+
+F2: a corrida de 32 exige uma participante que agora pertence ao conjunto exato
+de N candidatas; não depende de uma seleção aleatória dentre 64 incluir a Fonte.
+
+F3: a ordem global abrange importPlaylistTracks, incluindo identidades de Fontes
+ainda inexistentes, sem depender de migrations autoritativas na importação.
+
+G1 (P3): centralizar o hash foi adiado. As duas fórmulas existentes permanecem
+equivalentes; este delta se limita a compatibilidade, prova e ordenação de locks.
+Não há novo grant, migration, dependência, cutover ou mudança de UI.
+
+F4 observado em QA PostgreSQL: parâmetros Date em SQL raw de saúde não eram
+serializados pelo driver. Os seis campos temporais são enviados em ISO UTC,
+preservando os instantes e nulls; o CAS e a política não mudam. Prova vermelha
+registrou ERR_INVALID_ARG_TYPE, e o cenário de reconciliação ficou verde após a
+correção isolada. A primeira execução vermelha de F2 foi bloqueada por F4; a
+reexecução depois de F4 demonstrou a assertion de participante falsa.
+
+Runtime de QA: PostgreSQL 17.11 descartável do PM, loopback 127.0.0.1:55436,
+sem credenciais de produto. Os dez testes executaram sem skips; os filtros das
+provas vermelhas excluíram explicitamente os demais cenários. Não há promoção ou
+aceite integral antes da revisão independente do commit incremental.

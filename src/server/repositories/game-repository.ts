@@ -249,15 +249,16 @@ export async function withGameCreationTransaction<T>(
                 const [theme] = await transaction
                   .select({
                     id: themes.id,
-                    isActive: themes.isActive,
-                    editorialState: themes.editorialState,
+                    isActive: authoritative
+                      ? sql<boolean>`${themes.editorialState} = 'published'`
+                      : themes.isActive,
                   })
                   .from(themes)
                   .where(eq(themes.id, themeId))
                   .limit(1);
                 if (!theme) return null;
 
-                const activeSongs = await transaction
+                const candidates = transaction
                   .select({
                     songId: songs.id,
                     title: themeSongs.title,
@@ -270,13 +271,17 @@ export async function withGameCreationTransaction<T>(
                   })
                   .from(themeSongs)
                   .innerJoin(songs, eq(songs.id, themeSongs.songId))
-                  .leftJoin(
-                    observations,
-                    and(
-                      eq(observations.songId, songs.id),
-                      eq(observations.region, context.policy.region),
-                    ),
-                  )
+                  .$dynamic();
+                const eligible = authoritative
+                  ? candidates.leftJoin(
+                      observations,
+                      and(
+                        eq(observations.songId, songs.id),
+                        eq(observations.region, context.policy.region),
+                      ),
+                    )
+                  : candidates;
+                const activeSongs = await eligible
                   .where(
                     and(
                       eq(themeSongs.themeId, themeId),
@@ -300,9 +305,7 @@ export async function withGameCreationTransaction<T>(
 
                 return {
                   id: theme.id,
-                  isActive: authoritative
-                    ? theme.editorialState === "published"
-                    : theme.isActive,
+                  isActive: theme.isActive,
                   songs: activeSongs,
                 };
               } finally {

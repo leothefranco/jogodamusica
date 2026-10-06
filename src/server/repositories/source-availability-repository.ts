@@ -138,12 +138,12 @@ function observationValues(observation: SourceAvailabilityObservation) {
     ${observation.confirmedState},
     ${observation.confirmationReason},
     ${observation.errorCode},
-    ${observation.observedAt},
-    ${observation.lastAttemptAt},
-    ${observation.lastConfirmedAt},
-    ${observation.validUntil},
-    ${observation.graceUntil},
-    ${observation.nextCheckAt},
+    ${observation.observedAt.toISOString()},
+    ${observation.lastAttemptAt.toISOString()},
+    ${observation.lastConfirmedAt?.toISOString() ?? null},
+    ${observation.validUntil?.toISOString() ?? null},
+    ${observation.graceUntil?.toISOString() ?? null},
+    ${observation.nextCheckAt.toISOString()},
     ${observation.revision},
     ${observation.policyVersion}
   `;
