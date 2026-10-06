@@ -12,6 +12,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { getRoundLabel } from "@/domain/game/experience";
 import type { projectCompletedGame } from "@/domain/game/projections";
 import { cn } from "@/lib/utils";
+import { siteConfig } from "@/lib/site";
 import type { GameState } from "@/domain/game/state";
 
 export function GameResult({
@@ -68,7 +69,7 @@ export function GameResult({
               </h2>
               <p className="mt-3 max-w-xl text-sm leading-6 text-[var(--app-muted)] sm:text-base">
                 Baixe a imagem para Stories e Status com o tema, a música
-                vencedora e o endereço do Jogo da Música.
+                vencedora e o endereço do {siteConfig.name}.
               </p>
               <div className="mt-6 flex flex-col gap-3 sm:flex-row">
                 <a

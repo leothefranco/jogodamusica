@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { getRoundLabel } from "@/domain/game/experience";
 import { projectCurrentConfrontation } from "@/domain/game/projections";
 import type { GameSong, GameState } from "@/domain/game/state";
+import { siteConfig } from "@/lib/site";
 
 function SongCard({
   label,
@@ -276,9 +277,10 @@ export function GameExperience({ initialState }: { initialState: GameState }) {
           <div className="min-w-0">
             <Link
               href="/"
+              aria-label={siteConfig.name}
               className="text-xs font-semibold tracking-[0.16em] text-[var(--foreground)] uppercase outline-none focus-visible:ring-2 focus-visible:ring-[var(--foreground)]"
             >
-              Jogo da Música
+              {siteConfig.shortName}
             </Link>
             <h1 ref={headingRef} tabIndex={-1} className="game-theme-name">
               {state.theme.name}

@@ -13,7 +13,13 @@ export const metadata: Metadata = {
   description: siteConfig.description,
   applicationName: siteConfig.name,
   manifest: "/manifest.webmanifest",
-  icons: { apple: "/icons/icon-192.png" },
+  icons: {
+    icon: [
+      { url: "/icons/icon-16.png", sizes: "16x16", type: "image/png" },
+      { url: "/icons/icon-32.png", sizes: "32x32", type: "image/png" },
+    ],
+    apple: "/icons/apple-icon.png",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",

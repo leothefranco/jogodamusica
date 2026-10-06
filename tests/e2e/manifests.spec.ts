@@ -13,8 +13,8 @@ test("GET /manifest.webmanifest preserva o contrato público", async ({
     "public, max-age=0, must-revalidate",
   );
   await expect(response.json()).resolves.toEqual({
-    name: "Jogo da Música",
-    short_name: "Jogo da Música",
+    name: "Last Track Standing",
+    short_name: "Last Track",
     description:
       "Compare músicas em confrontos eliminatórios e descubra a campeã do grupo.",
     start_url: "/",
@@ -35,6 +35,18 @@ test("GET /manifest.webmanifest preserva o contrato público", async ({
         sizes: "512x512",
         type: "image/png",
       },
+      {
+        src: "/icons/icon-maskable-192.png",
+        sizes: "192x192",
+        type: "image/png",
+        purpose: "maskable",
+      },
+      {
+        src: "/icons/icon-maskable-512.png",
+        sizes: "512x512",
+        type: "image/png",
+        purpose: "maskable",
+      },
     ],
   });
 });
@@ -53,9 +65,9 @@ test("GET /admin/manifest.webmanifest preserva o contrato administrativo", async
   );
   await expect(response.json()).resolves.toEqual({
     id: "/admin",
-    name: "Jogo da Música Admin",
-    short_name: "Jogo da Música Admin",
-    description: "Administre temas e músicas do Jogo da Música.",
+    name: "Last Track Standing Admin",
+    short_name: "LTS Admin",
+    description: "Administre temas e músicas do Last Track Standing.",
     start_url: "/admin",
     scope: "/admin",
     display: "standalone",
@@ -77,13 +89,13 @@ test("GET /admin/manifest.webmanifest preserva o contrato administrativo", async
         purpose: "any",
       },
       {
-        src: "/icons/admin-icon-192.png",
+        src: "/icons/admin-icon-maskable-192.png",
         sizes: "192x192",
         type: "image/png",
         purpose: "maskable",
       },
       {
-        src: "/icons/admin-icon-512.png",
+        src: "/icons/admin-icon-maskable-512.png",
         sizes: "512x512",
         type: "image/png",
         purpose: "maskable",

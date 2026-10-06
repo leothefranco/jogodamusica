@@ -3,6 +3,7 @@
 import { Download, Share2, X } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { siteConfig } from "@/lib/site";
 
 import {
   getInstallPromptDismissedUntil,
@@ -144,7 +145,7 @@ export function PwaManager() {
       </span>
       <div className="min-w-0 flex-1">
         <p className="font-bold">
-          Instale o {isAdmin ? "Jogo da Música Admin" : "Jogo da Música"}
+          Instale o {isAdmin ? siteConfig.adminName : siteConfig.name}
         </p>
         {showIOSInstructions ? (
           <p className="mt-1 leading-5 text-[var(--app-muted)]">
