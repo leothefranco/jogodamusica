@@ -125,7 +125,7 @@ describe("capa pública do tema", () => {
     );
 
     expect(html).toContain('data-theme-visual="placeholder"');
-    expect(html).toContain("Jogo da Música");
+    expect(html).toContain("Last Track Standing");
     expect(html).toContain("aspect-[16/9]");
   });
 });

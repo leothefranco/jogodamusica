@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import { cn } from "@/lib/utils";
+import { siteConfig } from "@/lib/site";
 
 type ThemeThumbnailStackProps = {
   thumbnailUrls: string[];
@@ -177,7 +178,7 @@ export function ThemeThumbnailStack({
       ) : (
         <span className="theme-visual-placeholder">
           <span className="theme-visual-placeholder-mark">♫</span>
-          <span>Jogo da Música</span>
+          <span>{siteConfig.name}</span>
         </span>
       )}
     </div>

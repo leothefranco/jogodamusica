@@ -1,16 +1,18 @@
 import type { Metadata, Viewport } from "next";
 
-const adminName = "Jogo da Música Admin";
+import { siteConfig } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: {
-    absolute: adminName,
+    absolute: siteConfig.adminName,
   },
-  description: "Administre temas e músicas do Jogo da Música.",
-  applicationName: adminName,
+  description: `Administre temas e músicas do ${siteConfig.name}.`,
+  applicationName: siteConfig.adminName,
   manifest: "/admin/manifest.webmanifest",
   icons: {
     icon: [
+      { url: "/icons/admin-icon-16.png", sizes: "16x16", type: "image/png" },
+      { url: "/icons/admin-icon-32.png", sizes: "32x32", type: "image/png" },
       {
         url: "/icons/admin-icon-192.png",
         sizes: "192x192",
@@ -24,8 +26,8 @@ export const metadata: Metadata = {
     ],
     apple: [
       {
-        url: "/icons/admin-icon-192.png",
-        sizes: "192x192",
+        url: "/icons/admin-apple-icon.png",
+        sizes: "180x180",
         type: "image/png",
       },
     ],
@@ -33,7 +35,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: adminName,
+    title: siteConfig.adminShortName,
   },
 };
 

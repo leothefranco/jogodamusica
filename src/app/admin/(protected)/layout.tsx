@@ -3,6 +3,7 @@ import { AudioLines, LayoutDashboard, Library, LogOut } from "lucide-react";
 
 import { logoutAction } from "@/app/admin/login/actions";
 import { Button } from "@/components/ui/button";
+import { siteConfig } from "@/lib/site";
 import { requireAdmin } from "@/server/auth/session";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +27,7 @@ export default async function ProtectedAdminLayout({
               <AudioLines className="size-4.5" aria-hidden="true" />
             </span>
             <span className="text-sm font-bold">
-              Jogo da Música{" "}
+              {siteConfig.shortName}{" "}
               <span className="hidden text-white/35 sm:inline">/ Admin</span>
             </span>
           </Link>
