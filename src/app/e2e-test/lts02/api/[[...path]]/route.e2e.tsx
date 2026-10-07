@@ -11,9 +11,14 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ path?: string[] }> },
 ) {
-  const { service } = await getFixture();
+  const fixture = await getFixture();
+  const { service } = fixture;
   return handlePublicGameRequest(async () => {
     const path = (await params).path ?? [];
+    if (path[0] === "recover") {
+      fixture.recoverRender();
+      return Response.json({ recovered: true });
+    }
     if (!path.length) {
       const input = await parsePublicGameBody(request, createGameInputSchema);
       const { sessionId } = await service.createSession(input);

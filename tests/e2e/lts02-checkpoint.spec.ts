@@ -1,6 +1,5 @@
+import { installLts02YouTube } from "./support/lts02-youtube";
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
-import ts from "typescript";
 import { expect, test } from "playwright/test";
 
 // Only external boundaries are simulated: YouTube SDK, image delivery and DB.
@@ -17,16 +16,7 @@ test("C/Encore: quatro músicas, três decisões e repetição preservada", asyn
     "x-e2e-test": "lts02",
     "x-lts02-fixture": randomUUID(),
   });
-  const sdkSource = readFileSync("tests/e2e/two-players.spec.ts", "utf8");
-  const sdk = sdkSource.match(
-    /await page\.addInitScript\((\(\) => \{[\s\S]*?)\r?\n  \}\);/,
-  );
-  if (!sdk) throw new Error("External SDK fixture unavailable");
-  await page.addInitScript({
-    content: ts.transpile(`(${sdk[1]}\n})()`, {
-      target: ts.ScriptTarget.ES2020,
-    }),
-  });
+  await installLts02YouTube(page);
   await page.route("**/e2e-test/lts02/thumbnail/**", (route) =>
     route.fulfill({
       contentType: "image/svg+xml",

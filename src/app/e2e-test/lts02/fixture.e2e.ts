@@ -4,43 +4,86 @@ import { notFound } from "next/navigation";
 import { randomUUID } from "node:crypto";
 import type { GameState, GameSong } from "@/domain/game/state";
 import { createGameService } from "@/server/services/game-service";
-import { createPublicThemeService } from "@/server/services/public-theme-service";
+import {
+  createPublicThemeService,
+  createAuthoritativePublicThemeService,
+} from "@/server/services/public-theme-service";
 import type { GameDecisionRepository } from "@/server/repositories/game-repository-contract";
 
 export const themeId = "10000000-0000-4000-8000-000000000002";
-const theme = {
-  id: themeId,
-  name: "Noites de música",
-  slug: "noites-de-musica",
-  description: "Quatro faixas para ouvir, comparar e escolher juntos.",
-  coverUrl: null,
-  thumbnailUrls: Array.from(
-    { length: 4 },
-    (_, index) => `/e2e-test/lts02/thumbnail/${index}`,
-  ),
-  activeSongCount: 4,
-};
-const tracks: GameSong[] = [
-  "Luzes da cidade",
-  "Último trem",
-  "Depois da meia-noite",
-  "Até o amanhecer",
-].map((title, index) => ({
-  songId: `30000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
-  title,
-  artist: ["Aurora", "Linha Azul", "Horizonte", "Estação"][index],
-  thumbnailUrl: theme.thumbnailUrls[index],
-  provider: "youtube",
-  providerContentId: `video${String(index + 1).padStart(6, "0")}`,
-  startTimeSeconds: 0,
-  previewDurationSeconds: 30,
-}));
-const catalog = createPublicThemeService({
-  listPlayableThemes: async () => [theme],
-  findPlayableThemeBySlug: async (slug) => (slug === theme.slug ? theme : null),
-});
-
-function createHarness() {
+function createHarness(
+  count: number,
+  longNames: boolean,
+  authoritative: boolean,
+  catalogWindow: boolean,
+) {
+  const theme = {
+    id: themeId,
+    name: longNames
+      ? "Canções que atravessam gerações e acompanham nossas noites de música, encontros e memórias compartilhadas"
+      : "Noites de música",
+    slug: "noites-de-musica",
+    description: "Faixas para ouvir, comparar e escolher juntos.",
+    coverUrl: null,
+    thumbnailUrls: Array.from(
+      { length: Math.min(count, 4) },
+      (_, index) => `/e2e-test/lts02/thumbnail/${index}`,
+    ),
+    activeSongCount: count,
+  };
+  const tracks: GameSong[] = Array.from({ length: count }, (_, index) => ({
+    songId: `30000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+    title: longNames
+      ? `Canção ${index + 1} — O último encontro depois da meia-noite entre as luzes da cidade e os caminhos do amanhecer`
+      : ([
+          "Luzes da cidade",
+          "Último trem",
+          "Depois da meia-noite",
+          "Até o amanhecer",
+        ][index] ?? `Música ${index + 1}`),
+    artist: longNames
+      ? "Orquestra das lembranças e do horizonte que nunca termina"
+      : (["Aurora", "Linha Azul", "Horizonte", "Estação"][index] ??
+        `Artista ${index + 1}`),
+    thumbnailUrl: `/e2e-test/lts02/thumbnail/${index % 4}`,
+    provider: "youtube",
+    providerContentId: `video${String(index + 1).padStart(6, "0")}`,
+    startTimeSeconds: 0,
+    previewDurationSeconds: 30,
+  }));
+  const catalog = authoritative
+    ? createAuthoritativePublicThemeService({
+        clock: () => new Date(),
+        queryThemes: async ({ slug, page = 1 }) => {
+          const record = {
+            ...theme,
+            editorialState: "published" as const,
+            counts: {
+              availableFresh: tracks.length,
+              availableGrace: 0,
+              unknown: 0,
+              unavailable: 0,
+            },
+          };
+          if (slug && slug !== theme.slug) return [];
+          if (catalogWindow && !slug && page === 1)
+            return [
+              ...Array.from({ length: 200 }, (_, index) => ({
+                ...record,
+                id: `70000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+                name: `A oculto ${String(index).padStart(3, "0")}`,
+                counts: { ...record.counts, availableFresh: 3 },
+              })),
+              record,
+            ];
+          return [record];
+        },
+      })
+    : createPublicThemeService({
+        listPlayableThemes: async () => [theme],
+        findPlayableThemeBySlug: async (slug) =>
+          slug === theme.slug ? theme : null,
+      });
   const states = new Map<string, GameState>();
   let queue = Promise.resolve();
   const service = createGameService({
@@ -139,7 +182,15 @@ function createHarness() {
       }
     },
   });
-  return { service, catalog };
+  let renderFailure = true;
+  return {
+    service,
+    catalog,
+    hasRenderFailure: () => renderFailure,
+    recoverRender: () => {
+      renderFailure = false;
+    },
+  };
 }
 const fixtureGlobal = globalThis as typeof globalThis & {
   lts02Harnesses?: Map<string, ReturnType<typeof createHarness>>;
@@ -154,11 +205,18 @@ export async function getFixture() {
     !/^[a-z0-9-]{1,64}$/.test(namespace)
   )
     notFound();
+  const count = Number(requestHeaders.get("x-lts02-count") ?? "4");
+  if (!Number.isInteger(count) || count < 0 || count > 128) notFound();
+  const longNames = requestHeaders.get("x-lts02-long-names") === "1";
+  const authoritative =
+    requestHeaders.get("x-lts02-catalog") === "authoritative";
+  const catalogWindow = requestHeaders.get("x-lts02-catalog-window") === "1";
+  const key = `${namespace}:${count}:${longNames}:${authoritative}:${catalogWindow}`;
   const fixtures = (fixtureGlobal.lts02Harnesses ??= new Map());
-  let fixture = fixtures.get(namespace);
+  let fixture = fixtures.get(key);
   if (!fixture) {
-    fixture = createHarness();
-    fixtures.set(namespace, fixture);
+    fixture = createHarness(count, longNames, authoritative, catalogWindow);
+    fixtures.set(key, fixture);
   }
   return fixture;
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import { BrandMark } from "@/components/brand-mark";
+
 import { Dialog } from "@base-ui/react/dialog";
 import { LoaderCircle } from "lucide-react";
 
@@ -87,6 +89,9 @@ export function DecisionConfirmation({
         <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm" />
         <Dialog.Viewport className="fixed inset-0 z-50 grid place-items-center p-5">
           <Dialog.Popup className="game-decision-dialog w-full max-w-sm rounded-2xl border border-white/12 bg-[#101216] p-5 text-white shadow-2xl">
+            <div className="mb-3" aria-hidden="true">
+              <BrandMark size={24} />
+            </div>
             <Dialog.Title className="text-xl font-black">{title}</Dialog.Title>
             <Dialog.Description className="mt-2 text-sm leading-6 text-white/65">
               {isTiebreak

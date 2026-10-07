@@ -84,6 +84,17 @@ function SongCard({
         >
           {playerError}
         </p>
+        {playerError ? (
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={!canVote || voting}
+            onClick={() => window.location.reload()}
+            className="mt-2 min-h-12 w-full rounded-xl"
+          >
+            Recarregar os vídeos
+          </Button>
+        ) : null}
       </div>
       <Button
         type="button"

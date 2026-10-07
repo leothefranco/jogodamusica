@@ -1,3 +1,5 @@
+import { BrandMark } from "@/components/brand-mark";
+import { siteConfig } from "@/lib/site";
 import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
@@ -22,21 +24,16 @@ export function FullPageState({
   return (
     <main className="grid min-h-screen place-items-center bg-[var(--app-bg)] px-5 text-white">
       <div className="w-full max-w-md py-12 text-center">
-        <div
-          aria-hidden="true"
-          className="mx-auto mb-8 grid h-1 w-28 grid-cols-2 gap-2"
-        >
-          <span className="bg-[var(--duel-a)]" />
-          <span className="bg-[var(--duel-b)]" />
+        <div className="mb-8 flex items-center justify-center gap-3">
+          <BrandMark size={40} />
+          <p className="text-sm font-extrabold">{siteConfig.name}</p>
         </div>
         {icon}
         {eyebrow ? (
           <p
             className={cn(
               "mt-5 text-xs font-bold tracking-[0.18em] uppercase",
-              eyebrowTone === "danger"
-                ? "text-red-200"
-                : "text-[var(--duel-a)]",
+              eyebrowTone === "danger" ? "text-red-200" : "text-[#D4FF46]",
             )}
           >
             {eyebrow}

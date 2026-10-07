@@ -308,6 +308,7 @@
   grid-column: 1;
   grid-row: 1 / span 3;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: subgrid;
   min-width: 0;
   padding: 12px;
