@@ -296,3 +296,72 @@ test("CTA por Tab mostra foco e contraste medidos", async ({ page }, info) => {
     fullPage: true,
   });
 });
+
+test("Desempate: rótulos e artistas dos dois cards têm contraste de texto pequeno", async ({
+  page,
+}, info) => {
+  await setup(page);
+  await start(page);
+  await page
+    .getByRole("button", { name: "Sortear vencedora do confronto" })
+    .click();
+  await page
+    .getByRole("button", { name: "Sortear vencedora", exact: true })
+    .click();
+  const reveal = page.getByRole("status", { name: "Roleta de desempate" });
+  await expect(reveal).toBeVisible();
+  const ratios = await reveal
+    .locator(".game-reveal-label,.game-reveal-card p:last-child")
+    .evaluateAll((elements) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 1;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+      const parse = (s: string) => {
+        ctx.clearRect(0, 0, 1, 1);
+        ctx.fillStyle = s;
+        ctx.fillRect(0, 0, 1, 1);
+        const a = ctx.getImageData(0, 0, 1, 1).data;
+        return [a[0], a[1], a[2], a[3] / 255];
+      };
+      const mix = (a: number[], b: number[]) =>
+        a.slice(0, 3).map((v, i) => v * a[3] + b[i] * (1 - a[3]));
+      const luminance = (c: number[]) =>
+        c
+          .map((v) => v / 255)
+          .map((v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
+          .reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
+      return elements.map((el) => {
+        const chain = [];
+        let opacity = 1;
+        for (let n: Element | null = el; n; n = n.parentElement) {
+          const s = getComputedStyle(n);
+          chain.push({ color: s.backgroundColor, opacity: Number(s.opacity) });
+          opacity *= Number(s.opacity);
+        }
+        let bg = [255, 255, 255];
+        for (const item of chain.reverse()) {
+          const c = parse(item.color);
+          c[3] *= item.opacity;
+          bg = mix(c, bg);
+        }
+        const color = parse(getComputedStyle(el).color);
+        color[3] *= opacity;
+        const fg = mix(color, bg);
+        return {
+          text: el.textContent,
+          ratio:
+            (Math.max(luminance(fg), luminance(bg)) + 0.05) /
+            (Math.min(luminance(fg), luminance(bg)) + 0.05),
+          opacity,
+        };
+      });
+    });
+  await info.attach("reveal-text-contrast", {
+    body: JSON.stringify(ratios, null, 2),
+    contentType: "application/json",
+  });
+  await page.screenshot({ path: info.outputPath("reveal-contrast.png") });
+  expect(ratios).toHaveLength(4);
+  for (const measured of ratios)
+    expect(measured.ratio, measured.text).toBeGreaterThanOrEqual(4.5);
+});

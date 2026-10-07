@@ -34,7 +34,7 @@ function TiebreakSongCard({
       className={`game-reveal-card overflow-hidden rounded-2xl border text-left transition-all ${
         active
           ? "scale-[1.02] border-white bg-white/10"
-          : "border-white/10 bg-white/5 opacity-60"
+          : "border-white/10 bg-white/5"
       }`}
     >
       <div
