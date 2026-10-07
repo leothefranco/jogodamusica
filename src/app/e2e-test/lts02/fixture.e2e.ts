@@ -11,11 +11,18 @@ import {
 import type { GameDecisionRepository } from "@/server/repositories/game-repository-contract";
 
 export const themeId = "10000000-0000-4000-8000-000000000002";
+type FixtureData = {
+  playableCount: number;
+  states: Map<string, GameState>;
+  queue: Promise<void>;
+  renderFailure: boolean;
+};
 function createHarness(
   count: number,
   longNames: boolean,
   authoritative: boolean,
   catalogWindow: boolean,
+  data: FixtureData,
 ) {
   const theme = {
     id: themeId,
@@ -59,7 +66,7 @@ function createHarness(
             ...theme,
             editorialState: "published" as const,
             counts: {
-              availableFresh: tracks.length,
+              availableFresh: data.playableCount,
               availableGrace: 0,
               unknown: 0,
               unavailable: 0,
@@ -84,17 +91,25 @@ function createHarness(
         findPlayableThemeBySlug: async (slug) =>
           slug === theme.slug ? theme : null,
       });
-  const states = new Map<string, GameState>();
-  let queue = Promise.resolve();
+  const { states } = data;
   const service = createGameService({
     now: () => new Date(),
     random: () => 0,
     getGameState: async (id) => structuredClone(states.get(id) ?? null),
     async withGameCreationTransaction(requestedThemeId, operation) {
       return operation({
+        creationContext: {
+          authoritative,
+          now: new Date(),
+          policy: { version: 1, region: "BR" },
+        },
         async getThemeWithActiveSongs() {
           return requestedThemeId === themeId
-            ? { id: themeId, isActive: true, songs: tracks }
+            ? {
+                id: themeId,
+                isActive: true,
+                songs: tracks.slice(0, data.playableCount),
+              }
             : null;
         },
         async createGame(plan) {
@@ -123,9 +138,9 @@ function createHarness(
       });
     },
     async withGameDecisionTransaction(id, operation) {
-      const previous = queue;
+      const previous = data.queue;
       let release = () => {};
-      queue = new Promise<void>((resolve) => {
+      data.queue = new Promise<void>((resolve) => {
         release = resolve;
       });
       await previous;
@@ -182,18 +197,33 @@ function createHarness(
       }
     },
   });
-  let renderFailure = true;
   return {
     service,
     catalog,
-    hasRenderFailure: () => renderFailure,
+    setPlayableCount: (next: number) => {
+      if (!Number.isInteger(next) || next < 0 || next > count)
+        throw new Error("Invalid fixture availability");
+      data.playableCount = next;
+    },
+    diagnostics: () => ({
+      sessions: states.size,
+      snapshots: [...states.values()].reduce(
+        (sum, state) => sum + state.songs.length,
+        0,
+      ),
+      matches: [...states.values()].reduce(
+        (sum, state) => sum + state.matches.length,
+        0,
+      ),
+    }),
+    hasRenderFailure: () => data.renderFailure,
     recoverRender: () => {
-      renderFailure = false;
+      data.renderFailure = false;
     },
   };
 }
 const fixtureGlobal = globalThis as typeof globalThis & {
-  lts02Harnesses?: Map<string, ReturnType<typeof createHarness>>;
+  lts02Harnesses?: Map<string, FixtureData>;
 };
 export async function getFixture() {
   const requestHeaders = await headers();
@@ -213,10 +243,16 @@ export async function getFixture() {
   const catalogWindow = requestHeaders.get("x-lts02-catalog-window") === "1";
   const key = `${namespace}:${count}:${longNames}:${authoritative}:${catalogWindow}`;
   const fixtures = (fixtureGlobal.lts02Harnesses ??= new Map());
-  let fixture = fixtures.get(key);
-  if (!fixture) {
-    fixture = createHarness(count, longNames, authoritative, catalogWindow);
-    fixtures.set(key, fixture);
+  let data = fixtures.get(key);
+  if (!data) {
+    data = {
+      playableCount: count,
+      states: new Map(),
+      queue: Promise.resolve(),
+      renderFailure: true,
+    };
+    fixtures.set(key, data);
   }
-  return fixture;
+  // Cache data only: SSR and route bundles must construct their own service/errors.
+  return createHarness(count, longNames, authoritative, catalogWindow, data);
 }
