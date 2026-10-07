@@ -43,6 +43,7 @@ export type GameServiceDependencies = {
   withGameCreationTransaction<T>(
     themeId: string,
     operation: (repository: GameCreationRepository) => Promise<T>,
+    options?: { bracketSize?: BracketSize },
   ): Promise<T>;
   withGameDecisionTransaction<T>(
     sessionId: string,
@@ -80,6 +81,16 @@ export function createGameService(dependencies: GameServiceDependencies) {
         input.themeId,
         async (repository) => {
           const theme = await repository.getThemeWithActiveSongs();
+          if (
+            repository.creationContext?.authoritative &&
+            (!theme?.isActive || theme.songs.length < input.bracketSize)
+          ) {
+            throw new AppError(
+              "INSUFFICIENT_ACTIVE_SONGS",
+              "Este tema não está disponível para esta modalidade.",
+              409,
+            );
+          }
           if (!theme) {
             throw new AppError("THEME_NOT_FOUND", "Tema não encontrado.", 404);
           }
@@ -96,7 +107,8 @@ export function createGameService(dependencies: GameServiceDependencies) {
             input.bracketSize,
             dependencies.random,
           );
-          const startedAt = dependencies.now();
+          const startedAt =
+            repository.creationContext?.now ?? dependencies.now();
           const bracket = createBracket(
             selectedSongs.map(({ songId }) => songId),
             input.bracketSize,
@@ -129,6 +141,7 @@ export function createGameService(dependencies: GameServiceDependencies) {
 
           return { sessionId };
         },
+        { bracketSize: input.bracketSize },
       );
     },
 

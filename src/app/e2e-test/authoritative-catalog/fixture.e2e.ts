@@ -7,6 +7,11 @@ import { drizzle } from "drizzle-orm/pglite";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 
+import { createGameService } from "@/server/services/game-service";
+import {
+  getGameStateRecord,
+  withGameCreationTransaction,
+} from "@/server/repositories/game-repository";
 import * as schema from "@/db/schema";
 import { createAuthoritativePublicThemeRepository } from "@/server/repositories/authoritative-public-theme-repository";
 import { createAuthoritativePublicThemeService } from "@/server/services/public-theme-service";
@@ -92,10 +97,26 @@ async function createFixture() {
       })),
     ),
   );
-  return createAuthoritativePublicThemeService({
+  const catalog = createAuthoritativePublicThemeService({
     ...createAuthoritativePublicThemeRepository(database),
     clock: () => now,
   });
+  const games = createGameService({
+    getGameState: (id) => getGameStateRecord(id, database),
+    now: () => now,
+    random: Math.random,
+    withGameCreationTransaction: (id, operation, options) =>
+      withGameCreationTransaction(
+        id,
+        operation,
+        { ...options, authoritative: true, clock: () => now },
+        database,
+      ),
+    withGameDecisionTransaction: async () => {
+      throw new Error("Fixture only supports creation");
+    },
+  });
+  return { ...catalog, games };
 }
 
 const fixtureGlobal = globalThis as typeof globalThis & {

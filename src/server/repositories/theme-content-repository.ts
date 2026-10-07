@@ -4,6 +4,11 @@ import { and, asc, count, desc, eq, sql } from "drizzle-orm";
 
 import { getDatabase } from "@/db";
 import {
+  configureCatalogTransaction,
+  lockCatalogSources,
+  retryCatalogTransaction,
+} from "@/server/repositories/catalog-transaction";
+import {
   adminProfiles,
   gameSessions,
   songs,
@@ -1096,85 +1101,97 @@ export async function importPlaylistTracks(
     providerContentIdsToCountAsExisting: string[];
   },
 ): Promise<{ added: number; alreadyAssociated: number }> {
-  return getDatabase().transaction(async (transaction) => {
-    const locked = await transaction.execute(
-      sql`select ${themes.id} from ${themes} where ${themes.id} = ${themeId} for update`,
-    );
-    if (locked.length === 0) {
-      throw new AppError("THEME_NOT_FOUND", "Tema não encontrado.", 404);
-    }
+  return retryCatalogTransaction(() =>
+    getDatabase().transaction(async (transaction) => {
+      await configureCatalogTransaction(transaction);
+      const locked = await transaction.execute(
+        sql`select ${themes.id} from ${themes} where ${themes.id} = ${themeId} for update`,
+      );
+      if (locked.length === 0) {
+        throw new AppError("THEME_NOT_FOUND", "Tema não encontrado.", 404);
+      }
 
-    let added = 0;
-    let alreadyAssociated = 0;
-    const idsToAssociate = new Set(options.providerContentIdsToAssociate);
-    const idsToCountAsExisting = new Set(
-      options.providerContentIdsToCountAsExisting,
-    );
+      // Acquire every identity/row in the coordinator's order, including new
+      // sources, before playlist-order writes. Import never reads health tables.
+      await lockCatalogSources(
+        transaction,
+        tracks.map((track) => track.providerContentId),
+        SOURCE_AVAILABILITY_POLICY.region,
+        { observations: false },
+      );
 
-    for (const track of tracks) {
-      const [song] = await transaction
-        .insert(songs)
-        .values({
-          provider: "youtube",
-          providerContentId: track.providerContentId,
-          sourceTitle: track.sourceTitle,
-          sourceChannel: track.sourceChannel,
-          thumbnailUrl: track.thumbnailUrl,
-          durationSeconds: track.durationSeconds,
-          isEmbeddable: track.isEmbeddable,
-        })
-        .onConflictDoUpdate({
-          target: [songs.provider, songs.providerContentId],
-          set: {
+      let added = 0;
+      let alreadyAssociated = 0;
+      const idsToAssociate = new Set(options.providerContentIdsToAssociate);
+      const idsToCountAsExisting = new Set(
+        options.providerContentIdsToCountAsExisting,
+      );
+
+      for (const track of tracks) {
+        const [song] = await transaction
+          .insert(songs)
+          .values({
+            provider: "youtube",
+            providerContentId: track.providerContentId,
             sourceTitle: track.sourceTitle,
             sourceChannel: track.sourceChannel,
             thumbnailUrl: track.thumbnailUrl,
             durationSeconds: track.durationSeconds,
             isEmbeddable: track.isEmbeddable,
-            updatedAt: new Date(),
-          },
-        })
-        .returning({ id: songs.id });
+          })
+          .onConflictDoUpdate({
+            target: [songs.provider, songs.providerContentId],
+            set: {
+              sourceTitle: track.sourceTitle,
+              sourceChannel: track.sourceChannel,
+              thumbnailUrl: track.thumbnailUrl,
+              durationSeconds: track.durationSeconds,
+              isEmbeddable: track.isEmbeddable,
+              updatedAt: new Date(),
+            },
+          })
+          .returning({ id: songs.id });
 
-      if (!idsToAssociate.has(track.providerContentId)) {
-        if (!idsToCountAsExisting.has(track.providerContentId)) continue;
-        const existingAssociation = await transaction
-          .select({ songId: themeSongs.songId })
-          .from(themeSongs)
-          .where(
-            and(
-              eq(themeSongs.themeId, themeId),
-              eq(themeSongs.songId, song.id),
-            ),
-          )
-          .limit(1);
-        if (existingAssociation.length > 0) alreadyAssociated += 1;
-        continue;
+        if (!idsToAssociate.has(track.providerContentId)) {
+          if (!idsToCountAsExisting.has(track.providerContentId)) continue;
+          const existingAssociation = await transaction
+            .select({ songId: themeSongs.songId })
+            .from(themeSongs)
+            .where(
+              and(
+                eq(themeSongs.themeId, themeId),
+                eq(themeSongs.songId, song.id),
+              ),
+            )
+            .limit(1);
+          if (existingAssociation.length > 0) alreadyAssociated += 1;
+          continue;
+        }
+
+        const inserted = await transaction
+          .insert(themeSongs)
+          .values({
+            themeId,
+            songId: song.id,
+            title: track.sourceTitle,
+            artist: track.sourceChannel,
+            startTimeSeconds: 0,
+            previewDurationSeconds: track.durationSeconds,
+            isActive: true,
+            displayOrder: null,
+          })
+          .onConflictDoNothing({
+            target: [themeSongs.themeId, themeSongs.songId],
+          })
+          .returning({ songId: themeSongs.songId });
+
+        if (inserted.length > 0) added += 1;
+        else alreadyAssociated += 1;
       }
 
-      const inserted = await transaction
-        .insert(themeSongs)
-        .values({
-          themeId,
-          songId: song.id,
-          title: track.sourceTitle,
-          artist: track.sourceChannel,
-          startTimeSeconds: 0,
-          previewDurationSeconds: track.durationSeconds,
-          isActive: true,
-          displayOrder: null,
-        })
-        .onConflictDoNothing({
-          target: [themeSongs.themeId, themeSongs.songId],
-        })
-        .returning({ songId: themeSongs.songId });
-
-      if (inserted.length > 0) added += 1;
-      else alreadyAssociated += 1;
-    }
-
-    return { added, alreadyAssociated };
-  });
+      return { added, alreadyAssociated };
+    }),
+  );
 }
 
 export type LockedThemeContentRepository = {
