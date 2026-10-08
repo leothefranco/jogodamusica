@@ -1,4 +1,5 @@
 import "server-only";
+import { themeProjectionWritesEnabled } from "@/server/repositories/theme-projection-repository";
 
 import { connection } from "next/server";
 import { cache } from "react";
@@ -15,6 +16,7 @@ import {
   type PublicCatalogQuery,
 } from "@/server/repositories/authoritative-public-theme-repository";
 import { AppError } from "@/lib/errors";
+import { createProjectedPublicThemeRepository } from "@/server/repositories/projected-public-theme-repository";
 
 import {
   getSupportedBracketSizes,
@@ -38,7 +40,7 @@ export type PublicTheme = PlayableThemeRecord & {
 
 export type PublicCatalogReadMetric = {
   metric: "public_catalog_read";
-  mode: "legacy_guardrail" | "authoritative_direct";
+  mode: "legacy_guardrail" | "authoritative_direct" | "authoritative_projected";
   policyVersion: typeof SOURCE_AVAILABILITY_POLICY.version;
   durationMs: number;
   examinedThemes: number;
@@ -138,6 +140,7 @@ export function createPublicThemeService(
 export function createAuthoritativePublicThemeService(dependencies: {
   queryThemes(query: PublicCatalogQuery): Promise<AuthoritativeThemeRecord[]>;
   clock(): Date;
+  readMode?: "authoritative_direct" | "authoritative_projected";
   metrics?: PublicCatalogMetrics;
 }) {
   async function read(slug?: string, page = 1): Promise<PublicCatalogPage> {
@@ -181,7 +184,7 @@ export function createAuthoritativePublicThemeService(dependencies: {
     });
     recordMetric(dependencies.metrics, {
       metric: "public_catalog_read",
-      mode: "authoritative_direct",
+      mode: dependencies.readMode ?? "authoritative_direct",
       policyVersion: SOURCE_AVAILABILITY_POLICY.version,
       durationMs: performance.now() - startedAt,
       examinedThemes: rows.length,
@@ -219,9 +222,22 @@ function currentService() {
     process.env.VERCEL_ENV === "preview" ||
     (process.env.VERCEL_ENV !== "production" &&
       process.env.NODE_ENV !== "production");
-  if (isQa && process.env.PUBLIC_CATALOG_READ_MODE === "authoritative_direct") {
+  if (
+    isQa &&
+    ["authoritative_direct", "authoritative_projected"].includes(
+      process.env.PUBLIC_CATALOG_READ_MODE ?? "",
+    )
+  ) {
+    const useProjection =
+      process.env.PUBLIC_CATALOG_READ_MODE === "authoritative_projected" &&
+      themeProjectionWritesEnabled();
     return createAuthoritativePublicThemeService({
-      ...createAuthoritativePublicThemeRepository(getDatabase()),
+      ...(useProjection
+        ? createProjectedPublicThemeRepository(getDatabase())
+        : createAuthoritativePublicThemeRepository(getDatabase())),
+      readMode: useProjection
+        ? "authoritative_projected"
+        : "authoritative_direct",
       clock: () => new Date(),
       metrics: {
         record(event) {

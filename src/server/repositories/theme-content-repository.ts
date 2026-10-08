@@ -684,7 +684,22 @@ async function isThemeCoverUrlReferencedUsing(
 }
 
 export async function insertTheme(values: NewTheme): Promise<string> {
-  return insertThemeUsing(getDatabase(), values);
+  if (!themeProjectionWritesEnabled())
+    return insertThemeUsing(getDatabase(), values);
+  const context = captureProjectionContext();
+  const { themeId, metric } = await getDatabase().transaction(
+    async (transaction) => {
+      const themeId = await insertThemeUsing(transaction, values);
+      const { metric } = await recalculateThemeProjectionUsing(
+        transaction,
+        themeId,
+        context,
+      );
+      return { themeId, metric };
+    },
+  );
+  recordThemeProjectionMetric(metric);
+  return themeId;
 }
 
 export async function findThemeBySlug(slug: string) {
@@ -829,7 +844,9 @@ export async function withThemeCoverClaimPersistence<
   operation: (repository: LockedThemeCreationRepository) => Promise<T>,
 ): Promise<T> {
   assertTrustedThemeCoverClaimInput(claim);
-  return getDatabase().transaction(async (transaction) => {
+  const context = captureProjectionContext();
+  const metrics: ThemeProjectionMetric[] = [];
+  const result = await getDatabase().transaction(async (transaction) => {
     await lockThemeCoverClaim(transaction, claim);
     await assertActiveThemeCoverOwner(transaction, claim);
     const current = await findThemeCoverClaimUsing(transaction, claim);
@@ -844,10 +861,27 @@ export async function withThemeCoverClaimPersistence<
 
     const result = await operation({
       findBySlug: (slug) => findThemeBySlugUsing(transaction, slug),
-      insert: (values) =>
-        transaction.transaction((savepoint) =>
-          insertThemeIfSlugAvailableUsing(savepoint, values),
-        ),
+      insert: async (values) => {
+        const inserted = await transaction.transaction(async (savepoint) => {
+          const themeId = await insertThemeIfSlugAvailableUsing(
+            savepoint,
+            values,
+          );
+          const metric =
+            themeId && themeProjectionWritesEnabled()
+              ? (
+                  await recalculateThemeProjectionUsing(
+                    savepoint,
+                    themeId,
+                    context,
+                  )
+                ).metric
+              : undefined;
+          return { themeId, metric };
+        });
+        if (inserted.metric) metrics.push(inserted.metric);
+        return inserted.themeId;
+      },
       isCoverUrlReferenced: (url) =>
         isThemeCoverUrlReferencedUsing(transaction, url),
     });
@@ -875,6 +909,8 @@ export async function withThemeCoverClaimPersistence<
 
     return result;
   });
+  metrics.forEach(recordThemeProjectionMetric);
+  return result;
 }
 
 export async function prepareThemeCoverCleanup(
@@ -998,27 +1034,53 @@ export async function withThemeCoverUrlLock<T>(
   coverUrl: string,
   operation: (repository: LockedThemeCreationRepository) => Promise<T>,
 ): Promise<T> {
-  return getDatabase().transaction(async (transaction) => {
+  const context = captureProjectionContext();
+  const metrics: ThemeProjectionMetric[] = [];
+  const result = await getDatabase().transaction(async (transaction) => {
     await transaction.execute(
       sql`select pg_advisory_xact_lock(hashtextextended(${coverUrl}, 0::bigint))`,
     );
 
     return operation({
       findBySlug: (slug) => findThemeBySlugUsing(transaction, slug),
-      insert: (values) =>
-        transaction.transaction((savepoint) =>
-          insertThemeIfSlugAvailableUsing(savepoint, values),
-        ),
+      insert: async (values) => {
+        const inserted = await transaction.transaction(async (savepoint) => {
+          const themeId = await insertThemeIfSlugAvailableUsing(
+            savepoint,
+            values,
+          );
+          const metric =
+            themeId && themeProjectionWritesEnabled()
+              ? (
+                  await recalculateThemeProjectionUsing(
+                    savepoint,
+                    themeId,
+                    context,
+                  )
+                ).metric
+              : undefined;
+          return { themeId, metric };
+        });
+        if (inserted.metric) metrics.push(inserted.metric);
+        return inserted.themeId;
+      },
       isCoverUrlReferenced: (url) =>
         isThemeCoverUrlReferencedUsing(transaction, url),
     });
   });
+  metrics.forEach(recordThemeProjectionMetric);
+  return result;
 }
 
 export async function updateThemeRecord(
   themeId: string,
   values: Partial<NewTheme>,
 ) {
+  if (themeProjectionWritesEnabled()) {
+    return withThemeContentLock(themeId, (repository) =>
+      repository.updateThemeRecord(values),
+    );
+  }
   return updateThemeRecordUsing(getDatabase(), themeId, values);
 }
 
@@ -1059,12 +1121,22 @@ export async function deleteThemeRecord(themeId: string) {
 export async function upsertSongAndAssociation(
   input: SongAssociationUpsertInput,
 ) {
+  if (themeProjectionWritesEnabled()) {
+    return withThemeContentLock(input.themeId, (repository) =>
+      repository.upsertSongAndAssociation(input),
+    );
+  }
   await getDatabase().transaction(async (transaction) => {
     await upsertSongAndAssociationUsing(transaction, input);
   });
 }
 
 export async function updateThemeSongAssociation(input: ThemeSongUpdateInput) {
+  if (themeProjectionWritesEnabled()) {
+    return withThemeContentLock(input.themeId, (repository) =>
+      repository.updateThemeSongAssociation(input),
+    );
+  }
   await getDatabase().transaction(async (transaction) => {
     await updateThemeSongAssociationUsing(transaction, input);
   });
@@ -1108,8 +1180,10 @@ export async function importPlaylistTracks(
     providerContentIdsToCountAsExisting: string[];
   },
 ): Promise<{ added: number; alreadyAssociated: number }> {
-  return retryCatalogTransaction(() =>
-    getDatabase().transaction(async (transaction) => {
+  const context = captureProjectionContext();
+  return retryCatalogTransaction(async () => {
+    let metric: ThemeProjectionMetric | undefined;
+    const result = await getDatabase().transaction(async (transaction) => {
       await configureCatalogTransaction(transaction);
       const locked = await transaction.execute(
         sql`select ${themes.id} from ${themes} where ${themes.id} = ${themeId} for update`,
@@ -1119,7 +1193,8 @@ export async function importPlaylistTracks(
       }
 
       // Acquire every identity/row in the coordinator's order, including new
-      // sources, before playlist-order writes. Import never reads health tables.
+      // sources, before playlist-order writes. The projection reads health after
+      // these writes, without adding observation locks.
       await lockCatalogSources(
         transaction,
         tracks.map((track) => track.providerContentId),
@@ -1196,9 +1271,15 @@ export async function importPlaylistTracks(
         else alreadyAssociated += 1;
       }
 
+      if (themeProjectionWritesEnabled())
+        metric = (
+          await recalculateThemeProjectionUsing(transaction, themeId, context)
+        ).metric;
       return { added, alreadyAssociated };
-    }),
-  );
+    });
+    if (metric) recordThemeProjectionMetric(metric);
+    return result;
+  });
 }
 
 export type LockedThemeContentRepository = {
@@ -1295,5 +1376,10 @@ export async function withThemeContentLock<T>(
 }
 
 export async function removeThemeSongRecord(themeId: string, songId: string) {
+  if (themeProjectionWritesEnabled()) {
+    return withThemeContentLock(themeId, (repository) =>
+      repository.removeThemeSongRecord(songId),
+    );
+  }
   return removeThemeSongRecordUsing(getDatabase(), themeId, songId);
 }

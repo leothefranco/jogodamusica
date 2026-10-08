@@ -28,60 +28,52 @@ const songId = (i: number) =>
 const now = new Date("2026-10-07T12:00:00.000Z");
 const context = () => captureProjectionContext(now);
 async function seed(size = 64) {
-  await database
-    .insert(schema.themes)
-    .values({
-      id: themeId,
-      name: "QA",
-      slug: "qa-projection",
-      editorialState: "published",
+  await database.insert(schema.themes).values({
+    id: themeId,
+    name: "QA",
+    slug: "qa-projection",
+    editorialState: "published",
+    isActive: true,
+  });
+  await database.insert(schema.songs).values(
+    Array.from({ length: size }, (_, i) => ({
+      id: songId(i),
+      provider: "youtube" as const,
+      providerContentId: `qa-${i}`,
+      sourceTitle: "QA",
+      sourceChannel: "QA",
+      thumbnailUrl: `/qa-${i}.jpg`,
+      durationSeconds: 180,
+      isEmbeddable: false,
+    })),
+  );
+  await database.insert(schema.themeSongs).values(
+    Array.from({ length: size }, (_, i) => ({
+      themeId,
+      songId: songId(i),
+      title: "QA",
+      artist: "QA",
+      previewDurationSeconds: 30,
       isActive: true,
-    });
-  await database
-    .insert(schema.songs)
-    .values(
-      Array.from({ length: size }, (_, i) => ({
-        id: songId(i),
-        provider: "youtube" as const,
-        providerContentId: `qa-${i}`,
-        sourceTitle: "QA",
-        sourceChannel: "QA",
-        thumbnailUrl: `/qa-${i}.jpg`,
-        durationSeconds: 180,
-        isEmbeddable: false,
-      })),
-    );
-  await database
-    .insert(schema.themeSongs)
-    .values(
-      Array.from({ length: size }, (_, i) => ({
-        themeId,
-        songId: songId(i),
-        title: "QA",
-        artist: "QA",
-        previewDurationSeconds: 30,
-        isActive: true,
-        displayOrder: i,
-      })),
-    );
-  await database
-    .insert(schema.sourceAvailabilityObservations)
-    .values(
-      Array.from({ length: size }, (_, i) => ({
-        songId: songId(i),
-        region: "BR",
-        confirmedState: "available" as const,
-        confirmationReason: "available" as const,
-        observedAt: now,
-        lastAttemptAt: now,
-        lastConfirmedAt: now,
-        validUntil: new Date(now.getTime() + 7 * 86400000),
-        graceUntil: new Date(now.getTime() + 8 * 86400000),
-        nextCheckAt: new Date(now.getTime() + 7 * 86400000),
-        revision: 1,
-        policyVersion: 1,
-      })),
-    );
+      displayOrder: i,
+    })),
+  );
+  await database.insert(schema.sourceAvailabilityObservations).values(
+    Array.from({ length: size }, (_, i) => ({
+      songId: songId(i),
+      region: "BR",
+      confirmedState: "available" as const,
+      confirmationReason: "available" as const,
+      observedAt: now,
+      lastAttemptAt: now,
+      lastConfirmedAt: now,
+      validUntil: new Date(now.getTime() + 7 * 86400000),
+      graceUntil: new Date(now.getTime() + 8 * 86400000),
+      nextCheckAt: new Date(now.getTime() + 7 * 86400000),
+      revision: 1,
+      policyVersion: 1,
+    })),
+  );
 }
 const projection = async () =>
   (await database.select().from(schema.themeStateProjections))[0];

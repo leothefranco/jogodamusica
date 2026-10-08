@@ -16,6 +16,12 @@ import {
   recalculateThemeProjectionUsing,
   captureProjectionContext,
 } from "@/server/repositories/theme-projection-repository";
+import { applySourceAvailabilityResult } from "@/domain/music/source-availability";
+import { persistSourceAvailabilityObservation } from "@/server/repositories/source-availability-repository";
+import { rebuildThemeProjectionRecord } from "@/server/services/theme-projection-service";
+import { createAuthoritativePublicThemeRepository } from "@/server/repositories/authoritative-public-theme-repository";
+import { createProjectedPublicThemeRepository } from "@/server/repositories/projected-public-theme-repository";
+import { SOURCE_AVAILABILITY_POLICY } from "@/domain/music/source-availability";
 import { withThemeContentLock } from "@/server/repositories/theme-content-repository";
 import { createGameSession } from "@/server/services/game-service";
 const boundary = vi.hoisted(() => ({ database: vi.fn() }));
@@ -102,60 +108,52 @@ describe.skipIf(!enabled)("CAT-07 PostgreSQL real descartável", () => {
     vi.stubEnv("THEME_PROJECTION_WRITE_MODE", "enabled");
     vi.stubEnv("VERCEL_ENV", "preview");
     vi.stubEnv("PUBLIC_CATALOG_READ_MODE", "authoritative_direct");
-    await connection.unsafe("truncate themes, songs cascade");
-    await database
-      .insert(schema.themes)
-      .values({
-        id: themeId,
-        name: "QA",
-        slug: "qa-projection",
-        editorialState: "published",
+    await connection.unsafe("truncate themes, songs, admin_profiles cascade");
+    await database.insert(schema.themes).values({
+      id: themeId,
+      name: "QA",
+      slug: "qa-projection",
+      editorialState: "published",
+      isActive: true,
+    });
+    await database.insert(schema.songs).values(
+      Array.from({ length: 4 }, (_, i) => ({
+        id: songId(i),
+        provider: "youtube" as const,
+        providerContentId: `qa-${i}`,
+        sourceTitle: "QA",
+        sourceChannel: "QA",
+        thumbnailUrl: `/qa-${i}.jpg`,
+        durationSeconds: 180,
+        isEmbeddable: false,
+      })),
+    );
+    await database.insert(schema.themeSongs).values(
+      Array.from({ length: 4 }, (_, i) => ({
+        themeId,
+        songId: songId(i),
+        title: "QA",
+        artist: "QA",
+        previewDurationSeconds: 30,
         isActive: true,
-      });
-    await database
-      .insert(schema.songs)
-      .values(
-        Array.from({ length: 4 }, (_, i) => ({
-          id: songId(i),
-          provider: "youtube" as const,
-          providerContentId: `qa-${i}`,
-          sourceTitle: "QA",
-          sourceChannel: "QA",
-          thumbnailUrl: `/qa-${i}.jpg`,
-          durationSeconds: 180,
-          isEmbeddable: false,
-        })),
-      );
-    await database
-      .insert(schema.themeSongs)
-      .values(
-        Array.from({ length: 4 }, (_, i) => ({
-          themeId,
-          songId: songId(i),
-          title: "QA",
-          artist: "QA",
-          previewDurationSeconds: 30,
-          isActive: true,
-        })),
-      );
-    await database
-      .insert(schema.sourceAvailabilityObservations)
-      .values(
-        Array.from({ length: 4 }, (_, i) => ({
-          songId: songId(i),
-          region: "BR",
-          confirmedState: "available" as const,
-          confirmationReason: "available" as const,
-          observedAt: now,
-          lastAttemptAt: now,
-          lastConfirmedAt: now,
-          validUntil: new Date(now.getTime() + 7 * 86400000),
-          graceUntil: new Date(now.getTime() + 8 * 86400000),
-          nextCheckAt: new Date(now.getTime() + 7 * 86400000),
-          revision: 1,
-          policyVersion: 1,
-        })),
-      );
+      })),
+    );
+    await database.insert(schema.sourceAvailabilityObservations).values(
+      Array.from({ length: 4 }, (_, i) => ({
+        songId: songId(i),
+        region: "BR",
+        confirmedState: "available" as const,
+        confirmationReason: "available" as const,
+        observedAt: now,
+        lastAttemptAt: now,
+        lastConfirmedAt: now,
+        validUntil: new Date(now.getTime() + 7 * 86400000),
+        graceUntil: new Date(now.getTime() + 8 * 86400000),
+        nextCheckAt: new Date(now.getTime() + 7 * 86400000),
+        revision: 1,
+        policyVersion: 1,
+      })),
+    );
   });
 
   it("migration tem FK/PK, constraints e os índices de visibilidade/admin", async () => {
@@ -306,5 +304,146 @@ describe.skipIf(!enabled)("CAT-07 PostgreSQL real descartável", () => {
     expect(
       await connection`select (select count(*)::int from game_sessions) sessions, (select count(*)::int from session_songs) snapshots, (select count(*)::int from game_matches) matches`,
     ).toEqual([{ sessions: 0, snapshots: 0, matches: 0 }]);
+  });
+  it("backend sem superuser lê/escreve; RLS/grants negados aos papéis públicos permanecem", async () => {
+    await connection`grant select, update on themes to cat07_backend`;
+    await connection`grant select on songs, theme_songs, source_availability_observations to cat07_backend`;
+    await connection`grant select, insert, update on theme_state_projections to cat07_backend`;
+    const url = new URL(process.env.CAT07_POSTGRES_ADMIN_URL!);
+    url.username = "cat07_backend";
+    url.pathname = "/" + databaseName;
+    const backend = postgres(url.toString(), { max: 1, onnotice: () => {} });
+    try {
+      expect(
+        await backend`select rolsuper as super, rolbypassrls as bypass from pg_roles where rolname=current_user`,
+      ).toEqual([{ super: false, bypass: true }]);
+      const db = drizzle(backend, { schema });
+      expect(
+        (
+          await db.transaction((tx) =>
+            recalculateThemeProjectionUsing(
+              tx,
+              themeId,
+              captureProjectionContext(now),
+            ),
+          )
+        ).status,
+      ).toBe("created");
+      expect(
+        (
+          await backend`select playable_count as count from theme_state_projections`
+        )[0].count,
+      ).toBe(4);
+    } finally {
+      await backend.end();
+    }
+  });
+  it("revalidação contextual real confirma e faz rollback da observação com a projeção", async () => {
+    await recalculate();
+    const persist = () =>
+      persistSourceAvailabilityObservation({
+        contextThemeId: themeId,
+        providerContentId: "qa-0",
+        track: null,
+        observation: applySourceAvailabilityResult({
+          current: null,
+          observedAt: new Date(now.getTime() + 1),
+          result: { type: "unavailable", reason: "not_found", track: null },
+        }),
+      });
+    await connection`alter table theme_state_projections add constraint qa_reject_health check (playable_count<>3) not valid`;
+    try {
+      await expect(persist()).rejects.toThrow();
+      expect(
+        (
+          await connection`select confirmed_state as state from source_availability_observations where song_id=${songId(0)}::uuid`
+        )[0].state,
+      ).toBe("available");
+      expect(
+        (
+          await connection`select playable_count as count from theme_state_projections`
+        )[0].count,
+      ).toBe(4);
+    } finally {
+      await connection`alter table theme_state_projections drop constraint qa_reject_health`;
+    }
+    expect((await persist()).applied).toBe(true);
+    expect(
+      (
+        await connection`select playable_count as count, visibility from theme_state_projections`
+      )[0],
+    ).toEqual({ count: 3, visibility: "hidden" });
+    const query = {
+      now: new Date(now.getTime() + 2),
+      policy: SOURCE_AVAILABILITY_POLICY,
+      themeIds: [themeId],
+    };
+    const direct =
+      await createAuthoritativePublicThemeRepository(database).queryThemes(
+        query,
+      );
+    const projected =
+      await createProjectedPublicThemeRepository(database).queryThemes(query);
+    const logical = (records: typeof direct) =>
+      records.map((record) => {
+        const result = { ...record };
+        delete result.nextTransitionAt;
+        return result;
+      });
+    expect(logical(projected)).toEqual(logical(direct));
+  });
+  it("rebuild real criado/unchanged/corrigido é autorizado e métricas são agregadas", async () => {
+    const actorId = "30000000-0000-4000-8000-000000000071";
+    await expect(
+      rebuildThemeProjectionRecord(themeId, actorId),
+    ).rejects.toMatchObject({ status: 403 });
+    await database.insert(schema.adminProfiles).values({
+      userId: actorId,
+      displayName: "QA",
+      role: "admin",
+      isActive: true,
+    });
+    const metric = vi.spyOn(console, "info").mockImplementation(() => {});
+    try {
+      expect(
+        (await rebuildThemeProjectionRecord(themeId, actorId)).status,
+      ).toBe("created");
+      const before = await connection`select * from theme_state_projections`;
+      expect(
+        (await rebuildThemeProjectionRecord(themeId, actorId)).status,
+      ).toBe("unchanged");
+      expect(await connection`select * from theme_state_projections`).toEqual(
+        before,
+      );
+      await connection`update theme_state_projections set rule_version=99, thumbnail_urls=array['/drift.jpg']`;
+      expect(await rebuildThemeProjectionRecord(themeId, actorId)).toEqual({
+        status: "corrected",
+        changedFields: ["ruleVersion", "thumbnailUrls"],
+      });
+      const signals = metric.mock.calls.map((call) => call[1]);
+      expect(signals.map((event) => event.result)).toEqual([
+        "created",
+        "unchanged",
+        "corrected",
+      ]);
+      expect(signals[2]).toMatchObject({
+        driftCorrected: true,
+        changedFieldCount: 2,
+        ruleVersion: 1,
+        policyVersion: 1,
+      });
+      expect(signals.every((event) => event.durationMs >= 0)).toBe(true);
+      expect(JSON.stringify(signals)).not.toMatch(
+        /themeId|songId|slug|title|qa-projection|10000000/,
+      );
+      metric.mockImplementation(() => {
+        throw Error("telemetry down");
+      });
+      expect(
+        (await rebuildThemeProjectionRecord(themeId, actorId)).status,
+      ).toBe("unchanged");
+    } finally {
+      metric.mockRestore();
+    }
   });
 });
