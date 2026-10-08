@@ -4,6 +4,13 @@ import { and, asc, count, desc, eq, sql } from "drizzle-orm";
 
 import { getDatabase } from "@/db";
 import {
+  captureProjectionContext,
+  recalculateThemeProjectionUsing,
+  themeProjectionWritesEnabled,
+  recordThemeProjectionMetric,
+  type ThemeProjectionMetric,
+} from "@/server/repositories/theme-projection-repository";
+import {
   configureCatalogTransaction,
   lockCatalogSources,
   retryCatalogTransaction,
@@ -1220,12 +1227,14 @@ export async function withThemeContentLock<T>(
   themeId: string,
   operation: (repository: LockedThemeContentRepository) => Promise<T>,
 ): Promise<T> {
-  return getDatabase().transaction(async (transaction) => {
+  const projectionContext = captureProjectionContext();
+  let projectionMetric: ThemeProjectionMetric | undefined;
+  const result = await getDatabase().transaction(async (transaction) => {
     await transaction.execute(
       sql`select ${themes.id} from ${themes} where ${themes.id} = ${themeId} for update`,
     );
 
-    return operation({
+    const result = await operation({
       assertActiveAdmin: async (actorId) => {
         const [profile] = await transaction
           .select({ userId: adminProfiles.userId })
@@ -1270,7 +1279,19 @@ export async function withThemeContentLock<T>(
       upsertThemeSongAssociation: (input) =>
         upsertThemeSongAssociationUsing(transaction, { themeId, ...input }),
     });
+    if (themeProjectionWritesEnabled()) {
+      projectionMetric = (
+        await recalculateThemeProjectionUsing(
+          transaction,
+          themeId,
+          projectionContext,
+        )
+      ).metric;
+    }
+    return result;
   });
+  if (projectionMetric) recordThemeProjectionMetric(projectionMetric);
+  return result;
 }
 
 export async function removeThemeSongRecord(themeId: string, songId: string) {

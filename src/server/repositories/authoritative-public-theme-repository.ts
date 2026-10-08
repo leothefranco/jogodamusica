@@ -23,12 +23,14 @@ export type AuthoritativeThemeRecord = Omit<
 > & {
   editorialState: ThemeEditorialState;
   counts: ThemeAvailabilityCounts;
+  nextTransitionAt?: Date | null;
 };
 export type PublicCatalogQuery = {
   now: Date;
   policy: typeof SOURCE_AVAILABILITY_POLICY;
   slug?: string;
   page?: number;
+  themeIds?: string[];
 };
 
 export function createAuthoritativePublicThemeRepository(
@@ -42,14 +44,19 @@ export function createAuthoritativePublicThemeRepository(
         .select({ id: themes.id })
         .from(themes)
         .where(
-          query.slug === undefined
-            ? eq(themes.editorialState, "published")
-            : eq(themes.slug, query.slug),
+          query.themeIds !== undefined
+            ? inArray(themes.id, query.themeIds)
+            : query.slug === undefined
+              ? eq(themes.editorialState, "published")
+              : eq(themes.slug, query.slug),
         )
         .orderBy(asc(themes.name), asc(themes.id))
-        .limit(query.slug === undefined ? PUBLIC_CATALOG_PAGE_SIZE + 1 : 1)
+        .limit(
+          query.themeIds?.length ??
+            (query.slug === undefined ? PUBLIC_CATALOG_PAGE_SIZE + 1 : 1),
+        )
         .offset(
-          query.slug === undefined
+          query.themeIds === undefined && query.slug === undefined
             ? ((query.page ?? 1) - 1) * PUBLIC_CATALOG_PAGE_SIZE
             : 0,
         );
@@ -72,6 +79,12 @@ export function createAuthoritativePublicThemeRepository(
           description: themes.description,
           coverUrl: themes.coverUrl,
           editorialState: themes.editorialState,
+          nextTransitionAt: sql<string | null>`min(case
+            when ${observations.confirmedState} = 'available' and ${observations.validUntil} >= ${instant}::timestamptz then ${observations.validUntil}
+            when ${observations.confirmedState} = 'available' and ${observations.graceUntil} >= ${instant}::timestamptz then ${observations.graceUntil}
+            else null end)`.mapWith((value: string | null) =>
+            value === null ? null : new Date(value),
+          ),
           counts: {
             availableFresh: countState("available_fresh"),
             availableGrace: countState("available_grace"),
