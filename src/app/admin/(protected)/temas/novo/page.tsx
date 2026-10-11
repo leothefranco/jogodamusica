@@ -9,17 +9,17 @@ export default function NewThemePage() {
     <main className="mx-auto w-full max-w-4xl px-5 py-10 sm:px-8 sm:py-14">
       <Link
         href="/admin/temas"
-        className="inline-flex min-h-11 items-center gap-2 rounded-md pr-3 text-sm font-semibold text-[var(--app-muted)] outline-none hover:text-white focus-visible:ring-2 focus-visible:ring-[var(--duel-a)]"
+        className="inline-flex min-h-11 items-center gap-2 rounded-md pr-3 text-sm font-semibold text-[var(--app-muted)] outline-none hover:text-white focus-visible:ring-2 focus-visible:ring-[var(--app-focus)]"
       >
         <ArrowLeft className="size-4" aria-hidden="true" />
         Voltar aos temas
       </Link>
 
       <div className="mt-7">
-        <p className="text-xs font-bold tracking-[0.2em] text-[var(--duel-a)] uppercase">
+        <p className="text-xs font-bold tracking-[0.2em] text-[var(--brand)] uppercase">
           Novo conteúdo
         </p>
-        <h1 className="mt-3 text-4xl font-black tracking-[-0.04em] sm:text-5xl">
+        <h1 className="mt-3 text-4xl font-black tracking-[-0.04em] break-words sm:text-5xl">
           Criar tema
         </h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--app-muted)]">

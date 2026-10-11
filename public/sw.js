@@ -1,8 +1,11 @@
-const CACHE_NAME = "jogo-da-musica-shell-v3";
+const CACHE_NAME = "jogo-da-musica-shell-v4";
 const PRECACHE_URLS = [
   "/offline",
+  "/icon.svg",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
+  "/icons/admin-icon-192.png",
+  "/icons/admin-icon-512.png",
 ];
 
 self.addEventListener("install", (event) => {

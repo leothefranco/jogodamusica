@@ -1,8 +1,9 @@
 "use client";
 
-import { Download, Share2, X } from "lucide-react";
+import { X } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { BrandMark } from "@/components/brand-mark";
 import { siteConfig } from "@/lib/site";
 
 import {
@@ -126,22 +127,10 @@ export function PwaManager() {
       aria-label={
         isAdmin ? "Instalar aplicativo administrativo" : "Instalar aplicativo"
       }
-      className={`fixed right-3 bottom-3 left-3 z-50 mx-auto flex max-w-xl items-start gap-3 rounded-2xl border bg-[var(--app-surface)]/95 p-4 text-sm text-white shadow-2xl backdrop-blur sm:right-5 sm:bottom-5 sm:left-auto ${
-        isAdmin ? "border-[var(--duel-b)]/25" : "border-[var(--duel-a)]/25"
-      }`}
+      className="fixed right-3 bottom-3 left-3 z-50 mx-auto flex max-w-xl items-start gap-3 rounded-2xl border border-[var(--brand)]/25 bg-[var(--app-surface)]/95 p-4 text-sm text-[var(--app-text)] shadow-2xl backdrop-blur sm:right-5 sm:bottom-5 sm:left-auto"
     >
-      <span
-        className={`grid size-10 shrink-0 place-items-center rounded-md ${
-          isAdmin
-            ? "bg-[var(--duel-b)]/10 text-[var(--duel-b)]"
-            : "bg-[var(--duel-a)]/10 text-[var(--duel-a)]"
-        }`}
-      >
-        {showIOSInstructions ? (
-          <Share2 aria-hidden="true" />
-        ) : (
-          <Download aria-hidden="true" />
-        )}
+      <span className="size-10 shrink-0">
+        <BrandMark size={40} />
       </span>
       <div className="min-w-0 flex-1">
         <p className="font-bold">
@@ -156,11 +145,7 @@ export function PwaManager() {
           <button
             type="button"
             onClick={() => void install()}
-            className={`mt-2 min-h-11 rounded-lg px-4 font-bold outline-none focus-visible:ring-2 focus-visible:ring-white ${
-              isAdmin
-                ? "bg-[var(--duel-b)] text-[var(--app-bg)] hover:brightness-110"
-                : "bg-[var(--duel-a)] text-[var(--app-bg)] hover:brightness-110"
-            }`}
+            className="mt-2 min-h-11 rounded-lg bg-[var(--brand)] px-4 font-bold text-[var(--app-bg)] outline-none hover:brightness-110 focus-visible:ring-2 focus-visible:ring-[var(--app-focus)]"
           >
             Instalar aplicativo
           </button>
@@ -170,11 +155,7 @@ export function PwaManager() {
         type="button"
         onClick={dismiss}
         aria-label="Fechar instrução de instalação"
-        className={`grid size-11 shrink-0 place-items-center rounded-lg text-[var(--app-muted)] outline-none hover:bg-white/10 hover:text-white focus-visible:ring-2 ${
-          isAdmin
-            ? "focus-visible:ring-[var(--duel-b)]"
-            : "focus-visible:ring-[var(--duel-a)]"
-        }`}
+        className="grid size-11 shrink-0 place-items-center rounded-lg text-[var(--app-muted)] outline-none hover:bg-white/10 hover:text-[var(--app-text)] focus-visible:ring-2 focus-visible:ring-[var(--app-focus)]"
       >
         <X aria-hidden="true" />
       </button>

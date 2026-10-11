@@ -195,7 +195,7 @@ export function ThemeForm({
       {state.message ? (
         <div
           role="alert"
-          className="rounded-md border border-red-300/20 bg-red-400/8 px-4 py-3 text-sm text-red-100"
+          className="rounded-md border border-red-300/20 bg-red-400/8 px-4 py-3 text-sm text-[var(--app-error)]"
         >
           {state.message}
         </div>
@@ -283,10 +283,10 @@ export function ThemeForm({
             selectedCoverFile.current = event.currentTarget.files?.[0] ?? null;
             cachedUpload.current = null;
           }}
-          className={`${adminInputClassName} file:mr-4 file:rounded-lg file:border-0 file:bg-[var(--duel-a)] file:px-3 file:py-2 file:text-xs file:font-bold file:text-[var(--app-bg)]`}
+          className={`${adminInputClassName} file:mr-4 file:rounded-lg file:border-0 file:bg-[var(--brand)] file:px-3 file:py-2 file:text-xs file:font-bold file:text-[var(--app-bg)]`}
           aria-invalid={Boolean(state.fieldErrors?.coverFile)}
         />
-        <span className="text-xs leading-5 font-normal text-white/38">
+        <span className="text-xs leading-5 font-normal text-[var(--app-muted)]">
           JPEG, PNG ou WebP, com até 5 MB. A imagem enviada substitui os cards
           de miniaturas.
         </span>
@@ -296,7 +296,7 @@ export function ThemeForm({
             <input
               type="checkbox"
               name="removeCover"
-              className="size-4 accent-[var(--duel-a)]"
+              className="size-4 accent-[var(--brand)]"
             />
             Remover a capa atual e voltar aos cards
           </label>
@@ -335,5 +335,9 @@ export function ThemeForm({
 
 function FieldError({ errors }: { errors?: string[] }) {
   if (!errors?.[0]) return null;
-  return <span className="text-xs font-medium text-red-200">{errors[0]}</span>;
+  return (
+    <span className="text-xs font-medium text-[var(--app-error)]">
+      {errors[0]}
+    </span>
+  );
 }

@@ -67,7 +67,7 @@ export function ThemeStateStatus({ state }: { state: ThemeState }) {
           a visibilidade sem republicação.
         </p>
       ) : null}
-      <p className="text-xs text-white/45">
+      <p className="text-xs text-[var(--app-muted)]">
         Estado derivado no admin. O catálogo público ainda usa a leitura legada.
       </p>
     </section>

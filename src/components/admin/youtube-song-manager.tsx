@@ -151,7 +151,7 @@ export function YouTubeSongManager({ action }: YouTubeSongManagerProps) {
               </Button>
             </div>
           </div>
-          <p className="mt-3 text-xs leading-5 text-white/38">
+          <p className="mt-3 text-xs leading-5 text-[var(--app-muted)]">
             A pesquisa usa a cota da YouTube Data API somente no painel.
           </p>
         </form>
@@ -186,7 +186,7 @@ export function YouTubeSongManager({ action }: YouTubeSongManagerProps) {
               </Button>
             </div>
           </div>
-          <p className="mt-3 text-xs leading-5 text-white/38">
+          <p className="mt-3 text-xs leading-5 text-[var(--app-muted)]">
             Alternativa direta para encontrar um vídeo específico.
           </p>
         </form>
@@ -203,7 +203,7 @@ export function YouTubeSongManager({ action }: YouTubeSongManagerProps) {
 
       {results.length > 0 ? (
         <div>
-          <h3 className="text-sm font-bold text-white/75">
+          <h3 className="text-sm font-bold text-[var(--app-muted)]">
             Resultados da pesquisa
           </h3>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -212,18 +212,20 @@ export function YouTubeSongManager({ action }: YouTubeSongManagerProps) {
                 key={track.providerContentId}
                 type="button"
                 onClick={() => setSelected(track)}
-                className="min-h-24 rounded-md border border-white/8 bg-white/[0.025] p-4 text-left transition outline-none hover:border-[var(--duel-a)]/30 hover:bg-[var(--duel-a)]/5 focus-visible:ring-2 focus-visible:ring-[var(--duel-a)]"
+                className="min-h-24 rounded-md border border-white/8 bg-white/[0.025] p-4 text-left transition outline-none hover:border-[var(--brand)]/30 hover:bg-[var(--brand)]/5 focus-visible:ring-2 focus-visible:ring-[var(--app-focus)]"
               >
                 <span className="line-clamp-2 text-sm font-bold">
                   {track.sourceTitle}
                 </span>
-                <span className="mt-2 block text-xs text-white/45">
+                <span className="mt-2 block text-xs text-[var(--app-muted)]">
                   {track.sourceChannel} ·{" "}
                   {formatDuration(track.durationSeconds)}
                 </span>
                 <span
                   className={`mt-3 inline-flex items-center gap-1 text-xs font-semibold ${
-                    track.isEmbeddable ? "text-emerald-300" : "text-red-300"
+                    track.isEmbeddable
+                      ? "text-[var(--app-success)]"
+                      : "text-[var(--app-error)]"
                   }`}
                 >
                   {track.isEmbeddable ? (
@@ -243,7 +245,7 @@ export function YouTubeSongManager({ action }: YouTubeSongManagerProps) {
         <form
           key={selected.providerContentId}
           action={formAction}
-          className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,32rem),1fr))] gap-6 rounded-2xl border border-[var(--duel-a)]/18 bg-[var(--duel-a)]/[0.045] p-5 sm:p-6"
+          className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,32rem),1fr))] gap-6 rounded-2xl border border-[var(--brand)]/18 bg-[var(--brand)]/[0.045] p-5 sm:p-6"
         >
           <div className="min-w-0">
             <div className="aspect-video w-full bg-black">
@@ -258,7 +260,7 @@ export function YouTubeSongManager({ action }: YouTubeSongManagerProps) {
             <p className="mt-3 text-sm font-bold break-words">
               {selected.sourceTitle}
             </p>
-            <p className="mt-1 text-xs text-white/45">
+            <p className="mt-1 text-xs text-[var(--app-muted)]">
               {selected.sourceChannel} ·{" "}
               {formatDuration(selected.durationSeconds)}
             </p>
@@ -268,7 +270,7 @@ export function YouTubeSongManager({ action }: YouTubeSongManagerProps) {
             {actionState.message ? (
               <div
                 role="alert"
-                className="rounded-md border border-red-300/20 bg-red-400/8 px-4 py-3 text-sm text-red-100"
+                className="rounded-md border border-red-300/20 bg-red-400/8 px-4 py-3 text-sm text-[var(--app-error)]"
               >
                 {actionState.message}
               </div>
@@ -326,7 +328,7 @@ export function YouTubeSongManager({ action }: YouTubeSongManagerProps) {
                   required
                   className={adminInputClassName}
                 />
-                <span className="text-xs leading-5 font-normal text-white/42">
+                <span className="text-xs leading-5 font-normal text-[var(--app-muted)]">
                   A música inteira já vem selecionada. Reduza este valor se
                   quiser usar apenas um trecho.
                 </span>
@@ -338,7 +340,7 @@ export function YouTubeSongManager({ action }: YouTubeSongManagerProps) {
                 type="checkbox"
                 name="isActive"
                 defaultChecked
-                className="size-4 accent-[var(--duel-a)]"
+                className="size-4 accent-[var(--brand)]"
               />
               Música ativa neste tema
             </label>
@@ -359,7 +361,7 @@ export function YouTubeSongManager({ action }: YouTubeSongManagerProps) {
           </div>
         </form>
       ) : (
-        <div className="rounded-2xl border border-dashed border-white/10 px-5 py-10 text-center text-sm text-white/38">
+        <div className="rounded-2xl border border-dashed border-white/10 px-5 py-10 text-center text-sm text-[var(--app-muted)]">
           Pesquise ou informe uma URL para visualizar e configurar a música.
         </div>
       )}
