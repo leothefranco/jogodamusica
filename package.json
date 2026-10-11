@@ -13,6 +13,8 @@
     "lint": "eslint .",
     "typegen": "next typegen",
     "typecheck": "npm run typegen && tsc --noEmit",
+    "typecheck:only": "tsc --noEmit",
+    "gate": "node scripts/gate-cli.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "db:generate": "drizzle-kit generate",
@@ -22,7 +24,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "security:check": "node scripts/check-next-security.mjs",
-    "test:security": "node --test tests/security/next-security.test.mjs"
+    "test:security": "node --test \"tests/security/*.test.mjs\""
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
