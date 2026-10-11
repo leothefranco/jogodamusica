@@ -209,6 +209,7 @@ describe("integração individual da disponibilidade no Tema", () => {
     ).resolves.toMatchObject({ state: "available_fresh", playable: true });
     expect(observeSourceAvailability).toHaveBeenCalledWith(
       track.providerContentId,
+      { themeId },
     );
   });
 

@@ -8,6 +8,13 @@ import {
   retryCatalogTransaction,
 } from "@/server/repositories/catalog-transaction";
 import { getDatabase } from "@/db";
+import {
+  captureProjectionContext,
+  recalculateThemeProjectionUsing,
+  recordThemeProjectionMetric,
+  themeProjectionWritesEnabled,
+  type ThemeProjectionMetric,
+} from "@/server/repositories/theme-projection-repository";
 import type { ResolvedProviderTrack } from "@/domain/music/provider";
 import type {
   SourceAvailabilityConfirmationReason,
@@ -59,6 +66,7 @@ export type SourceAvailabilitySource = {
 };
 
 export type PersistSourceAvailabilityInput = {
+  contextThemeId?: string;
   providerContentId: string;
   track: ResolvedProviderTrack | null;
   observation: SourceAvailabilityObservation;
@@ -534,130 +542,158 @@ export async function persistSourceAvailabilityObservation(
   applied: boolean;
   track: ResolvedProviderTrack | null;
 }> {
-  return retryCatalogTransaction(() =>
-    getDatabase().transaction(async (transaction) => {
-      const recheckDependencies = await coordinateSourceHealth(
-        transaction,
-        input.providerContentId,
-        input.observation.region,
-      );
-      const songId = input.track
-        ? await resolveSongId(transaction, input)
-        : await findSongIdForUpdate(transaction, input.providerContentId);
-      // A legacy writer may have materialized a previously missing Fonte while
-      // locks were being acquired. The resolved row now protects FK inserts.
-      await recheckDependencies();
-
-      if (!songId) {
-        const previousObservation = await findUnboundObservationUsing(
+  const context = captureProjectionContext();
+  return retryCatalogTransaction(async () => {
+    let metric: ThemeProjectionMetric | undefined;
+    const persisted = await getDatabase().transaction(async (transaction) => {
+      const persist = async () => {
+        const recheckDependencies = await coordinateSourceHealth(
           transaction,
           input.providerContentId,
           input.observation.region,
         );
-        const appliedObservation = await upsertUnboundObservationUsing(
-          transaction,
-          input.providerContentId,
-          input.observation,
-        );
-        if (!appliedObservation) {
+        const songId = input.track
+          ? await resolveSongId(transaction, input)
+          : await findSongIdForUpdate(transaction, input.providerContentId);
+        // A legacy writer may have materialized a previously missing Fonte while
+        // locks were being acquired. The resolved row now protects FK inserts.
+        await recheckDependencies();
+
+        if (!songId) {
+          const previousObservation = await findUnboundObservationUsing(
+            transaction,
+            input.providerContentId,
+            input.observation.region,
+          );
+          const appliedObservation = await upsertUnboundObservationUsing(
+            transaction,
+            input.providerContentId,
+            input.observation,
+          );
+          if (!appliedObservation) {
+            return {
+              songId: null,
+              previousObservation,
+              observation: await findUnboundObservationForWriteUsing(
+                transaction,
+                input.providerContentId,
+                input.observation.region,
+              ),
+              applied: false,
+              track: null,
+            };
+          }
+
           return {
             songId: null,
             previousObservation,
-            observation: await findUnboundObservationForWriteUsing(
-              transaction,
-              input.providerContentId,
-              input.observation.region,
-            ),
-            applied: false,
+            observation: appliedObservation,
+            applied: true,
             track: null,
           };
         }
 
-        return {
-          songId: null,
-          previousObservation,
-          observation: appliedObservation,
-          applied: true,
-          track: null,
-        };
-      }
+        const unboundObservation = await findUnboundObservationForUpdateUsing(
+          transaction,
+          input.providerContentId,
+          input.observation.region,
+        );
+        if (unboundObservation) {
+          await upsertObservationUsing(transaction, songId, unboundObservation);
+        }
 
-      const unboundObservation = await findUnboundObservationForUpdateUsing(
-        transaction,
-        input.providerContentId,
-        input.observation.region,
-      );
-      if (unboundObservation) {
-        await upsertObservationUsing(transaction, songId, unboundObservation);
-      }
-
-      // The candidate replaces this bound predecessor after unbound reconciliation,
-      // under the same identity/song locks as its CAS (null on first observation).
-      const previousObservation = await findObservationUsing(
-        transaction,
-        songId,
-        input.observation.region,
-      );
-      const appliedObservation = await upsertObservationUsing(
-        transaction,
-        songId,
-        input.observation,
-      );
-
-      if (!appliedObservation) {
-        const persistedObservation = await findObservationUsing(
+        // The candidate replaces this bound predecessor after unbound reconciliation,
+        // under the same identity/song locks as its CAS (null on first observation).
+        const previousObservation = await findObservationUsing(
           transaction,
           songId,
           input.observation.region,
         );
-        if (!persistedObservation) {
-          throw new AppError(
-            "SOURCE_AVAILABILITY_WRITE_CONFLICT",
-            "A observação concorrente não pôde ser reconciliada.",
-            409,
+        const appliedObservation = await upsertObservationUsing(
+          transaction,
+          songId,
+          input.observation,
+        );
+
+        if (!appliedObservation) {
+          const persistedObservation = await findObservationUsing(
+            transaction,
+            songId,
+            input.observation.region,
           );
+          if (!persistedObservation) {
+            throw new AppError(
+              "SOURCE_AVAILABILITY_WRITE_CONFLICT",
+              "A observação concorrente não pôde ser reconciliada.",
+              409,
+            );
+          }
+          await removeUnboundObservationUsing(
+            transaction,
+            input.providerContentId,
+            input.observation.region,
+          );
+          return {
+            songId,
+            previousObservation,
+            observation: persistedObservation,
+            applied: false,
+            track: await findTrackUsing(
+              transaction,
+              songId,
+              persistedObservation,
+            ),
+          };
         }
+
         await removeUnboundObservationUsing(
           transaction,
           input.providerContentId,
           input.observation.region,
         );
+
+        if (input.track) {
+          await updateSourceMetadata(transaction, songId, input.track);
+        }
+
         return {
           songId,
           previousObservation,
-          observation: persistedObservation,
-          applied: false,
-          track: await findTrackUsing(
-            transaction,
-            songId,
-            persistedObservation,
-          ),
+          observation: appliedObservation,
+          applied: true,
+          track: input.track
+            ? {
+                ...input.track,
+                isRegionAllowed:
+                  appliedObservation.confirmationReason !== "region_blocked",
+              }
+            : await findTrackUsing(transaction, songId, appliedObservation),
         };
-      }
-
-      await removeUnboundObservationUsing(
-        transaction,
-        input.providerContentId,
-        input.observation.region,
-      );
-
-      if (input.track) {
-        await updateSourceMetadata(transaction, songId, input.track);
-      }
-
-      return {
-        songId,
-        previousObservation,
-        observation: appliedObservation,
-        applied: true,
-        track: input.track
-          ? {
-              ...input.track,
-              isRegionAllowed:
-                appliedObservation.confirmationReason !== "region_blocked",
-            }
-          : await findTrackUsing(transaction, songId, appliedObservation),
       };
-    }),
-  );
+      const result = await persist();
+      if (
+        themeProjectionWritesEnabled() &&
+        input.contextThemeId &&
+        result.songId
+      ) {
+        // The coordinator already locked every dependent Tema before the Fonte.
+        // Recheck current membership rather than locking a new parent out of order.
+        const membership = await transaction.execute(sql`
+          select 1 from public.theme_songs
+          where theme_id = ${input.contextThemeId}::uuid and song_id = ${result.songId}::uuid
+        `);
+        if (membership.length > 0)
+          metric = (
+            await recalculateThemeProjectionUsing(
+              transaction,
+              input.contextThemeId,
+              context,
+            )
+          ).metric;
+      }
+      return result;
+    });
+    if (metric) recordThemeProjectionMetric(metric);
+    return persisted;
+  });
 }

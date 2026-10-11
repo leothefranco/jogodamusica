@@ -85,6 +85,13 @@
       "when": 1788836882482,
       "tag": "0011_theme_editorial_state",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791418343019,
+      "tag": "0012_theme_state_projection",
+      "breakpoints": true
     }
   ]
 }

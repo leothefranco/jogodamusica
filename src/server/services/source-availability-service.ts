@@ -53,7 +53,10 @@ export function createSourceAvailabilityService(
   dependencies: SourceAvailabilityServiceDependencies,
 ) {
   return {
-    async observeSource(providerContentId: string) {
+    async observeSource(
+      providerContentId: string,
+      context?: { themeId: string },
+    ) {
       const current = await dependencies.findSource(
         providerContentId,
         SOURCE_AVAILABILITY_POLICY.region,
@@ -72,6 +75,7 @@ export function createSourceAvailabilityService(
         providerContentId,
         track: result.type === "transient_error" ? null : result.track,
         observation: candidate,
+        ...(context ? { contextThemeId: context.themeId } : {}),
       });
       const decisionAt = dependencies.clock();
       const availability = deriveEffectiveSourceAvailability(

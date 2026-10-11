@@ -368,6 +368,7 @@ export function createThemeContentService(
 
       const observed = await dependencies.observeSourceAvailability(
         source.providerContentId,
+        { themeId },
       );
       if (observed.applied) {
         const events = await dependencies.withThemeContentLock(
