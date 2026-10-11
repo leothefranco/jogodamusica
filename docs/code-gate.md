@@ -22,18 +22,18 @@ com configurações npm de usuário/global vazias e registry público explícito
 
 ## Ordem e falha
 
-| Estágio       | Comando                                                         |
-| ------------- | --------------------------------------------------------------- |
-| install       | `npm ci --no-audit --no-fund`                                   |
-| format        | `npm run format:check`                                          |
-| lint          | `npm run lint`                                                  |
-| typegen       | `npm run typegen` (`next typegen`)                              |
-| typecheck     | `npm run typecheck:only` (`tsc --noEmit`)                       |
-| test          | `npm test` (Node e Vitest, descoberta automática)               |
-| build         | `npm run build`, sem fixture                                    |
-| build-fixture | `npm run build`, com `E2E_TEST_MODE=1`                          |
-| e2e           | Instalação de Chromium e `npm run test:e2e` contra `next start` |
-| audit         | `npm audit --omit=dev --audit-level=high --json`                |
+| Estágio       | Comando                                                             |
+| ------------- | ------------------------------------------------------------------- |
+| install       | `npm ci --no-audit --no-fund`                                       |
+| format        | `npm run format:check`                                              |
+| lint          | `npm run lint`                                                      |
+| typegen       | `npm run typegen` (`next typegen`)                                  |
+| typecheck     | `npm run typecheck:only` (`tsc --noEmit`)                           |
+| test          | `npm test -- --maxWorkers=1` (Node e Vitest, descoberta automática) |
+| build         | `npm run build`, sem fixture                                        |
+| build-fixture | `npm run build`, com `E2E_TEST_MODE=1`                              |
+| e2e           | Instalação de Chromium e `npm run test:e2e` contra `next start`     |
+| audit         | `npm audit --omit=dev --audit-level=high --json`                    |
 
 O build usa o Next oficial, incluindo a verificação de versão já existente.
 `CI=true` força o Playwright a iniciar o bundle de produção da fixture e impede
@@ -42,6 +42,13 @@ Os testes de navegador conservam configuração de projetos, workers e retries d
 suíte. Reporter textual e trace desligado evitam publicar relatórios brutos;
 isso não muda quais testes executam. A instalação de Chromium pertence ao
 estágio e2e; no Linux inclui dependências do navegador no runner efêmero do CI.
+
+O estágio de testes limita o Vitest a um worker em ambas as plataformas. Esse
+orçamento conserva todas as suítes e seus testes de concorrência internos; não
+altera assertions, timeout ou configuração compartilhada. Em Windows com 8 GB,
+o orçamento automático excedeu os hooks de inicialização PGlite de 10 segundos;
+o controle com um worker executou todos os testes com os limites originais.
+O script `npm test` isolado continua disponível com suas opções de desenvolvimento.
 
 Uma falha interrompe os estágios dependentes, que ficam `not-run`, com exit code
 nulo. As saídas e códigos anteriores são preservados. Timeout (20 minutos por

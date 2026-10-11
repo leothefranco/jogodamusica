@@ -298,7 +298,11 @@ test("the gate uses real project commands and fixture mode only for the fixture 
         args: ["run", "typecheck:only"],
         fixture: undefined,
       },
-      { stage: "test", args: ["test"], fixture: undefined },
+      {
+        stage: "test",
+        args: ["test", "--", "--maxWorkers=1"],
+        fixture: undefined,
+      },
       { stage: "build", args: ["run", "build"], fixture: undefined },
       { stage: "build-fixture", args: ["run", "build"], fixture: "1" },
       {

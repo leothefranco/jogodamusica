@@ -7,7 +7,7 @@ const stages = [
   ["lint", ["run", "lint"]],
   ["typegen", ["run", "typegen"]],
   ["typecheck", ["run", "typecheck:only"]],
-  ["test", ["test"]],
+  ["test", ["test", "--", "--maxWorkers=1"]],
   ["build", ["run", "build"]],
   ["build-fixture", ["run", "build"]],
   [
