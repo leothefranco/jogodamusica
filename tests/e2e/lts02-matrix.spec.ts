@@ -293,14 +293,17 @@ test("janela autoritativa vazia conserva continuação e página seguinte", asyn
   page,
 }) => {
   await setup(page, 4, false, true);
-  await page.route(/^http:\/\/localhost:3162\/\?page=/, async (route) => {
-    const url = new URL(route.request().url());
-    url.pathname = "/e2e-test/lts02";
-    await route.fulfill({
-      status: 307,
-      headers: { location: url.pathname + url.search },
-    });
-  });
+  await page.route(
+    (url) => url.pathname === "/" && url.searchParams.has("page"),
+    async (route) => {
+      const url = new URL(route.request().url());
+      url.pathname = "/e2e-test/lts02";
+      await route.fulfill({
+        status: 307,
+        headers: { location: url.pathname + url.search },
+      });
+    },
+  );
   await page.goto("/e2e-test/lts02");
   await expect(
     page.getByText("Nenhum tema disponível nesta página."),
