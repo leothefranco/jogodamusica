@@ -8,7 +8,7 @@ export default function NotFound() {
     <FullPageState
       icon={
         <SearchX
-          className="mx-auto size-12 text-[var(--duel-a)]"
+          className="mx-auto size-12 text-[#D4FF46]"
           aria-hidden="true"
         />
       }
@@ -18,7 +18,7 @@ export default function NotFound() {
     >
       <Link
         href="/"
-        className="inline-flex min-h-12 items-center justify-center rounded-md bg-[var(--duel-a)] px-5 font-bold text-[var(--app-bg)] outline-none hover:brightness-110 focus-visible:ring-2 focus-visible:ring-white"
+        className="inline-flex min-h-12 items-center justify-center rounded-md bg-[#D4FF46] px-5 font-bold text-[var(--app-bg)] outline-none hover:brightness-110 focus-visible:ring-2 focus-visible:ring-white"
       >
         Voltar ao início
       </Link>

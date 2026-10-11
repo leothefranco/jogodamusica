@@ -1,4 +1,5 @@
 import { BrandMark } from "@/components/brand-mark";
+import { EncoreArt } from "@/components/encore-art";
 import { buttonVariants } from "@/components/ui/button";
 import { ArrowUpRight } from "lucide-react";
 import Link from "next/link";
@@ -48,21 +49,23 @@ export function HomeExperience({
           className={styles.intro}
           aria-labelledby="titulo-inicio"
         >
-          <p className={styles.eyebrow}>CATÁLOGO / ESCOLHA O TEMA</p>
+          <p className={styles.eyebrow}>OUÇAM. COMPAREM. ESCOLHAM.</p>
           <h1 id="titulo-inicio">
-            QUAL É A<br />
-            <span>MELHOR</span>
+            LAST
             <br />
-            <span className={styles.questionEnd}>MÚSICA?</span>
+            <span>TRACK</span>
+            <br />
+            <span className={styles.questionEnd}>STANDING</span>
           </h1>
-          <div className={styles.duelRule} aria-hidden="true">
-            VS
-          </div>
+          <EncoreArt className={styles.encore} />
           <p className={styles.description}>
-            Escolha um tema.
+            Um tema. Duas músicas por confronto.
             <br />
-            Escolham a melhor música.
+            Só uma fica de pé.
           </p>
+          <a href="#temas" className={styles.choose}>
+            Escolher tema <ArrowUpRight aria-hidden="true" />
+          </a>
         </section>
         <section
           id="temas"

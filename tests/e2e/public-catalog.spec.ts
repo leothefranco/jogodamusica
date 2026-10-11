@@ -79,6 +79,25 @@ test("home → Tema → POST limita a modalidade ao snapshot atual", async ({
     }),
   ).toBeVisible();
 
+  await expect(
+    page
+      .getByRole("alert")
+      .filter({ hasText: "não possui músicas ativas suficientes" }),
+  ).toBeFocused();
+  await expect(page.getByRole("radio", { name: /4 músicas/ })).toBeDisabled();
+  await expect(page.getByRole("radio", { name: /8 músicas/ })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Iniciar partida" }),
+  ).toBeDisabled();
+
+  await page.getByRole("button", { name: "Atualizar modalidades" }).click();
+  await expect(page.getByRole("radio", { name: /4 músicas/ })).toBeEnabled();
+  await expect(page.locator('input[type="radio"]:checked')).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Escolha uma modalidade" }),
+  ).toBeDisabled();
+  expect(attempts).toHaveLength(1);
+
   await page.getByRole("radio", { name: /4 músicas/ }).check();
   await page.getByRole("button", { name: "Iniciar partida" }).click();
 

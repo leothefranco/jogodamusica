@@ -9,10 +9,10 @@ import { Button } from "@/components/ui/button";
 
 export default function ErrorPage({
   error,
-  reset,
+  retry,
 }: {
   error: Error & { digest?: string };
-  reset(): void;
+  retry(): void;
 }) {
   useEffect(() => {
     console.error("Falha ao renderizar a página", error);
@@ -29,8 +29,8 @@ export default function ErrorPage({
       <Button
         type="button"
         size="lg"
-        onClick={reset}
-        className="min-h-12 rounded-md"
+        onClick={retry}
+        className="min-h-12 rounded-md bg-[#D4FF46] text-[#101216] hover:bg-[#D4FF46] hover:brightness-110"
       >
         <RotateCcw aria-hidden="true" />
         Tentar novamente

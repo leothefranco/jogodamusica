@@ -2,7 +2,7 @@
 
 import { LoaderCircle, Play } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { roundCountFromBracketSize } from "@/domain/bracket";
@@ -27,7 +27,15 @@ export function StartGameForm({
 }: StartGameFormProps) {
   const router = useRouter();
   const [bracketSize, setBracketSize] = useState<BracketSize | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ code?: string; message: string } | null>(
+    null,
+  );
+  const errorId = useId();
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  const needsUpdatedModes = error?.code === "INSUFFICIENT_ACTIVE_SONGS";
+  useEffect(() => {
+    if (error) errorRef.current?.focus();
+  }, [error]);
   const [isStarting, setIsStarting] = useState(false);
   const sections = modeGroups
     ? [
@@ -38,8 +46,9 @@ export function StartGameForm({
     : [{ title: null, sizes: supportedBracketSizes }];
 
   async function startGame() {
+    if (isStarting || needsUpdatedModes) return;
     if (bracketSize === null) {
-      setError("Escolha uma modalidade antes de iniciar.");
+      setError({ message: "Escolha uma modalidade antes de iniciar." });
       return;
     }
 
@@ -54,27 +63,32 @@ export function StartGameForm({
       });
       const payload = (await response.json()) as {
         url?: string;
-        error?: { message?: string };
+        error?: { code?: string; message?: string };
       };
       if (!response.ok || !payload.url) {
-        throw new Error(
-          payload.error?.message ?? "Não foi possível iniciar a partida.",
-        );
+        setError({
+          code: payload.error?.code,
+          message:
+            payload.error?.message ?? "Não foi possível iniciar a partida.",
+        });
+        setIsStarting(false);
+        return;
       }
       router.push(payload.url);
     } catch (caught) {
-      setError(
-        caught instanceof Error
-          ? caught.message
-          : "Não foi possível iniciar a partida.",
-      );
+      setError({
+        message:
+          caught instanceof Error
+            ? caught.message
+            : "Não foi possível iniciar a partida.",
+      });
       setIsStarting(false);
     }
   }
 
   return (
     <div className="rounded-2xl border-t-4 border-[var(--duel-b)] bg-[var(--app-surface)] p-5 sm:p-7">
-      <fieldset>
+      <fieldset disabled={isStarting || needsUpdatedModes}>
         <legend className="text-2xl font-black">Quantas rodadas?</legend>
         <p className="mt-2 text-sm leading-6 text-[var(--app-muted)]">
           O tema tem {activeSongCount} músicas disponíveis. A partida sorteia
@@ -127,7 +141,8 @@ export function StartGameForm({
         type="button"
         size="lg"
         onClick={startGame}
-        disabled={isStarting || bracketSize === null}
+        disabled={isStarting || bracketSize === null || needsUpdatedModes}
+        aria-describedby={error ? errorId : undefined}
         className="mt-6 min-h-12 w-full rounded-md bg-[var(--duel-b)] font-bold text-[var(--app-bg)] hover:bg-[var(--duel-b)] hover:brightness-110"
       >
         {isStarting ? (
@@ -139,12 +154,36 @@ export function StartGameForm({
           ? "Preparando chave..."
           : bracketSize === null
             ? "Escolha uma modalidade"
-            : "Iniciar partida"}
+            : error?.code === "CATALOG_BUSY"
+              ? "Tentar novamente"
+              : "Iniciar partida"}
       </Button>
       {error ? (
-        <p className="mt-3 text-sm text-red-200" role="alert">
-          {error}
-        </p>
+        <div className="mt-3 space-y-3">
+          <p
+            ref={errorRef}
+            id={errorId}
+            tabIndex={-1}
+            className="rounded-md text-sm leading-6 text-red-200"
+            role="alert"
+          >
+            {error.message}
+            {needsUpdatedModes
+              ? " Atualize as modalidades e escolha novamente."
+              : null}
+          </p>
+          {needsUpdatedModes ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              className="min-h-12 w-full"
+              onClick={() => window.location.reload()}
+            >
+              Atualizar modalidades
+            </Button>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );

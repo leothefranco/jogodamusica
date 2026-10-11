@@ -84,8 +84,9 @@
   padding: 10px 24px;
   border: 1px solid var(--border);
   border-radius: 12px;
-  color: var(--app-text);
-  background: var(--app-surface);
+  background: #d4ff46;
+  color: #101216;
+  font-weight: 800;
 }
 .skip:hover {
   border-color: var(--app-text);
@@ -95,15 +96,15 @@
   outline-offset: 4px;
 }
 .stage[data-final="true"] {
-  background: radial-gradient(ellipse at 50% 25%, #343028, var(--app-bg) 70%);
+  background: radial-gradient(ellipse at 50% 25%, #283028, var(--app-bg) 70%);
 }
 .stage[data-final="true"] .emblem {
-  color: #ffce73;
+  color: #d4ff46;
   animation: final-emblem 1000ms 100ms both;
 }
 .stage[data-final="true"] .title {
   font-size: clamp(66px, 12vw, 144px);
-  text-shadow: 0 0 50px rgb(255 206 115 / 0.2);
+  text-shadow: 0 0 50px rgb(212 255 70 / 0.2);
 }
 .stage[data-final="true"] .curtainA,
 .stage[data-final="true"] .curtainB {

@@ -1,3 +1,6 @@
+import { BrandMark } from "@/components/brand-mark";
+import { EncoreArt } from "@/components/encore-art";
+import styles from "./game-result.module.css";
 import {
   ArrowLeft,
   Crown,
@@ -27,13 +30,18 @@ export function GameResult({
   const { champion } = result;
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[var(--app-bg)] px-5 py-10 text-white sm:px-8">
+    <main className={styles.page}>
       <div className="relative mx-auto max-w-5xl">
-        <section className="border-t-4 border-b-4 border-t-[var(--duel-a)] border-b-[var(--duel-b)] py-8 text-center">
+        <header className={styles.header}>
+          <BrandMark size={36} />
+          <span>{siteConfig.name}</span>
+        </header>
+        <section className={styles.champion}>
+          <EncoreArt className={styles.encore} />
           <span className="mx-auto grid size-16 place-items-center rounded-none border border-white/25 bg-[var(--app-surface)] text-[var(--app-text)]">
             <Trophy className="size-8" aria-hidden="true" />
           </span>
-          <p className="mt-5 text-xs font-bold tracking-[0.2em] text-[var(--duel-a)] uppercase">
+          <p className="mt-5 text-xs font-bold tracking-[0.2em] text-[#D4FF46] uppercase">
             Campeã de {state.theme.name}
           </p>
           <h1 className="mt-3 font-['JDM_Anton'] text-5xl font-normal tracking-tight text-balance uppercase sm:text-6xl">
@@ -76,7 +84,7 @@ export function GameResult({
                   href={`/api/resultados/${sessionId}/imagem?download=1`}
                   className={cn(
                     buttonVariants({ size: "lg" }),
-                    "min-h-12 rounded-md bg-[var(--duel-a)] px-5 font-bold text-[var(--app-bg)] hover:brightness-110",
+                    "min-h-12 rounded-md bg-[#D4FF46] px-5 font-bold text-[var(--app-bg)] hover:brightness-110",
                   )}
                 >
                   <Download aria-hidden="true" />
@@ -171,7 +179,7 @@ export function GameResult({
             href={`/tema/${state.theme.slug}`}
             className={cn(
               buttonVariants({ size: "lg" }),
-              "min-h-12 rounded-md bg-[var(--duel-a)] px-5 font-bold text-[var(--app-bg)] hover:brightness-110",
+              "min-h-12 rounded-md bg-[#D4FF46] px-5 font-bold text-[var(--app-bg)] hover:brightness-110",
             )}
           >
             <RotateCcw aria-hidden="true" />
