@@ -9,7 +9,7 @@ function isPatchedVersion(version) {
   const match =
     typeof version === "string" && /^16\.3\.(0|[1-9]\d*)$/.exec(version);
   return Boolean(
-    match && Number.isSafeInteger(Number(match[1])) && Number(match[1]) >= 3,
+    match && Number.isSafeInteger(Number(match[1])) && Number(match[1]) >= 8,
   );
 }
 
@@ -19,7 +19,7 @@ try {
   const version = manifest.dependencies?.next;
   if (!isPatchedVersion(version)) {
     throw new Error(
-      "Next.js deve estar fixado em uma versão estável da linha 16.3, no mínimo 16.3.3.",
+      "Next.js deve estar fixado em uma versão estável da linha 16.3, no mínimo 16.3.8.",
     );
   }
   if (lock.lockfileVersion !== 3) {

@@ -13,6 +13,8 @@
     "lint": "eslint .",
     "typegen": "next typegen",
     "typecheck": "npm run typegen && tsc --noEmit",
+    "typecheck:only": "tsc --noEmit",
+    "gate": "node scripts/gate-cli.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "db:generate": "drizzle-kit generate",
@@ -22,7 +24,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "security:check": "node scripts/check-next-security.mjs",
-    "test:security": "node --test tests/security/next-security.test.mjs"
+    "test:security": "node --test \"tests/security/*.test.mjs\""
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -34,7 +36,7 @@
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",
     "lucide-react": "^1.27.0",
-    "next": "16.3.3",
+    "next": "16.3.8",
     "postgres": "^3.4.9",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
@@ -53,7 +55,7 @@
     "@vitest/coverage-v8": "^4.1.10",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9",
-    "eslint-config-next": "16.3.3",
+    "eslint-config-next": "16.3.8",
     "playwright": "^1.62.0",
     "prettier": "^3.9.6",
     "prettier-plugin-tailwindcss": "^0.8.1",
