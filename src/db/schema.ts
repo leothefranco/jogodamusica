@@ -464,3 +464,69 @@ export type GameSession = typeof gameSessions.$inferSelect;
 export type SessionSong = typeof sessionSongs.$inferSelect;
 export type GameMatch = typeof gameMatches.$inferSelect;
 export type RateLimitBucket = typeof rateLimitBuckets.$inferSelect;
+
+export const themeStateProjections = pgTable(
+  "theme_state_projections",
+  {
+    themeId: uuid("theme_id")
+      .primaryKey()
+      .references(() => themes.id, { onDelete: "cascade" }),
+    availableFresh: integer("available_fresh").notNull(),
+    availableGrace: integer("available_grace").notNull(),
+    unavailable: integer("unavailable").notNull(),
+    unknown: integer("unknown").notNull(),
+    playableCount: integer("playable_count").notNull(),
+    potentialCount: integer("potential_count").notNull(),
+    activeEntryCount: integer("active_entry_count").notNull(),
+    supportedModes: integer("supported_modes")
+      .array()
+      .$type<import("@/domain/music/content-validation").BracketSize[]>()
+      .notNull(),
+    editorialState: themeEditorialStateEnum("editorial_state").notNull(),
+    visibility: varchar("visibility", { length: 8 })
+      .$type<"visible" | "hidden">()
+      .notNull(),
+    operationalState: varchar("operational_state", { length: 48 })
+      .$type<import("@/domain/music/theme-state").ThemeOperationalState>()
+      .notNull(),
+    policyVersion: integer("policy_version").notNull(),
+    ruleVersion: integer("rule_version").notNull(),
+    calculatedAt: timestamp("calculated_at", { withTimezone: true }).notNull(),
+    thumbnailUrls: text("thumbnail_urls").array().notNull(),
+    nextTransitionAt: timestamp("next_transition_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("theme_projection_visibility_idx").on(
+      table.visibility,
+      table.themeId,
+    ),
+    index("theme_projection_operational_idx").on(
+      table.operationalState,
+      table.themeId,
+    ),
+    check(
+      "theme_projection_nonnegative_check",
+      sql`${table.availableFresh} >= 0 and ${table.availableGrace} >= 0 and ${table.unavailable} >= 0 and ${table.unknown} >= 0`,
+    ),
+    check(
+      "theme_projection_counts_check",
+      sql`${table.playableCount} = ${table.availableFresh} + ${table.availableGrace} and ${table.potentialCount} = ${table.playableCount} + ${table.unknown} and ${table.activeEntryCount} = ${table.potentialCount} + ${table.unavailable}`,
+    ),
+    check(
+      "theme_projection_versions_check",
+      sql`${table.policyVersion} > 0 and ${table.ruleVersion} > 0`,
+    ),
+    check(
+      "theme_projection_visibility_check",
+      sql`${table.visibility} in ('visible', 'hidden') and (${table.visibility} <> 'visible' or (${table.editorialState} = 'published' and ${table.playableCount} >= 4))`,
+    ),
+    check(
+      "theme_projection_operational_check",
+      sql`${table.operationalState} in ('editorial_draft', 'healthy', 'degraded', 'suspended_pending_verification', 'suspended_insufficient_healthy_entries')`,
+    ),
+    check(
+      "theme_projection_modes_check",
+      sql`${table.supportedModes} <@ array[4,8,16,32,64,128]::integer[] and array_position(${table.supportedModes}, null) is null`,
+    ),
+  ],
+).enableRLS();
