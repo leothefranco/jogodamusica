@@ -20,11 +20,16 @@ O lockfile foi regenerado com npm 11.16.0 e revisado. Além dos dois pins, mudam
 
 ## Proteção contra downgrade
 
-`npm run security:check` lê manifesto, lockfile v3 e os package.json realmente instalados de Next.js e eslint-config-next. Exige pins idênticos, estáveis, da linha 16.3, com patch numérico >=3. Divergência ou ausência dos artefatos faz o comando falhar.
+`npm run security:check` lê manifesto, lockfile v3 e os package.json realmente instalados de Next.js e eslint-config-next. Exige pins idênticos, estáveis, da linha 16.3, com patch numérico >=8, piso elevado pela OPS-02 em 11/10/2026. Divergência ou ausência dos artefatos faz o comando falhar. O piso >=3 e as provas 16.3.3 abaixo descrevem a remediação histórica REL-01 e não autorizam downgrade após novos advisories.
 
 O gate executa antes de `npm run build`, inclusive no CI e no build padrão da hospedagem. `npm test` executa os testes do gate antes do Vitest. Não exige rede nem credenciais. A regra é um piso desta remediação, não um substituto para consultar novos advisories; outra minor/major requer revisão deliberada do gate.
 
 Os testes executam a CLI em diretórios temporários e observam o código de saída. O ciclo red/green demonstrou falha ao aceitar 16.3.0, ao ignorar downgrade instalado e ao ignorar divergências de lock/ESLint, antes das respectivas correções. Há cobertura para 16.3.1/2, ranges, prerelease, versão fora da linha, patch malformado, artefato ausente e comparação numérica do patch.
+
+A atualização OPS-02 acrescenta rejeição das versões coerentes 16.3.3–16.3.7 e
+aceitação de 16.3.8, conservando comparação numérica e pareamento exato. Consulte
+[a remediação OPS-02](ops-02-dependency-patches.md) para os novos advisories e
+patches transitivos; a pesquisa de versões não substitui a auditoria real.
 
 ## Evidências de validação
 

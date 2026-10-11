@@ -106,10 +106,7 @@ function redact(output, environment) {
     .filter((value) => typeof value === "string" && value.length >= 4)
     .sort((a, b) => b.length - a.length))
     safe = safe.replaceAll(value, "[REDACTED]");
-  safe = safe.replace(
-    /(?:https?|postgres(?:ql)?|redis|mongodb(?:\+srv)?):\/\/[^\s<>"']+/gi,
-    "[URL REDACTED]",
-  );
+  safe = safe.replace(/[a-z][a-z\d+.-]*:\/\/[^\s<>"']+/gi, "[URL REDACTED]");
   safe = safe.replace(
     /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,
     "[EMAIL REDACTED]",
@@ -128,7 +125,7 @@ function redact(output, environment) {
     "[TOKEN REDACTED]",
   );
   safe = safe.replace(
-    /^.*(?:\b(?:set-cookie|cookie|authorization|bearer|gameCapability|capability|access[_-]?token|refresh[_-]?token|api[_-]?key|secret|password)\b|\b[A-Z][A-Z0-9_]{2,}\s*=).*$/gim,
+    /^.*(?:\b(?:set-cookie|cookie|authorization|bearer|gameCapability|capability|\w*token\w*|api[_-]?key|secret|password|passwd|senha)\b|\b[A-Z][A-Z0-9_]{2,}\s*=).*$/gim,
     "[SENSITIVE LINE REDACTED]",
   );
   return safe;
@@ -239,6 +236,23 @@ export async function runGate({
       stage === "audit"
         ? auditResult(response.stdout ?? response.output, response.exitCode)
         : undefined;
+    let validation;
+    if (stage === "install" && response.validation) {
+      const allowedReasons = [
+        "immutable-installation",
+        "installed-next-mismatch",
+        "checkout-changed",
+        "installation-validation-error",
+      ];
+      validation =
+        allowedReasons.includes(response.validation.reason) &&
+        ["passed", "failed"].includes(response.validation.result)
+          ? {
+              result: response.validation.result,
+              reason: response.validation.reason,
+            }
+          : { result: "failed", reason: "installation-validation-error" };
+    }
     await writeFile(
       join(outputDir, `${stage}.log`),
       audit
@@ -249,10 +263,12 @@ export async function runGate({
       stage,
       exitCode: response.exitCode,
       durationMs: Math.round(performance.now() - started),
-      result: failure
-        ? "failed"
-        : (audit?.result ?? (response.exitCode === 0 ? "passed" : "failed")),
+      result:
+        failure || validation?.result === "failed"
+          ? "failed"
+          : (audit?.result ?? (response.exitCode === 0 ? "passed" : "failed")),
       ...(audit ? { audit } : {}),
+      ...(validation ? { validation } : {}),
       ...(failure ? { failure } : {}),
     };
     await persist();

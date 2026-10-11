@@ -7,6 +7,12 @@ Em checkout limpo, use o Node exato de `.nvmrc` e o npm exato de
 npm run gate
 ```
 
+A política `.gitattributes` usa `* text=auto eol=lf`: checkouts novos mantêm
+texto em LF em ambas as plataformas, preservando arquivos binários pela detecção
+automática. Em checkout anterior à política, use uma worktree limpa do SHA
+validado; não altere a configuração global do Git nem reformate o produto para
+contornar uma divergência de checkout.
+
 O bootstrap usa módulos nativos do Node e não precisa de `node_modules`.
 O comando funciona no Windows e no Linux e não exige credenciais do produto.
 Runtime divergente, árvore Git suja, `.env*` diferente de `.env.example`,
@@ -58,6 +64,11 @@ runtime efetivo, Next exato, plataforma, timestamps, resultado e exit code do
 gate; cada estágio contém identificador, resultado, exit code e duração. Audit
 acrescenta classificação e contagens. Falhas de preflight retêm os dez estágios
 como não executados, sem fabricar identidade validada.
+
+A validação posterior ao `npm ci` registra `validation.result` e
+`validation.reason` separadamente. Divergência do Next instalado, alteração do
+checkout ou erro de leitura/parse mantém o estágio falho, mas conserva o exit
+code original do processo e sua saída redigida no log da instalação.
 
 Logs são capturados antes de qualquer publicação e redigem valores de ambiente,
 URLs, e-mails, IPs, JWTs, UUIDs/capabilities e linhas de cookie, token, senha ou

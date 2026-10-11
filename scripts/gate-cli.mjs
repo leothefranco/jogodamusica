@@ -165,24 +165,39 @@ async function main() {
       }
       const result = await executeStage(request);
       if (request.stage === "install" && result.exitCode === 0) {
-        const installed = JSON.parse(
-          await readFile(
-            join(cwd, "node_modules", "next", "package.json"),
-            "utf8",
-          ),
-        );
-        if (installed.version !== expectedNext)
-          return {
-            exitCode: 1,
-            output:
-              "Installed Next version does not match the locked version.\n",
+        let validation = { result: "passed", reason: "immutable-installation" };
+        try {
+          const installed = JSON.parse(
+            await readFile(
+              join(cwd, "node_modules", "next", "package.json"),
+              "utf8",
+            ),
+          );
+          if (installed.version !== expectedNext)
+            validation = {
+              result: "failed",
+              reason: "installed-next-mismatch",
+            };
+          else if (
+            JSON.stringify(await snapshot(safeEnvironment)) !==
+            JSON.stringify(baseline)
+          )
+            validation = { result: "failed", reason: "checkout-changed" };
+        } catch {
+          validation = {
+            result: "failed",
+            reason: "installation-validation-error",
           };
-        const current = await snapshot(safeEnvironment);
-        if (JSON.stringify(current) !== JSON.stringify(baseline))
-          return {
-            exitCode: 1,
-            output: "Immutable installation changed the checkout.\n",
-          };
+        }
+        return {
+          ...result,
+          validation,
+          output:
+            result.output +
+            (validation.result === "failed"
+              ? `\nPost-install validation failed: ${validation.reason}.\n`
+              : ""),
+        };
       }
       return result;
     },

@@ -10,7 +10,7 @@ const command = fileURLToPath(
   new URL("../../scripts/check-next-security.mjs", import.meta.url),
 );
 
-function fixture(t, version = "16.3.3") {
+function fixture(t, version = "16.3.8") {
   const fixtureRoot = path.resolve(tmpdir());
   const cwd = mkdtempSync(path.join(fixtureRoot, "next-security-"));
   t.after(() => {
@@ -52,12 +52,12 @@ function fixture(t, version = "16.3.3") {
 test("rejeita a instalação vulnerável 16.3.0 mesmo com manifesto e lock coerentes", (t) => {
   const result = fixture(t, "16.3.0").run();
   assert.equal(result.status, 1, result.stdout + result.stderr);
-  assert.match(result.stderr, /16\.3\.3/);
+  assert.match(result.stderr, /16\.3\.8/);
 });
-test("aceita a versão corrigida 16.3.3", (t) => {
+test("aceita a versão corrigida 16.3.8", (t) => {
   const result = fixture(t).run();
   assert.equal(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stdout, /16\.3\.3/);
+  assert.match(result.stdout, /16\.3\.8/);
 });
 
 test("rejeita downgrade instalado mesmo quando o manifesto e lock prometem o patch", (t) => {
@@ -77,7 +77,7 @@ for (const [description, mutate] of [
   [
     "pin divergente na raiz do lock",
     (project) => {
-      project.lock.packages[""].dependencies.next = "^16.3.3";
+      project.lock.packages[""].dependencies.next = "^16.3.8";
     },
   ],
   [
@@ -99,8 +99,13 @@ for (const [description, mutate] of [
 for (const version of [
   "16.3.1",
   "16.3.2",
-  "^16.3.3",
-  "16.3.3-canary.1",
+  "16.3.3",
+  "16.3.4",
+  "16.3.5",
+  "16.3.6",
+  "16.3.7",
+  "^16.3.8",
+  "16.3.8-canary.1",
   "16.4.0",
   "17.0.0",
   "16.3.03",

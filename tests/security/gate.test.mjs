@@ -229,6 +229,37 @@ test("a process exception fails closed and retains a safe stage result", async (
   }
 });
 
+test("generic token and password diagnostics never reach publishable logs", async () => {
+  const outputDir = await mkdtemp(join(tmpdir(), "ops-gate-labels-"));
+  const sentinels = [
+    "ops-token-synthetic-92",
+    "ops-pass-synthetic-92",
+    "ops-session-synthetic-92",
+    "ops-mysql-user-92",
+    "ops-mysql-pass-92",
+  ];
+  try {
+    await runGate({
+      cwd: process.cwd(),
+      outputDir,
+      identity,
+      environment: {},
+      runner: async () => ({
+        exitCode: 1,
+        output: `safe installation progress\ntoken: ${sentinels[0]}\nsenha: ${sentinels[1]}\n{"sessionToken":"${sentinels[2]}"}\nmysql://${sentinels[3]}:${sentinels[4]}@example.invalid/db\nsafe final diagnostic\n`,
+      }),
+    });
+    const retained =
+      (await readFile(join(outputDir, "install.log"), "utf8")) +
+      (await readFile(join(outputDir, "evidence.json"), "utf8"));
+    for (const sentinel of sentinels) assert.ok(!retained.includes(sentinel));
+    assert.ok(retained.includes("safe installation progress"));
+    assert.ok(retained.includes("safe final diagnostic"));
+  } finally {
+    await rm(outputDir, { recursive: true, force: true });
+  }
+});
+
 test("the gate uses real project commands and fixture mode only for the fixture build and browser tests", async () => {
   const outputDir = await mkdtemp(join(tmpdir(), "ops-gate-commands-"));
   const observed = [];
