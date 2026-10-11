@@ -46,8 +46,13 @@ estágio e2e; no Linux inclui dependências do navegador no runner efêmero do C
 O estágio de testes limita o Vitest a um worker em ambas as plataformas. Esse
 orçamento conserva todas as suítes e seus testes de concorrência internos; não
 altera assertions, timeout ou configuração compartilhada. Em Windows com 8 GB,
-o orçamento automático excedeu os hooks de inicialização PGlite de 10 segundos;
-o controle com um worker executou todos os testes com os limites originais.
+a execução inicial com orçamento automático falhou em hooks PGlite de 10 segundos;
+o controle com um worker passou com os limites originais. A carga de outro trabalho
+mudou entre essas tentativas, portanto essa comparação não isola a causa. Um único
+controle posterior, na janela exclusiva, também falhou com orçamento automático,
+com um hook excedido, saídas inesperadas de workers e erro nativo de falta de memória.
+O gate completo com um worker passou no mesmo host. Esses resultados sustentam o
+orçamento comum, sem atribuir toda a falha inicial exclusivamente aos workers.
 O script `npm test` isolado continua disponível com suas opções de desenvolvimento.
 
 Uma falha interrompe os estágios dependentes, que ficam `not-run`, com exit code
@@ -88,16 +93,30 @@ de Playwright nem JSON bruto do audit.
 
 ## Rollout e equivalência
 
-O primeiro checkpoint mantém `Quality gate` e adiciona o mesmo `npm run gate`
-como job paralelo. O runner canônico faz checkout do SHA da PR para compará-lo
-com a execução Windows. Antes de substituir o caminho antigo, compare ordem,
-suítes descobertas, ambos os builds, resultados, árvore e falhas. O caminho
-antigo usa o merge sintético; a composição deve ter a mesma árvore da branch
-sincronizada com master e qualquer delta exige nova conferência.
+A comparação anterior à transição foi concluída no checkpoint
+`95ccb5bff6def722b930e96cd4eddba090a07cd9`, árvore
+`eb99c350c8adcadb11b3b1fe5ec7b48cf919c29f`. No CI Linux
+[38176747894](https://github.com/leothefranco/jogodamusica/actions/runs/38176747894),
+os jobs antigo e canônico passaram; o merge sintético do job antigo tinha a mesma
+árvore. O Windows passou os dez estágios, com exit code zero e postflight aprovado,
+em checkout novo LF sem dependências iniciais. Ambos executaram 50 testes Node,
+569 Vitest em 69 arquivos e 143 Playwright, os dois builds e auditoria de produção
+com todas as severidades zeradas, no Node 24.18.0/npm 11.16.0/Next 16.3.8.
 
-O workflow usa `contents: read`, actions fixadas por SHA e nenhum segredo do
-produto. A transição para fonte única do CI aguarda evidência Linux/Windows e
-revisão independente. Não implica acesso a Preview/QA/produção ou promoção.
+Os comandos conservam descoberta automática, configurações e assertions das suítes.
+O canônico explicita typegen antes de tipos, limita o Vitest a um worker, instala
+Chromium no estágio E2E após o build fixture e acrescenta audit fail-closed.
+Reporter textual e trace desligado não selecionam testes. A redação remove a linha
+com o nome authorization do log canônico; a contagem final de 69 arquivos é
+preservada. O reporter antigo não lista arquivos E2E: a comparação usa o mesmo
+Git/configuração e os 143 resultados, além da lista descoberta pelo canônico.
+
+O workflow agora mantém o nome obrigatório `Quality gate` e executa somente
+`npm run gate`, com checkout do SHA literal da PR, `contents: read`, actions
+fixadas por SHA e artefatos restritos ao schema e logs redigidos. A revisão e as
+provas Windows/Linux do novo commit confirmam a transição antes da integração;
+o checkpoint acima comprova equivalência, não substitui provas do novo objeto.
+Essa integração não implica QA externo, acesso a produção ou promoção de release.
 
 Rollback do runner precisa preservar instalação imutável, formatação, lint,
 typegen antes de tipos, testes descobertos automaticamente, os dois builds,

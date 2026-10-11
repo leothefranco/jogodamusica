@@ -18,61 +18,6 @@ jobs:
   quality:
     name: Quality gate
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      CI: "true"
-      NEXT_TELEMETRY_DISABLED: "1"
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-
-      - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-
-      - name: Restore Next.js build cache
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: ${{ github.workspace }}/.next/cache
-          key: ${{ runner.os }}-nextjs-${{ hashFiles('package-lock.json') }}-${{ hashFiles('src/**/*.[jt]s', 'src/**/*.[jt]sx', 'next.config.ts') }}
-          restore-keys: |
-            ${{ runner.os }}-nextjs-${{ hashFiles('package-lock.json') }}-
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Check formatting
-        run: npm run format:check
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Type-check
-        run: npm run typecheck
-
-      - name: Run unit and integration tests
-        run: npm test
-
-      - name: Build production bundle
-        run: npm run build
-
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
-
-      - name: Build browser-test fixture
-        run: npm run build
-        env:
-          E2E_TEST_MODE: "1"
-
-      - name: Run browser tests
-        run: npm run test:e2e
-
-  deterministic:
-    name: Deterministic gate (parallel rollout)
-    runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
       CI: "true"
