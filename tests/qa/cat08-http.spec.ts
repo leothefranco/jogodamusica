@@ -108,6 +108,19 @@ test("Next real propaga saúde, invalida destinos e recupera ambos os Temas", as
     const link = page.locator(`a[href="/tema/cat08-${index}"]`).first();
     await expect(link).toBeVisible();
     expect((await request.get(`/tema/cat08-${index}`)).status()).toBe(200);
+    await link.click();
+    await expect(page).toHaveURL(new RegExp(`/tema/cat08-${index}$`));
+    await expect(
+      page.getByRole("heading", { name: `CAT08 Tema ${index}`, exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", {
+        name: "Não encontramos esta página",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await page.goBack();
+    await expect(page).toHaveURL("http://127.0.0.1:3182/");
   }
   expect(externalRequests).toEqual([]);
 });
