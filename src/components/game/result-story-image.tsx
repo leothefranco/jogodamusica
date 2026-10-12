@@ -1,34 +1,44 @@
-import { BrandMark } from "@/components/brand-mark";
 import { ImageResponse } from "next/og";
 
+import { BrandMark } from "@/components/brand-mark";
 import type { ResultShareCard } from "@/domain/game/result-share-card";
+import { brandColors } from "@/lib/brand";
+import { siteConfig } from "@/lib/site";
 
-const size = {
-  height: 1920,
-  width: 1080,
-};
-
-function CrownIcon() {
+function RecordGrooves() {
   return (
     <svg
-      width="68"
-      height="68"
-      viewBox="0 0 68 68"
+      width="600"
+      height="600"
+      viewBox="0 0 600 600"
       fill="none"
       aria-hidden="true"
     >
-      <path
-        d="M10 22 23 36 34 14l11 22 13-14-5 31H15l-5-31Z"
-        fill="#F5F3ED"
-        stroke="#101216"
-        strokeWidth="3"
-        strokeLinejoin="round"
+      <circle
+        cx="300"
+        cy="300"
+        r="292"
+        fill="#171B21"
+        stroke={brandColors.brand}
+        strokeWidth="4"
       />
-      <path
-        d="M17 58h34"
-        stroke="#F5F3ED"
-        strokeWidth="5"
-        strokeLinecap="round"
+      {[268, 245, 222, 199, 176, 153].map((radius) => (
+        <circle
+          key={radius}
+          cx="300"
+          cy="300"
+          r={radius}
+          stroke="#343A43"
+          strokeWidth="2"
+        />
+      ))}
+      <circle
+        cx="300"
+        cy="300"
+        r="126"
+        fill={brandColors.background}
+        stroke={brandColors.brand}
+        strokeWidth="3"
       />
     </svg>
   );
@@ -38,208 +48,175 @@ export function createResultStoryImage(
   card: ResultShareCard,
   headers?: Record<string, string>,
 ) {
+  const titleSize =
+    card.title.length > 120
+      ? 44
+      : card.title.length > 80
+        ? 54
+        : card.titleFontSize;
+  const artistSize = card.artist.length > 100 ? 27 : 36;
+  const themeSize = card.themeName.length > 90 ? 28 : 36;
+
   return new ImageResponse(
     <div
       style={{
         alignItems: "center",
-        background: "#101216",
-        color: "white",
+        background: brandColors.background,
+        color: brandColors.text,
         display: "flex",
         flexDirection: "column",
         height: "100%",
-        overflow: "hidden",
-        padding: "78px 70px 64px",
-        position: "relative",
         width: "100%",
+        padding: "64px 72px",
+        position: "relative",
       }}
     >
       <div
         style={{
-          background: "#38BDF8",
-          border: "0px solid transparent",
-          borderRadius: 0,
-          display: "flex",
-          height: 12,
           position: "absolute",
-          right: 0,
           top: 0,
-          width: "50%",
-        }}
-      />
-      <div
-        style={{
-          background: "#FF923D",
-          borderRadius: 0,
-          top: 0,
-          display: "flex",
-          height: 12,
           left: 0,
-          position: "absolute",
-          width: "50%",
+          width: "100%",
+          height: 12,
+          background: brandColors.brand,
+          display: "flex",
         }}
       />
-
       <div
         style={{
           alignItems: "center",
           display: "flex",
-          justifyContent: "space-between",
           width: "100%",
+          gap: 22,
         }}
       >
-        <div style={{ alignItems: "center", display: "flex" }}>
-          <div
+        <BrandMark size={100} />
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          <span style={{ fontSize: 38, fontWeight: 900, letterSpacing: -1 }}>
+            {siteConfig.name.toUpperCase()}
+          </span>
+          <span
             style={{
-              alignItems: "center",
-              background: "#181C22",
-              border: "2px solid #38BDF8",
-              borderRadius: 0,
-              display: "flex",
-              height: 82,
-              justifyContent: "center",
-              width: 82,
+              color: brandColors.brand,
+              fontSize: 21,
+              letterSpacing: 4,
+              marginTop: 8,
             }}
           >
-            <BrandMark size={72} />
-          </div>
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              marginLeft: 22,
-            }}
-          >
-            <span
-              style={{
-                fontSize: 29,
-                fontWeight: 800,
-                letterSpacing: 3,
-              }}
-            >
-              JOGO DA MÚSICA
-            </span>
-            <span
-              style={{
-                color: "#38BDF8",
-                fontSize: 20,
-                fontWeight: 700,
-                letterSpacing: 2,
-                marginTop: 5,
-              }}
-            >
-              RESULTADO FINAL
-            </span>
-          </div>
-        </div>
-        <div
-          style={{
-            alignItems: "center",
-            background: "#181C22",
-            border: "2px solid #FF923D",
-            borderRadius: 0,
-            display: "flex",
-            height: 82,
-            justifyContent: "center",
-            width: 82,
-          }}
-        >
-          <CrownIcon />
+            A ÚLTIMA FAIXA É A CAMPEÃ
+          </span>
         </div>
       </div>
 
       <div
         style={{
-          alignItems: "center",
           display: "flex",
           flexDirection: "column",
-          marginTop: 105,
+          alignItems: "center",
           width: "100%",
+          marginTop: 42,
         }}
       >
         <span
           style={{
-            color: "#FF923D",
-            fontSize: 25,
+            color: brandColors.brand,
+            fontSize: 24,
             fontWeight: 800,
-            letterSpacing: 4,
-            textTransform: "uppercase",
-          }}
-        >
-          CAMPEÃ DE {card.themeName}
-        </span>
-        <span
-          style={{
-            color: "#F5F3ED",
-            fontSize: 43,
-            fontWeight: 900,
-            letterSpacing: 6,
-            marginTop: 24,
+            letterSpacing: 5,
           }}
         >
           MÚSICA CAMPEÃ
         </span>
+        <span
+          style={{
+            fontSize: themeSize,
+            color: brandColors.muted,
+            lineHeight: 1.15,
+            marginTop: 14,
+            width: "100%",
+            textAlign: "center",
+            wordBreak: "break-word",
+          }}
+        >
+          {card.themeName}
+        </span>
       </div>
 
       <div
         style={{
-          background: "rgba(255, 255, 255, 0.035)",
-          border: "3px solid #F5F3ED",
-          borderRadius: 0,
-          boxShadow: "0 30px 90px rgba(0, 0, 0, 0.5)",
-          display: "flex",
-          height: 770,
-          marginTop: 50,
-          overflow: "hidden",
-          padding: 14,
           position: "relative",
-          width: 770,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 600,
+          height: 600,
+          marginTop: 30,
+          flexShrink: 0,
         }}
       >
-        {card.thumbnailUrl ? (
-          // The URL is restricted to the same image hosts allowed by the app.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            alt=""
-            src={card.thumbnailUrl}
-            style={{
-              borderRadius: 0,
-              height: "100%",
-              objectFit: "cover",
-              width: "100%",
-            }}
-          />
-        ) : (
-          <div
-            style={{
-              alignItems: "center",
-              background:
-                "linear-gradient(135deg, #38BDF8 0%, #38BDF8 50%, #FF923D 50%, #FF923D 100%)",
-              borderRadius: 0,
-              display: "flex",
-              height: "100%",
-              justifyContent: "center",
-              width: "100%",
-            }}
-          >
-            <BrandMark size={72} />
-          </div>
-        )}
+        <RecordGrooves />
         <div
           style={{
-            alignItems: "center",
-            background: "#181C22",
-            borderRadius: 0,
-            bottom: 35,
             display: "flex",
-            height: 100,
-            justifyContent: "center",
             position: "absolute",
-            right: 35,
-            width: 100,
+            width: 240,
+            height: 240,
+            borderRadius: 120,
+            alignItems: "center",
+            justifyContent: "center",
+            overflow: "hidden",
+            background: brandColors.background,
           }}
         >
-          <CrownIcon />
+          {card.thumbnailUrl ? (
+            // The share projection restricts the image URL to approved public hosts.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              alt=""
+              src={card.thumbnailUrl}
+              width={240}
+              height={240}
+              style={{ width: 240, height: 240, objectFit: "cover" }}
+            />
+          ) : (
+            <BrandMark size={170} />
+          )}
         </div>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-end",
+          gap: 12,
+          marginTop: 14,
+          flexShrink: 0,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            width: 90,
+            height: 26,
+            background: "#242A32",
+          }}
+        />
+        <div
+          style={{
+            display: "flex",
+            width: 150,
+            height: 48,
+            background: brandColors.brand,
+          }}
+        />
+        <div
+          style={{
+            display: "flex",
+            width: 90,
+            height: 18,
+            background: "#242A32",
+          }}
+        />
       </div>
 
       <div
@@ -247,29 +224,32 @@ export function createResultStoryImage(
           alignItems: "center",
           display: "flex",
           flexDirection: "column",
-          marginTop: 54,
+          marginTop: 30,
           width: "100%",
         }}
       >
         <span
           style={{
-            fontSize: card.titleFontSize,
+            fontSize: titleSize,
             fontWeight: 900,
-            letterSpacing: -2,
-            lineHeight: 1.02,
-            maxWidth: 930,
+            letterSpacing: -1,
+            lineHeight: 1.05,
+            width: "100%",
             textAlign: "center",
+            wordBreak: "break-word",
           }}
         >
           {card.title}
         </span>
         <span
           style={{
-            color: "rgba(255, 255, 255, 0.62)",
-            fontSize: 37,
-            fontWeight: 600,
-            marginTop: 20,
+            color: brandColors.muted,
+            fontSize: artistSize,
+            lineHeight: 1.15,
+            marginTop: 18,
+            width: "100%",
             textAlign: "center",
+            wordBreak: "break-word",
           }}
         >
           {card.artist}
@@ -278,38 +258,35 @@ export function createResultStoryImage(
 
       <div
         style={{
-          alignItems: "center",
-          borderTop: "2px solid rgba(255, 255, 255, 0.1)",
           display: "flex",
-          justifyContent: "space-between",
+          flexDirection: "column",
+          alignItems: "center",
+          borderTop: "2px solid #343A43",
           marginTop: "auto",
-          paddingTop: 35,
+          paddingTop: 26,
           width: "100%",
         }}
       >
         <span
-          style={{
-            color: "rgba(255, 255, 255, 0.55)",
-            fontSize: 23,
-            fontWeight: 600,
-          }}
+          style={{ fontSize: 24, color: brandColors.brand, fontWeight: 800 }}
         >
-          Elejam a melhor música.
+          Elejam a melhor música. Guardem este resultado.
         </span>
         <span
           style={{
-            color: "#FF923D",
-            fontSize: 25,
-            fontWeight: 800,
+            color: brandColors.muted,
+            fontSize: 20,
+            lineHeight: 1.2,
+            marginTop: 14,
+            textAlign: "center",
+            width: "100%",
+            wordBreak: "break-all",
           }}
         >
-          {card.siteLabel}
+          {card.resultUrl}
         </span>
       </div>
     </div>,
-    {
-      ...size,
-      headers,
-    },
+    { width: 1080, height: 1920, headers },
   );
 }

@@ -22,10 +22,10 @@ export default async function AdminThemesPage({
     <main className="mx-auto w-full max-w-7xl px-5 py-10 sm:px-8 sm:py-14">
       <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-bold tracking-[0.2em] text-[var(--duel-a)] uppercase">
+          <p className="text-xs font-bold tracking-[0.2em] text-[var(--brand)] uppercase">
             Conteúdo
           </p>
-          <h1 className="mt-3 text-4xl font-black tracking-[-0.04em] sm:text-5xl">
+          <h1 className="mt-3 text-4xl font-black tracking-[-0.04em] break-words sm:text-5xl">
             Temas
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--app-muted)]">
@@ -49,7 +49,7 @@ export default async function AdminThemesPage({
       {query.message ? (
         <div
           role="status"
-          className="mt-7 rounded-md border border-emerald-300/20 bg-emerald-400/8 px-4 py-3 text-sm text-emerald-100"
+          className="mt-7 rounded-md border border-emerald-300/20 bg-emerald-400/8 px-4 py-3 text-sm text-[var(--app-success)]"
         >
           {query.message}
         </div>
@@ -58,11 +58,11 @@ export default async function AdminThemesPage({
       {themeItems.length === 0 ? (
         <section className="mt-10 rounded-2xl border border-dashed border-white/10 px-6 py-16 text-center">
           <Disc3
-            className="mx-auto size-9 text-[var(--duel-a)]"
+            className="mx-auto size-9 text-[var(--brand)]"
             aria-hidden="true"
           />
           <h2 className="mt-5 text-xl font-bold">Nenhum tema criado</h2>
-          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-white/45">
+          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--app-muted)]">
             Crie o primeiro tema e depois adicione vídeos para torná-lo jogável.
           </p>
         </section>
@@ -85,7 +85,7 @@ export default async function AdminThemesPage({
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       {theme.editorialState === "draft" && canPublish ? (
-                        <span className="text-xs font-semibold text-[var(--duel-a)]">
+                        <span className="text-xs font-semibold text-[var(--brand)]">
                           Pronto para publicar
                         </span>
                       ) : null}
@@ -93,7 +93,7 @@ export default async function AdminThemesPage({
                     <h2 className="mt-4 truncate text-xl font-black">
                       {theme.name}
                     </h2>
-                    <p className="mt-1 truncate font-mono text-xs text-white/35">
+                    <p className="mt-1 truncate font-mono text-xs text-[var(--app-muted)]">
                       /{theme.slug}
                     </p>
                   </div>

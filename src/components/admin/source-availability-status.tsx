@@ -11,9 +11,9 @@ const labels = {
 } as const;
 
 const tones = {
-  available_fresh: "border-emerald-300/20 text-emerald-200",
+  available_fresh: "border-emerald-300/20 text-[var(--app-success)]",
   available_grace: "border-amber-300/20 text-amber-100",
-  unavailable: "border-red-300/20 text-red-200",
+  unavailable: "border-red-300/20 text-[var(--app-error)]",
   unknown: "border-white/10 text-[var(--app-muted)]",
 } as const;
 
@@ -45,7 +45,7 @@ export function SourceAvailabilityStatus({
         >
           {labels[availability.state]}
         </span>
-        <span className="text-xs text-white/38">
+        <span className="text-xs text-[var(--app-muted)]">
           Brasil · policy v{observation?.policyVersion ?? 1}
         </span>
       </div>
@@ -84,7 +84,7 @@ export function SourceAvailabilityStatus({
           </div>
         </dl>
       ) : (
-        <p className="mt-3 text-xs text-white/42">
+        <p className="mt-3 text-xs text-[var(--app-muted)]">
           Nunca verificada no Brasil. Fontes legadas permanecem desconhecidas.
         </p>
       )}

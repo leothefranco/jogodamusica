@@ -22,15 +22,15 @@ export default async function AdminPage() {
 
   return (
     <main className="mx-auto w-full max-w-7xl px-5 py-12 sm:px-8 sm:py-16">
-      <p className="text-xs font-bold tracking-[0.2em] text-[var(--duel-a)] uppercase">
+      <p className="text-xs font-bold tracking-[0.2em] text-[var(--brand)] uppercase">
         Painel administrativo
       </p>
-      <h1 className="mt-3 max-w-3xl text-4xl font-black tracking-[-0.04em] sm:text-5xl">
+      <h1 className="mt-3 max-w-3xl text-4xl font-black tracking-[-0.04em] break-words sm:text-5xl">
         Olá, {admin.displayName}.
       </h1>
       <p className="mt-4 max-w-2xl text-base leading-7 text-[var(--app-muted)]">
         Prepare temas, associe músicas do YouTube e publique coleções prontas
-        para os futuros chaveamentos.
+        para as próximas partidas.
       </p>
 
       <div className="mt-7 flex flex-wrap gap-3">
@@ -78,18 +78,20 @@ export default async function AdminPage() {
           },
         ].map(({ icon: Icon, value, label }) => (
           <article key={label} className="bg-[var(--app-surface)] p-6 sm:p-7">
-            <span className="grid size-10 place-items-center rounded-md border border-white/8 bg-white/[0.04] text-[var(--duel-a)]">
+            <span className="grid size-10 place-items-center rounded-md border border-white/8 bg-white/[0.04] text-[var(--brand)]">
               <Icon className="size-5" aria-hidden="true" />
             </span>
             <strong className="mt-8 block text-3xl font-black">{value}</strong>
-            <p className="mt-1 text-sm leading-6 text-white/42">{label}</p>
+            <p className="mt-1 text-sm leading-6 text-[var(--app-muted)]">
+              {label}
+            </p>
           </article>
         ))}
       </section>
 
       {themes.length === 0 ? (
-        <div className="mt-6 flex gap-3 rounded-xl border border-white/8 bg-white/[0.025] p-5 text-sm text-white/45">
-          <CircleOff className="size-5 shrink-0 text-[var(--duel-a)]" />
+        <div className="mt-6 flex gap-3 rounded-xl border border-white/8 bg-white/[0.025] p-5 text-sm text-[var(--app-muted)]">
+          <CircleOff className="size-5 shrink-0 text-[var(--brand)]" />
           Crie um tema para iniciar a preparação do conteúdo jogável.
         </div>
       ) : null}

@@ -60,7 +60,7 @@ export default async function EditThemePage({
     <main className="mx-auto w-full max-w-7xl px-5 py-10 sm:px-8 sm:py-14">
       <Link
         href="/admin/temas"
-        className="inline-flex min-h-11 items-center gap-2 rounded-md pr-3 text-sm font-semibold text-[var(--app-muted)] outline-none hover:text-white focus-visible:ring-2 focus-visible:ring-[var(--duel-a)]"
+        className="inline-flex min-h-11 items-center gap-2 rounded-md pr-3 text-sm font-semibold text-[var(--app-muted)] outline-none hover:text-white focus-visible:ring-2 focus-visible:ring-[var(--app-focus)]"
       >
         <ArrowLeft className="size-4" aria-hidden="true" />
         Voltar aos temas
@@ -68,10 +68,12 @@ export default async function EditThemePage({
 
       <div className="mt-7 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="mt-4 text-4xl font-black tracking-[-0.04em] sm:text-5xl">
+          <h1 className="mt-4 text-4xl font-black tracking-[-0.04em] break-words sm:text-5xl">
             {theme.name}
           </h1>
-          <p className="mt-2 font-mono text-xs text-white/35">/{theme.slug}</p>
+          <p className="mt-2 font-mono text-xs text-[var(--app-muted)]">
+            /{theme.slug}
+          </p>
           <div className="mt-4">
             <ThemeStateStatus state={state} />
           </div>
@@ -124,7 +126,7 @@ export default async function EditThemePage({
       {query.message ? (
         <div
           role="status"
-          className="mt-7 rounded-md border border-emerald-300/20 bg-emerald-400/8 px-4 py-3 text-sm text-emerald-100"
+          className="mt-7 rounded-md border border-emerald-300/20 bg-emerald-400/8 px-4 py-3 text-sm text-[var(--app-success)]"
         >
           {query.message}
         </div>
@@ -132,7 +134,7 @@ export default async function EditThemePage({
       {query.error ? (
         <div
           role="alert"
-          className="mt-7 rounded-md border border-red-300/20 bg-red-400/8 px-4 py-3 text-sm text-red-100"
+          className="mt-7 rounded-md border border-red-300/20 bg-red-400/8 px-4 py-3 text-sm text-[var(--app-error)]"
         >
           {query.error}
         </div>
@@ -156,7 +158,7 @@ export default async function EditThemePage({
       <div className="mt-10 grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
         <section className="rounded-2xl border border-white/8 bg-[var(--app-surface)] p-5 sm:p-7">
           <h2 className="text-xl font-black">Dados do tema</h2>
-          <p className="mt-2 text-sm leading-6 text-white/42">
+          <p className="mt-2 text-sm leading-6 text-[var(--app-muted)]">
             Nome, endereço e apresentação do catálogo musical.
           </p>
           <div className="mt-7">
@@ -176,7 +178,7 @@ export default async function EditThemePage({
 
         <section className="rounded-2xl border border-white/8 bg-[var(--app-surface)] p-5 sm:p-7">
           <h2 className="text-xl font-black">Adicionar música</h2>
-          <p className="mt-2 text-sm leading-6 text-white/42">
+          <p className="mt-2 text-sm leading-6 text-[var(--app-muted)]">
             Pesquise somente no painel ou cole uma URL. Os metadados são
             resolvidos no servidor antes do cadastro.
           </p>
@@ -189,14 +191,14 @@ export default async function EditThemePage({
       <section className="mt-6 rounded-2xl border border-white/8 bg-[var(--app-surface)] p-5 sm:p-7">
         <div>
           <h2 className="text-xl font-black">Músicas do tema</h2>
-          <p className="mt-2 text-sm text-white/42">
+          <p className="mt-2 text-sm text-[var(--app-muted)]">
             {countLabel(songs.length, "associada", "associadas")},{" "}
             {countLabel(state.counts.activeEntryCount, "ativa", "ativas")}.
           </p>
         </div>
 
         {songs.length === 0 ? (
-          <div className="mt-7 rounded-2xl border border-dashed border-white/10 px-5 py-10 text-center text-sm text-white/38">
+          <div className="mt-7 rounded-2xl border border-dashed border-white/10 px-5 py-10 text-center text-sm text-[var(--app-muted)]">
             Nenhuma música associada ainda.
           </div>
         ) : (
@@ -212,8 +214,8 @@ export default async function EditThemePage({
                       <span
                         className={`rounded-full border px-2.5 py-1 text-[0.68rem] font-bold ${
                           song.isActive
-                            ? "border-emerald-300/20 text-emerald-200"
-                            : "border-white/8 text-white/38"
+                            ? "border-emerald-300/20 text-[var(--app-success)]"
+                            : "border-white/8 text-[var(--app-muted)]"
                         }`}
                       >
                         {song.isActive ? "Ativa" : "Inativa"}
@@ -222,14 +224,14 @@ export default async function EditThemePage({
                         href={song.watchUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-[var(--duel-a)] outline-none hover:text-white focus-visible:ring-2 focus-visible:ring-[var(--duel-a)]"
+                        className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-[var(--brand)] outline-none hover:text-white focus-visible:ring-2 focus-visible:ring-[var(--app-focus)]"
                       >
                         Abrir YouTube
                         <ExternalLink className="size-3.5" aria-hidden="true" />
                       </a>
                     </div>
                     <p className="mt-3 font-bold">{song.sourceTitle}</p>
-                    <p className="mt-1 text-xs text-white/38">
+                    <p className="mt-1 text-xs text-[var(--app-muted)]">
                       Fonte: {song.sourceChannel} · {song.durationSeconds}s
                     </p>
                   </div>
@@ -306,7 +308,7 @@ export default async function EditThemePage({
                       required
                       className={adminInputClassName}
                     />
-                    <span className="leading-4 font-normal text-white/38">
+                    <span className="leading-4 font-normal text-[var(--app-muted)]">
                       Máximo: {song.durationSeconds}s (música inteira).
                     </span>
                   </label>
@@ -325,7 +327,7 @@ export default async function EditThemePage({
                       type="checkbox"
                       name="isActive"
                       defaultChecked={song.isActive}
-                      className="size-4 accent-[var(--duel-a)]"
+                      className="size-4 accent-[var(--brand)]"
                     />
                     Ativa neste tema
                   </label>
@@ -353,7 +355,7 @@ export default async function EditThemePage({
                     type="submit"
                     variant="ghost"
                     confirmation={`Remover “${song.title}” deste tema? A música continuará disponível para outros temas.`}
-                    className="min-h-11 rounded-md px-3 text-red-200 hover:bg-red-400/10 hover:text-red-100"
+                    className="min-h-11 rounded-md px-3 text-[var(--app-error)] hover:bg-red-400/10 hover:text-[var(--app-error)]"
                   >
                     <Trash2 aria-hidden="true" />
                     Remover do tema
