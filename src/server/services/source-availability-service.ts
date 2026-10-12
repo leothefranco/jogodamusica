@@ -1,4 +1,11 @@
 import "server-only";
+import { drainCatalogInvalidations } from "@/server/services/catalog-invalidation-service";
+import { getDatabase } from "@/db";
+import {
+  assertCatalogHealthWriteAllowed,
+  catalogHealthWriteMode,
+  type CatalogHealthWriteMode,
+} from "@/server/repositories/catalog-health-mode";
 
 import type { SourceAvailabilityProvider } from "@/domain/music/provider";
 import {
@@ -33,6 +40,8 @@ export type SourceAvailabilityMetrics = {
 };
 
 export type SourceAvailabilityServiceDependencies = {
+  afterCommit?: () => Promise<unknown>;
+  assertWriteAllowed?: () => Promise<CatalogHealthWriteMode>;
   clock: () => Date;
   findSource: (
     providerContentId: string,
@@ -57,6 +66,9 @@ export function createSourceAvailabilityService(
       providerContentId: string,
       context?: { themeId: string },
     ) {
+      const mode = dependencies.assertWriteAllowed
+        ? await dependencies.assertWriteAllowed()
+        : catalogHealthWriteMode();
       const current = await dependencies.findSource(
         providerContentId,
         SOURCE_AVAILABILITY_POLICY.region,
@@ -72,28 +84,41 @@ export function createSourceAvailabilityService(
         result,
       });
       const persisted = await dependencies.persistObservation({
+        expectedWriteMode: mode,
         providerContentId,
         track: result.type === "transient_error" ? null : result.track,
         observation: candidate,
+        normalizedResult: result,
         ...(context ? { contextThemeId: context.themeId } : {}),
       });
       const decisionAt = dependencies.clock();
+      if (mode === "enabled" && persisted.applied) {
+        try {
+          await dependencies.afterCommit?.();
+        } catch {
+          /* Failed delivery keeps backlog; health is already committed. */
+        }
+      }
       const availability = deriveEffectiveSourceAvailability(
         persisted.observation,
         decisionAt,
       );
 
-      dependencies.metrics.record({
-        metric: "source_availability_observation",
-        count: 1,
-        effectiveState: availability.state,
-        policyVersion: persisted.observation.policyVersion,
-        ageBand: getSourceAvailabilityAgeBand(
-          persisted.observation,
-          decisionAt,
-        ),
-        resultCode: resultCode(result),
-      });
+      try {
+        dependencies.metrics.record({
+          metric: "source_availability_observation",
+          count: 1,
+          effectiveState: availability.state,
+          policyVersion: persisted.observation.policyVersion,
+          ageBand: getSourceAvailabilityAgeBand(
+            persisted.observation,
+            decisionAt,
+          ),
+          resultCode: resultCode(result),
+        });
+      } catch {
+        /* Telemetry cannot change a committed observation. */
+      }
 
       return { ...persisted, availability, result };
     },
@@ -107,6 +132,8 @@ const sourceAvailabilityMetrics: SourceAvailabilityMetrics = {
 };
 
 const sourceAvailabilityService = createSourceAvailabilityService({
+  afterCommit: drainCatalogInvalidations,
+  assertWriteAllowed: () => assertCatalogHealthWriteAllowed(getDatabase()),
   clock: () => new Date(),
   findSource: findSourceAvailabilityByProviderContentId,
   metrics: sourceAvailabilityMetrics,

@@ -1,4 +1,12 @@
 import "server-only";
+import { getDatabase } from "@/db";
+import {
+  assertCatalogHealthWriteAllowed,
+  catalogHealthWriteMode,
+  type CatalogHealthWriteMode,
+} from "@/server/repositories/catalog-health-mode";
+import { normalizePlaylistAvailability } from "@/domain/music/source-availability";
+import { drainCatalogInvalidations } from "@/server/services/catalog-invalidation-service";
 
 import { randomUUID } from "node:crypto";
 
@@ -33,6 +41,8 @@ export type PlaylistPreview = Omit<ProviderPlaylistPreview, "items"> & {
 };
 
 type PlaylistImportDependencies = {
+  assertWriteAllowed?: () => Promise<CatalogHealthWriteMode>;
+  afterCommit?: () => Promise<unknown>;
   findThemeSummary: typeof findThemeSummary;
   importPlaylistTracks: typeof importPlaylistTracks;
   listThemeProviderContentIds: typeof listThemeProviderContentIds;
@@ -192,10 +202,27 @@ export function createPlaylistImportService(
         existingCandidateIds = [];
       }
 
-      const tracks = await dependencies.musicProvider.resolveMany(
+      const mode = dependencies.assertWriteAllowed
+        ? await dependencies.assertWriteAllowed()
+        : catalogHealthWriteMode();
+      const observedAt = new Date(dependencies.now());
+      const responseTracks = await dependencies.musicProvider.resolveMany(
         candidateIds,
         "BR",
       );
+      const normalizedAttempts = normalizePlaylistAvailability(
+        candidateIds,
+        responseTracks,
+        observedAt,
+      );
+      const tracks =
+        mode === "enabled"
+          ? normalizedAttempts.flatMap(({ result }) =>
+              result.type !== "transient_error" && result.track
+                ? [result.track]
+                : [],
+            )
+          : responseTracks;
       const eligible = tracks.filter(
         (track) => track.isEmbeddable && track.isRegionAllowed,
       );
@@ -215,12 +242,22 @@ export function createPlaylistImportService(
         input.themeId,
         tracksForPersistence,
         {
+          expectedWriteMode: mode,
+          ...(mode === "enabled" ? { normalizedAttempts } : {}),
           providerContentIdsToAssociate: eligibleAssociationIds,
           providerContentIdsToCountAsExisting: existingCandidateIds.filter(
             (id) => eligibleIds.has(id),
           ),
         },
       );
+
+      if (mode === "enabled") {
+        try {
+          await dependencies.afterCommit?.();
+        } catch {
+          /* Committed import stays valid; backlog remains retryable. */
+        }
+      }
 
       return {
         added: result.added,
@@ -235,6 +272,8 @@ export function createPlaylistImportService(
 }
 
 const playlistImportService = createPlaylistImportService({
+  assertWriteAllowed: () => assertCatalogHealthWriteAllowed(getDatabase()),
+  afterCommit: drainCatalogInvalidations,
   findThemeSummary,
   importPlaylistTracks,
   listThemeProviderContentIds,

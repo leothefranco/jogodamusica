@@ -5,6 +5,7 @@ import {
   check,
   index,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   primaryKey,
@@ -285,11 +286,140 @@ export const sourceAvailabilityObservations = pgTable(
   },
   (table) => [
     primaryKey({ columns: [table.songId, table.region] }),
+    index("source_availability_revision_idx").on(
+      table.songId,
+      table.region,
+      table.revision,
+    ),
     index("source_availability_region_next_check_idx").on(
       table.region,
       table.nextCheckAt,
     ),
     ...sourceAvailabilityObservationChecks("source_availability", table),
+  ],
+).enableRLS();
+
+export const catalogGlobalHealthActivation = pgTable(
+  "catalog_global_health_activation",
+  {
+    singleton: boolean("singleton").primaryKey().default(true),
+    activatedAt: timestamp("activated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    policyVersion: integer("policy_version").notNull(),
+    ruleVersion: integer("rule_version").notNull(),
+  },
+  (table) => [
+    check(
+      "catalog_global_health_singleton_check",
+      sql`${table.singleton} = true`,
+    ),
+    check(
+      "catalog_global_health_versions_check",
+      sql`${table.policyVersion} > 0 and ${table.ruleVersion} > 0`,
+    ),
+  ],
+).enableRLS();
+
+export const catalogInvalidationOutbox = pgTable(
+  "catalog_invalidation_outbox",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    themeId: uuid("theme_id").notNull(),
+    sourceKeyHash: varchar("source_key_hash", { length: 64 }).notNull(),
+    region: varchar("region", { length: 2 }).notNull(),
+    revision: integer("revision").notNull(),
+    policyVersion: integer("policy_version").notNull(),
+    ruleVersion: integer("rule_version").notNull(),
+    payload: jsonb("payload")
+      .$type<
+        import("@/domain/music/catalog-invalidation").SourceHealthInvalidation
+      >()
+      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    availableAt: timestamp("available_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    attempts: integer("attempts").default(0).notNull(),
+    leaseToken: uuid("lease_token"),
+    leasedUntil: timestamp("leased_until", { withTimezone: true }),
+    processedAt: timestamp("processed_at", { withTimezone: true }),
+  },
+  (table) => [
+    unique("catalog_invalidation_identity_unique").on(
+      table.sourceKeyHash,
+      table.region,
+      table.revision,
+      table.themeId,
+    ),
+    index("catalog_invalidation_pending_idx")
+      .on(table.availableAt, table.createdAt, table.id)
+      .where(sql`${table.processedAt} is null`),
+    check(
+      "catalog_invalidation_source_check",
+      sql`${table.sourceKeyHash} ~ '^[0-9a-f]{64}$' and ${table.region} = 'BR'`,
+    ),
+    check(
+      "catalog_invalidation_versions_check",
+      sql`${table.revision} > 0 and ${table.policyVersion} > 0 and ${table.ruleVersion} > 0`,
+    ),
+    check("catalog_invalidation_attempts_check", sql`${table.attempts} >= 0`),
+    check(
+      "catalog_invalidation_lease_check",
+      sql`(${table.leaseToken} is null) = (${table.leasedUntil} is null)`,
+    ),
+    check(
+      "catalog_invalidation_shape_check",
+      sql`(
+      ${table.payload}->'schemaVersion' = '1'::jsonb
+      and ${table.payload}->'ruleVersion' = to_jsonb(${table.ruleVersion})
+      and ${table.payload}->'source'->'revision' = to_jsonb(${table.revision})
+      and ${table.payload}->'source'->'policyVersion' = to_jsonb(${table.policyVersion})
+      and jsonb_typeof(${table.payload}->'source'->'keyHash') = 'string'
+      and jsonb_typeof(${table.payload}->'source'->'region') = 'string'
+      and jsonb_typeof(${table.payload}->'theme'->'id') = 'string'
+      and jsonb_typeof(${table.payload}->'theme'->'slug') = 'string'
+      and ${table.payload}->'transition'->>'fromVisibility' in ('visible', 'hidden')
+      and ${table.payload}->'transition'->>'toVisibility' in ('visible', 'hidden')
+      and ${table.payload}->'transition'->>'fromOperationalState' in ('editorial_draft','healthy','degraded','suspended_pending_verification','suspended_insufficient_healthy_entries')
+      and ${table.payload}->'transition'->>'toOperationalState' in ('editorial_draft','healthy','degraded','suspended_pending_verification','suspended_insufficient_healthy_entries')
+      and (${table.payload}->'transition'->>'fromOperationalState' = 'editorial_draft') = (${table.payload}->'transition'->>'toOperationalState' = 'editorial_draft')
+      and ${table.payload}->'transition'->'lostPrimaryModes' in ('[]'::jsonb,'[32]'::jsonb,'[64]'::jsonb,'[32,64]'::jsonb,'[64,32]'::jsonb)
+      and ${table.payload}->'transition'->'recoveredPrimaryModes' in ('[]'::jsonb,'[32]'::jsonb,'[64]'::jsonb,'[32,64]'::jsonb,'[64,32]'::jsonb)
+      and not ((${table.payload}->'transition'->'lostPrimaryModes' @> '[32]'::jsonb and ${table.payload}->'transition'->'recoveredPrimaryModes' @> '[32]'::jsonb) or (${table.payload}->'transition'->'lostPrimaryModes' @> '[64]'::jsonb and ${table.payload}->'transition'->'recoveredPrimaryModes' @> '[64]'::jsonb))
+    ) is true`,
+    ),
+    check(
+      "catalog_invalidation_payload_check",
+      sql`
+      jsonb_typeof(${table.payload}) = 'object'
+      and ${table.payload} ?& array['schemaVersion','ruleVersion','type','cause','source','theme','transition','paths']::text[]
+      and ${table.payload} - array['schemaVersion','ruleVersion','type','cause','source','theme','transition','paths']::text[] = '{}'::jsonb
+      and ${table.payload}->>'schemaVersion' = '1'
+      and ${table.payload}->>'type' = 'source_health_changed'
+      and ${table.payload}->>'cause' = 'health_change'
+      and ${table.payload}->>'ruleVersion' = ${table.ruleVersion}::text
+      and jsonb_typeof(${table.payload}->'source') = 'object'
+      and (${table.payload}->'source') ?& array['keyHash','region','revision','policyVersion']::text[]
+      and (${table.payload}->'source') - array['keyHash','region','revision','policyVersion']::text[] = '{}'::jsonb
+      and ${table.payload}->'source'->>'keyHash' = ${table.sourceKeyHash}
+      and ${table.payload}->'source'->>'region' = ${table.region}
+      and ${table.payload}->'source'->>'revision' = ${table.revision}::text
+      and ${table.payload}->'source'->>'policyVersion' = ${table.policyVersion}::text
+      and jsonb_typeof(${table.payload}->'theme') = 'object'
+      and (${table.payload}->'theme') ?& array['id','slug']::text[]
+      and (${table.payload}->'theme') - array['id','slug']::text[] = '{}'::jsonb
+      and ${table.payload}->'theme'->>'id' = ${table.themeId}::text
+      and ${table.payload}->'theme'->>'slug' ~ '^[a-z0-9]+(-[a-z0-9]+)*$'
+      and length(${table.payload}->'theme'->>'slug') <= 140
+      and jsonb_typeof(${table.payload}->'transition') = 'object'
+      and (${table.payload}->'transition') ?& array['fromVisibility','toVisibility','fromOperationalState','toOperationalState','lostPrimaryModes','recoveredPrimaryModes']::text[]
+      and (${table.payload}->'transition') - array['fromVisibility','toVisibility','fromOperationalState','toOperationalState','lostPrimaryModes','recoveredPrimaryModes']::text[] = '{}'::jsonb
+      and ${table.payload}->'paths' = jsonb_build_array('/', '/tema/' || (${table.payload}->'theme'->>'slug'), '/admin', '/admin/temas', '/admin/temas/' || ${table.themeId}::text)
+    `,
+    ),
   ],
 ).enableRLS();
 
@@ -336,6 +466,7 @@ export const themeSongs = pgTable(
   (table) => [
     primaryKey({ columns: [table.themeId, table.songId] }),
     index("theme_songs_theme_active_idx").on(table.themeId, table.isActive),
+    index("theme_songs_source_theme_idx").on(table.songId, table.themeId),
     check("theme_songs_start_time_check", sql`${table.startTimeSeconds} >= 0`),
     check(
       "theme_songs_preview_duration_check",

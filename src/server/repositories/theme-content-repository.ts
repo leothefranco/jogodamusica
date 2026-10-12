@@ -4,6 +4,16 @@ import { and, asc, count, desc, eq, sql } from "drizzle-orm";
 
 import { getDatabase } from "@/db";
 import {
+  assertCatalogHealthWriteAllowed,
+  type CatalogHealthWriteMode,
+} from "@/server/repositories/catalog-health-mode";
+import {
+  persistSourceAvailabilityObservationUsing,
+  recordCatalogHealthMetric,
+  recordCatalogHealthRetry,
+  type CatalogHealthMetric,
+} from "@/server/repositories/source-availability-repository";
+import {
   captureProjectionContext,
   recalculateThemeProjectionUsing,
   themeProjectionWritesEnabled,
@@ -12,6 +22,7 @@ import {
 } from "@/server/repositories/theme-projection-repository";
 import {
   configureCatalogTransaction,
+  coordinateSourceHealthBatch,
   lockCatalogSources,
   retryCatalogTransaction,
 } from "@/server/repositories/catalog-transaction";
@@ -26,7 +37,13 @@ import {
   type ThemeCoverClaimStatus,
 } from "@/db/schema";
 import type { ResolvedPlaylistTrack } from "@/domain/music/provider";
-import { SOURCE_AVAILABILITY_POLICY } from "@/domain/music/source-availability";
+import {
+  SOURCE_AVAILABILITY_POLICY,
+  applySourceAvailabilityResult,
+  deriveEffectiveSourceAvailability,
+  normalizePlaylistAvailability,
+  type NormalizedSourceAvailabilityAttempt,
+} from "@/domain/music/source-availability";
 import type { SourceAvailabilityObservation } from "@/domain/music/source-availability";
 import type { ThemeEditorialState } from "@/domain/music/theme-state";
 import { AppError } from "@/lib/errors";
@@ -1178,108 +1195,189 @@ export async function importPlaylistTracks(
   options: {
     providerContentIdsToAssociate: string[];
     providerContentIdsToCountAsExisting: string[];
+    normalizedAttempts?: NormalizedSourceAvailabilityAttempt[];
+    expectedWriteMode?: CatalogHealthWriteMode;
   },
 ): Promise<{ added: number; alreadyAssociated: number }> {
   const context = captureProjectionContext();
-  return retryCatalogTransaction(async () => {
-    let metric: ThemeProjectionMetric | undefined;
-    const result = await getDatabase().transaction(async (transaction) => {
-      await configureCatalogTransaction(transaction);
-      const locked = await transaction.execute(
-        sql`select ${themes.id} from ${themes} where ${themes.id} = ${themeId} for update`,
-      );
-      if (locked.length === 0) {
-        throw new AppError("THEME_NOT_FOUND", "Tema não encontrado.", 404);
-      }
-
-      // Acquire every identity/row in the coordinator's order, including new
-      // sources, before playlist-order writes. The projection reads health after
-      // these writes, without adding observation locks.
-      await lockCatalogSources(
-        transaction,
-        tracks.map((track) => track.providerContentId),
-        SOURCE_AVAILABILITY_POLICY.region,
-        { observations: false },
-      );
-
-      let added = 0;
-      let alreadyAssociated = 0;
-      const idsToAssociate = new Set(options.providerContentIdsToAssociate);
-      const idsToCountAsExisting = new Set(
-        options.providerContentIdsToCountAsExisting,
-      );
-
-      for (const track of tracks) {
-        const [song] = await transaction
-          .insert(songs)
-          .values({
-            provider: "youtube",
-            providerContentId: track.providerContentId,
-            sourceTitle: track.sourceTitle,
-            sourceChannel: track.sourceChannel,
-            thumbnailUrl: track.thumbnailUrl,
-            durationSeconds: track.durationSeconds,
-            isEmbeddable: track.isEmbeddable,
-          })
-          .onConflictDoUpdate({
-            target: [songs.provider, songs.providerContentId],
-            set: {
-              sourceTitle: track.sourceTitle,
-              sourceChannel: track.sourceChannel,
-              thumbnailUrl: track.thumbnailUrl,
-              durationSeconds: track.durationSeconds,
-              isEmbeddable: track.isEmbeddable,
-              updatedAt: new Date(),
-            },
-          })
-          .returning({ id: songs.id });
-
-        if (!idsToAssociate.has(track.providerContentId)) {
-          if (!idsToCountAsExisting.has(track.providerContentId)) continue;
-          const existingAssociation = await transaction
-            .select({ songId: themeSongs.songId })
-            .from(themeSongs)
-            .where(
-              and(
-                eq(themeSongs.themeId, themeId),
-                eq(themeSongs.songId, song.id),
-              ),
-            )
-            .limit(1);
-          if (existingAssociation.length > 0) alreadyAssociated += 1;
-          continue;
+  let retryCount = 0;
+  return retryCatalogTransaction(
+    async () => {
+      let metric: ThemeProjectionMetric | undefined;
+      const healthMetrics: ThemeProjectionMetric[] = [];
+      const globalMetrics: CatalogHealthMetric[] = [];
+      const result = await getDatabase().transaction(async (transaction) => {
+        const mode = await assertCatalogHealthWriteAllowed(transaction, {
+          transaction: true,
+          expectedMode: options.expectedWriteMode,
+        });
+        const attempts =
+          options.normalizedAttempts ??
+          normalizePlaylistAvailability(
+            tracks.map(({ providerContentId }) => providerContentId),
+            tracks,
+            context.now,
+          );
+        const coordination =
+          mode === "enabled"
+            ? await coordinateSourceHealthBatch(
+                transaction,
+                attempts.map(({ providerContentId }) => providerContentId),
+                SOURCE_AVAILABILITY_POLICY.region,
+                [themeId],
+              )
+            : null;
+        if (!coordination) await configureCatalogTransaction(transaction);
+        const locked = await transaction.execute(
+          sql`select ${themes.id} from ${themes} where ${themes.id} = ${themeId} for update`,
+        );
+        if (locked.length === 0) {
+          throw new AppError("THEME_NOT_FOUND", "Tema não encontrado.", 404);
         }
 
-        const inserted = await transaction
-          .insert(themeSongs)
-          .values({
-            themeId,
-            songId: song.id,
-            title: track.sourceTitle,
-            artist: track.sourceChannel,
-            startTimeSeconds: 0,
-            previewDurationSeconds: track.durationSeconds,
-            isActive: true,
-            displayOrder: null,
-          })
-          .onConflictDoNothing({
-            target: [themeSongs.themeId, themeSongs.songId],
-          })
-          .returning({ songId: themeSongs.songId });
+        // Acquire every identity/row in the coordinator's order, including new
+        // sources, before playlist-order writes. The projection reads health after
+        // these writes, without adding observation locks.
+        if (!coordination)
+          await lockCatalogSources(
+            transaction,
+            tracks.map((track) => track.providerContentId),
+            SOURCE_AVAILABILITY_POLICY.region,
+            { observations: false },
+          );
+        const observed = new Map<
+          string,
+          Awaited<
+            ReturnType<typeof persistSourceAvailabilityObservationUsing>
+          >["result"]
+        >();
+        if (coordination)
+          for (const attempt of attempts) {
+            const result = await persistSourceAvailabilityObservationUsing(
+              transaction,
+              {
+                providerContentId: attempt.providerContentId,
+                track:
+                  attempt.result.type === "transient_error"
+                    ? null
+                    : attempt.result.track,
+                observation: applySourceAvailabilityResult({
+                  current: null,
+                  observedAt: attempt.observedAt,
+                  result: attempt.result,
+                }),
+                normalizedResult: attempt.result,
+              },
+              {
+                context,
+                mode,
+                coordination: coordination.forSource(attempt.providerContentId),
+              },
+            );
+            observed.set(attempt.providerContentId, result.result);
+            healthMetrics.push(...result.metrics);
+            if (result.healthMetric) globalMetrics.push(result.healthMetric);
+          }
 
-        if (inserted.length > 0) added += 1;
-        else alreadyAssociated += 1;
-      }
+        let added = 0;
+        let alreadyAssociated = 0;
+        const idsToAssociate = new Set(options.providerContentIdsToAssociate);
+        const idsToCountAsExisting = new Set(
+          options.providerContentIdsToCountAsExisting,
+        );
 
-      if (themeProjectionWritesEnabled())
-        metric = (
-          await recalculateThemeProjectionUsing(transaction, themeId, context)
-        ).metric;
-      return { added, alreadyAssociated };
-    });
-    if (metric) recordThemeProjectionMetric(metric);
-    return result;
-  });
+        for (const track of tracks) {
+          const persisted = observed.get(track.providerContentId);
+          if (
+            coordination &&
+            (!persisted?.songId ||
+              !deriveEffectiveSourceAvailability(
+                persisted.observation,
+                context.now,
+              ).playable)
+          )
+            continue;
+          const sourceTrack = persisted?.track ?? track;
+          const [song] = persisted?.songId
+            ? [{ id: persisted.songId }]
+            : await transaction
+                .insert(songs)
+                .values({
+                  provider: "youtube",
+                  providerContentId: track.providerContentId,
+                  sourceTitle: track.sourceTitle,
+                  sourceChannel: track.sourceChannel,
+                  thumbnailUrl: track.thumbnailUrl,
+                  durationSeconds: track.durationSeconds,
+                  isEmbeddable: track.isEmbeddable,
+                })
+                .onConflictDoUpdate({
+                  target: [songs.provider, songs.providerContentId],
+                  set: {
+                    sourceTitle: track.sourceTitle,
+                    sourceChannel: track.sourceChannel,
+                    thumbnailUrl: track.thumbnailUrl,
+                    durationSeconds: track.durationSeconds,
+                    isEmbeddable: track.isEmbeddable,
+                    updatedAt: new Date(),
+                  },
+                })
+                .returning({ id: songs.id });
+
+          if (!idsToAssociate.has(track.providerContentId)) {
+            if (!idsToCountAsExisting.has(track.providerContentId)) continue;
+            const existingAssociation = await transaction
+              .select({ songId: themeSongs.songId })
+              .from(themeSongs)
+              .where(
+                and(
+                  eq(themeSongs.themeId, themeId),
+                  eq(themeSongs.songId, song.id),
+                ),
+              )
+              .limit(1);
+            if (existingAssociation.length > 0) alreadyAssociated += 1;
+            continue;
+          }
+
+          const inserted = await transaction
+            .insert(themeSongs)
+            .values({
+              themeId,
+              songId: song.id,
+              title: sourceTrack.sourceTitle,
+              artist: sourceTrack.sourceChannel,
+              startTimeSeconds: 0,
+              previewDurationSeconds: sourceTrack.durationSeconds,
+              isActive: true,
+              displayOrder: null,
+            })
+            .onConflictDoNothing({
+              target: [themeSongs.themeId, themeSongs.songId],
+            })
+            .returning({ songId: themeSongs.songId });
+
+          if (inserted.length > 0) added += 1;
+          else alreadyAssociated += 1;
+        }
+
+        if (themeProjectionWritesEnabled())
+          metric = (
+            await recalculateThemeProjectionUsing(transaction, themeId, context)
+          ).metric;
+        return { added, alreadyAssociated };
+      });
+      if (metric) recordThemeProjectionMetric(metric);
+      for (const metric of healthMetrics) recordThemeProjectionMetric(metric);
+      for (const metric of globalMetrics)
+        recordCatalogHealthMetric({ ...metric, retryCount });
+      return result;
+    },
+    () => {
+      retryCount += 1;
+      recordCatalogHealthRetry(retryCount, context.policy.version);
+    },
+  );
 }
 
 export type LockedThemeContentRepository = {

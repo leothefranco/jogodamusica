@@ -124,21 +124,56 @@ export async function coordinateSourceHealth(
   database: Executor,
   providerContentId: string,
   region: string,
+  contextThemeIds: string[] = [],
+) {
+  const batch = await coordinateSourceHealthBatch(
+    database,
+    [providerContentId],
+    region,
+    contextThemeIds,
+  );
+  return batch.forSource(providerContentId);
+}
+
+export async function coordinateSourceHealthBatch(
+  database: Executor,
+  providerContentIds: string[],
+  region: string,
+  contextThemeIds: string[] = [],
 ) {
   await configureCatalogTransaction(database);
-  const before = await sourceThemes(database, providerContentId);
-  await lockCatalogThemes(
-    database,
-    before.map(({ id }) => id),
-  );
-  await lockCatalogSources(database, [providerContentId], region);
+  const ids = [...new Set(providerContentIds)].sort();
+  const before = new Map<string, { id: string }[]>();
+  for (const id of ids) before.set(id, await sourceThemes(database, id));
+  const themeIds = [
+    ...new Set([
+      ...contextThemeIds,
+      ...[...before.values()].flat().map(({ id }) => id),
+    ]),
+  ].sort();
+  await lockCatalogThemes(database, themeIds);
+  await lockCatalogSources(database, ids, region);
   // A newly associated Tema requires restarting, never taking a Tema lock after
   // a Fonte lock. Deletions/reassociations are equally rechecked.
-  const recheck = async () =>
-    assertSameDependencies(
-      before,
-      await sourceThemes(database, providerContentId),
-    );
+  const recheck = async () => {
+    for (const id of ids)
+      assertSameDependencies(
+        before.get(id) ?? [],
+        await sourceThemes(database, id),
+      );
+  };
   await recheck();
-  return recheck;
+  return {
+    themeIds,
+    recheck,
+    forSource: (id: string) => ({
+      themeIds: [
+        ...new Set([
+          ...contextThemeIds,
+          ...(before.get(id) ?? []).map(({ id }) => id),
+        ]),
+      ].sort(),
+      recheck,
+    }),
+  };
 }
