@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { AudioLines, Database, ShieldCheck } from "lucide-react";
+import { Database, ShieldCheck } from "lucide-react";
 
+import { BrandMark } from "@/components/brand-mark";
 import { getOptionalPublicSupabaseEnv } from "@/lib/public-env";
 import { siteConfig } from "@/lib/site";
 
@@ -19,22 +20,22 @@ export default function AdminLoginPage() {
           aria-hidden="true"
           className="pointer-events-none absolute inset-x-10 bottom-28 grid h-1 grid-cols-2 gap-2"
         >
-          <span className="bg-[var(--duel-a)]" />
-          <span className="bg-[var(--duel-b)]" />
+          <span className="bg-[var(--brand)]" />
+          <span className="bg-[var(--brand)]" />
         </div>
 
         <Link
           href="/"
-          className="relative flex w-fit items-center gap-3 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-[var(--duel-a)]"
+          className="relative flex w-fit items-center gap-3 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-focus)]"
         >
-          <span className="grid size-10 place-items-center rounded-md border border-[var(--duel-a)]/25 bg-[var(--duel-a)]/10 text-[var(--duel-a)]">
-            <AudioLines className="size-5" aria-hidden="true" />
+          <span className="grid size-10 place-items-center">
+            <BrandMark size={40} />
           </span>
           <span className="font-bold">{siteConfig.name}</span>
         </Link>
 
         <div className="relative max-w-lg">
-          <p className="text-xs font-bold tracking-[0.2em] text-[var(--duel-a)] uppercase">
+          <p className="text-xs font-bold tracking-[0.2em] text-[var(--brand)] uppercase">
             Área protegida
           </p>
           <h1 className="mt-4 text-5xl leading-[1.02] font-black tracking-[-0.045em]">
@@ -46,24 +47,24 @@ export default function AdminLoginPage() {
           </p>
         </div>
 
-        <p className="relative text-xs text-white/30">
+        <p className="relative text-xs text-[var(--app-muted)]">
           Acesso exclusivo para administradores autorizados
         </p>
       </section>
 
       <section className="flex items-center justify-center px-5 py-12 sm:px-8">
-        <div className="w-full max-w-md border-t-4 border-[var(--duel-b)] pt-6">
+        <div className="w-full max-w-md border-t-4 border-[var(--brand)] pt-6">
           <Link
             href="/"
-            className="mb-12 flex w-fit items-center gap-3 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-[var(--duel-a)] lg:hidden"
+            className="mb-12 flex w-fit items-center gap-3 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-focus)] lg:hidden"
           >
-            <span className="grid size-10 place-items-center rounded-md border border-[var(--duel-a)]/25 bg-[var(--duel-a)]/10 text-[var(--duel-a)]">
-              <AudioLines className="size-5" aria-hidden="true" />
+            <span className="grid size-10 place-items-center">
+              <BrandMark size={40} />
             </span>
             <span className="font-bold">{siteConfig.name}</span>
           </Link>
 
-          <div className="flex size-12 items-center justify-center rounded-md border border-white/10 bg-white/[0.04] text-[var(--duel-a)]">
+          <div className="flex size-12 items-center justify-center rounded-md border border-white/10 bg-white/[0.04] text-[var(--brand)]">
             <ShieldCheck className="size-6" aria-hidden="true" />
           </div>
           <h2 className="mt-6 text-3xl font-black tracking-tight">
@@ -88,7 +89,7 @@ export default function AdminLoginPage() {
 
           <LoginForm configured={configured} />
 
-          <p className="mt-6 text-center text-xs text-white/30">
+          <p className="mt-6 text-center text-xs text-[var(--app-muted)]">
             O acesso é concedido pela equipe responsável pelo catálogo.
           </p>
         </div>

@@ -158,7 +158,7 @@ export function PlaylistImportManager({
             Gerar prévia
           </Button>
         </div>
-        <p className="mt-3 text-xs leading-5 text-white/42">
+        <p className="mt-3 text-xs leading-5 text-[var(--app-muted)]">
           Playlists públicas ou não listadas. Até {maxItems} posições por
           importação.
         </p>
@@ -167,7 +167,7 @@ export function PlaylistImportManager({
       {error ? (
         <div
           role="alert"
-          className="rounded-md border border-red-300/20 bg-red-400/8 px-4 py-3 text-sm text-red-100"
+          className="rounded-md border border-red-300/20 bg-red-400/8 px-4 py-3 text-sm text-[var(--app-error)]"
         >
           {error}
         </div>
@@ -177,13 +177,13 @@ export function PlaylistImportManager({
         <section className="rounded-2xl border border-white/8 bg-[var(--app-surface)] p-5 sm:p-7">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <p className="text-xs font-bold tracking-[0.16em] text-[var(--duel-a)] uppercase">
+              <p className="text-xs font-bold tracking-[0.16em] text-[var(--brand)] uppercase">
                 Prévia
               </p>
               <h2 className="mt-2 text-2xl font-black">
                 {preview.playlistTitle}
               </h2>
-              <p className="mt-2 text-sm text-white/45">
+              <p className="mt-2 text-sm text-[var(--app-muted)]">
                 {countLabel(preview.positionsScanned, "posição", "posições")} ·{" "}
                 {countLabel(
                   preview.uniqueVideoCount,
@@ -246,7 +246,7 @@ export function PlaylistImportManager({
                           : current.filter((value) => value !== id),
                       );
                     }}
-                    className="mt-1 size-4 accent-[var(--duel-a)]"
+                    className="mt-1 size-4 accent-[var(--brand)]"
                   />
                   <span className="min-w-0 flex-1">
                     <strong className="block truncate text-sm">
@@ -254,7 +254,7 @@ export function PlaylistImportManager({
                         item.providerContentId ??
                         "Item sem vídeo válido"}
                     </strong>
-                    <span className="mt-1 block text-xs text-white/42">
+                    <span className="mt-1 block text-xs text-[var(--app-muted)]">
                       {item.track?.sourceChannel
                         ? `${item.track.sourceChannel} · `
                         : ""}

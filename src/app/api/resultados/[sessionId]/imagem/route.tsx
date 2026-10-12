@@ -24,7 +24,7 @@ export async function GET(
     "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400",
     ...(shouldDownload
       ? {
-          "Content-Disposition": `attachment; filename="jogo-da-musica-${sessionId}.png"`,
+          "Content-Disposition": `attachment; filename="last-track-standing-${sessionId}.png"`,
         }
       : {}),
   });

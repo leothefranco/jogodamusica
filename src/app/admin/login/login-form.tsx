@@ -19,7 +19,7 @@ export function LoginForm({ configured }: { configured: boolean }) {
       <div>
         <label
           htmlFor="email"
-          className="mb-2 block text-sm font-semibold text-white/80"
+          className="mb-2 block text-sm font-semibold text-[var(--app-muted)]"
         >
           E-mail
         </label>
@@ -34,11 +34,11 @@ export function LoginForm({ configured }: { configured: boolean }) {
           aria-describedby={
             state.fieldErrors?.email ? "email-error" : undefined
           }
-          className="min-h-12 w-full rounded-md border border-white/10 bg-white/[0.045] px-4 text-base text-white transition outline-none placeholder:text-white/25 focus:border-[var(--duel-a)]/50 focus:ring-3 focus:ring-[var(--duel-a)]/15 disabled:cursor-not-allowed disabled:opacity-55"
+          className="min-h-12 w-full rounded-md border border-white/10 bg-white/[0.045] px-4 text-base text-white transition outline-none placeholder:text-[var(--app-muted)] focus:border-[var(--app-focus)] focus:ring-2 focus:ring-[var(--app-focus)] disabled:cursor-not-allowed disabled:opacity-55"
           placeholder="admin@exemplo.com"
         />
         {state.fieldErrors?.email?.[0] ? (
-          <p id="email-error" className="mt-2 text-sm text-rose-300">
+          <p id="email-error" className="mt-2 text-sm text-[var(--app-error)]">
             {state.fieldErrors.email[0]}
           </p>
         ) : null}
@@ -47,7 +47,7 @@ export function LoginForm({ configured }: { configured: boolean }) {
       <div>
         <label
           htmlFor="password"
-          className="mb-2 block text-sm font-semibold text-white/80"
+          className="mb-2 block text-sm font-semibold text-[var(--app-muted)]"
         >
           Senha
         </label>
@@ -61,11 +61,14 @@ export function LoginForm({ configured }: { configured: boolean }) {
           aria-describedby={
             state.fieldErrors?.password ? "password-error" : undefined
           }
-          className="min-h-12 w-full rounded-md border border-white/10 bg-white/[0.045] px-4 text-base text-white transition outline-none placeholder:text-white/25 focus:border-[var(--duel-a)]/50 focus:ring-3 focus:ring-[var(--duel-a)]/15 disabled:cursor-not-allowed disabled:opacity-55"
+          className="min-h-12 w-full rounded-md border border-white/10 bg-white/[0.045] px-4 text-base text-white transition outline-none placeholder:text-[var(--app-muted)] focus:border-[var(--app-focus)] focus:ring-2 focus:ring-[var(--app-focus)] disabled:cursor-not-allowed disabled:opacity-55"
           placeholder="Sua senha"
         />
         {state.fieldErrors?.password?.[0] ? (
-          <p id="password-error" className="mt-2 text-sm text-rose-300">
+          <p
+            id="password-error"
+            className="mt-2 text-sm text-[var(--app-error)]"
+          >
             {state.fieldErrors.password[0]}
           </p>
         ) : null}
@@ -74,7 +77,7 @@ export function LoginForm({ configured }: { configured: boolean }) {
       {state.message ? (
         <p
           role="alert"
-          className="rounded-md border border-rose-300/15 bg-rose-300/[0.07] px-4 py-3 text-sm leading-6 text-rose-200"
+          className="rounded-md border border-rose-300/15 bg-rose-300/[0.07] px-4 py-3 text-sm leading-6 text-[var(--app-error)]"
         >
           {state.message}
         </p>
@@ -84,7 +87,7 @@ export function LoginForm({ configured }: { configured: boolean }) {
         type="submit"
         size="lg"
         disabled={!configured || pending}
-        className="min-h-12 w-full rounded-md bg-[var(--duel-a)] text-sm font-bold text-[var(--app-bg)] hover:brightness-110"
+        className="min-h-12 w-full rounded-md bg-[var(--brand)] text-sm font-bold text-[var(--app-bg)] hover:brightness-110"
       >
         {pending ? (
           <LoaderCircle className="animate-spin" aria-hidden="true" />
