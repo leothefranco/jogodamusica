@@ -9,7 +9,7 @@ export class CatalogDependenciesChanged extends Error {}
 
 // Only definite transaction-abort SQLSTATEs are retried. Connection/commit
 // ambiguity is never retried: the caller may already have a committed session.
-function retryable(error: unknown, depth = 0): boolean {
+export function isCatalogTransactionAbort(error: unknown, depth = 0): boolean {
   if (error instanceof CatalogDependenciesChanged) return true;
   if (!error || typeof error !== "object" || depth > 3) return false;
   if (
@@ -17,7 +17,7 @@ function retryable(error: unknown, depth = 0): boolean {
     ["55P03", "40P01", "40001"].includes(String(error.code))
   )
     return true;
-  return "cause" in error && retryable(error.cause, depth + 1);
+  return "cause" in error && isCatalogTransactionAbort(error.cause, depth + 1);
 }
 export async function retryCatalogTransaction<T>(
   operation: () => Promise<T>,
@@ -27,7 +27,7 @@ export async function retryCatalogTransaction<T>(
     try {
       return await operation();
     } catch (error) {
-      if (!retryable(error)) throw error;
+      if (!isCatalogTransactionAbort(error)) throw error;
       if (attempt === 2)
         throw new AppError(
           "CATALOG_BUSY",

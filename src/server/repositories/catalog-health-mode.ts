@@ -1,4 +1,5 @@
 import "server-only";
+import { isCatalogTransactionAbort } from "@/server/repositories/catalog-transaction";
 import { sql, type SQL } from "drizzle-orm";
 import { AppError } from "@/lib/errors";
 
@@ -115,7 +116,10 @@ export async function assertCatalogHealthWriteAllowed(
 ): Promise<CatalogHealthWriteMode> {
   try {
     return await checkCatalogHealthWriteAllowed(database, options);
-  } catch {
+  } catch (error) {
+    // Definite transactional aborts belong to the coordinator's bounded retry.
+    // Configuration, unreadable schema and ambiguous failures stay fail closed.
+    if (options.transaction && isCatalogTransactionAbort(error)) throw error;
     return busy();
   }
 }
