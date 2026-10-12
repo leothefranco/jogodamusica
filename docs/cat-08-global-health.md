@@ -28,6 +28,12 @@ A transição de saúde compara dados autoritativos antes/depois da observação
 usar uma projeção antiga como predecessor. Recuperação preserva `published`.
 Retirar uma Entrada editorialmente não se torna incidente de saúde de 32/64.
 
+Uma reconciliação de observação por hash com uma Fonte materializada pode mudar
+a saúde bound mesmo quando o candidato do provedor é antigo. Essa mudança efetiva
+usa a revisão persistida, atualiza todos os derivados/outbox e aciona entrega após
+commit. O candidato continua ignorado; não se inventa revisão para propagá-la. Uma
+transferência sem mudança lógica remove a duplicata sem novos eventos.
+
 ## Outbox interno
 
 `catalog_invalidation_outbox` identifica cada Fonte/região/revisão/Tema uma única

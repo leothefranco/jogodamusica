@@ -92,7 +92,10 @@ export function createSourceAvailabilityService(
         ...(context ? { contextThemeId: context.themeId } : {}),
       });
       const decisionAt = dependencies.clock();
-      if (mode === "enabled" && persisted.applied) {
+      if (
+        mode === "enabled" &&
+        (persisted.applied || persisted.healthChanged)
+      ) {
         try {
           await dependencies.afterCommit?.();
         } catch {

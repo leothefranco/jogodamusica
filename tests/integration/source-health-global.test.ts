@@ -1117,6 +1117,8 @@ it("SQL rejeita payload não controlado, tipos coercíveis e transições invál
   const invalid = [
     { ...row.payload, providerUrl: "https://provider.invalid/private" },
     { ...row.payload, schemaVersion: "1" },
+    { ...row.payload, type: null },
+    { ...row.payload, cause: null },
     { ...row.payload, source: { ...row.payload.source, revision: "2" } },
     { ...row.payload, theme: { ...row.payload.theme, slug: null } },
     {
@@ -1495,5 +1497,320 @@ it("enabled projected e reativação preservam revisão, marcador e transições
   } finally {
     vi.stubEnv("CATALOG_GLOBAL_HEALTH_WRITE_MODE", "enabled");
     vi.stubEnv("PUBLIC_CATALOG_READ_MODE", "authoritative_direct");
+  }
+});
+
+it("reconciliação global propaga unbound mais recente sem aceitar candidato antigo nem fabricar revisão", async () => {
+  await client.exec(
+    "delete from theme_songs where song_id='20000000-0000-4000-8000-000000000000'",
+  );
+  const providerContentId = "reconcile-new";
+  const track = {
+    providerContentId,
+    sourceTitle: "Metadado anterior",
+    sourceChannel: "QA",
+    thumbnailUrl: "/qa.jpg",
+    durationSeconds: 180,
+    isEmbeddable: true,
+    isRegionAllowed: true,
+  };
+  let arrived!: () => void, release!: () => void;
+  const entered = new Promise<void>((resolve) => {
+    arrived = resolve;
+  });
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const observe = vi.fn(async () => {
+    arrived();
+    await released;
+    return { type: "available" as const, reason: "available" as const, track };
+  });
+  const consumer = createCatalogInvalidationConsumer({
+    database: () => postgresRowsAdapter(database),
+    clock: () => new Date(now.getTime() + 100),
+    invalidatePath: vi.fn(),
+  });
+  const afterCommit = vi.fn(() => consumer.drain());
+  const service = createSourceAvailabilityService({
+    afterCommit,
+    assertWriteAllowed: () =>
+      assertCatalogHealthWriteAllowed(postgresRowsAdapter(database)),
+    clock: () => new Date(now.getTime() + 1),
+    findSource: findSourceAvailabilityByProviderContentId,
+    persistObservation: persistSourceAvailabilityObservation,
+    metrics: { record: vi.fn() },
+    provider: { observe },
+  });
+  const global = service.observeSource(providerContentId, {
+    themeId: themeIds[0],
+  });
+  void global.catch(() => {});
+  await entered;
+  try {
+    vi.stubEnv("CATALOG_GLOBAL_HEALTH_WRITE_MODE", undefined);
+    await persistSourceAvailabilityObservation({
+      providerContentId,
+      track: null,
+      observation: applySourceAvailabilityResult({
+        current: null,
+        observedAt: new Date(now.getTime() + 2),
+        result: { type: "unavailable", reason: "not_found", track: null },
+      }),
+    });
+    for (const themeId of themeIds)
+      await importPlaylistTracks(
+        themeId,
+        [{ ...track, sourceTitle: "Metadado legado corrente" }],
+        {
+          providerContentIdsToAssociate: [providerContentId],
+          providerContentIdsToCountAsExisting: [],
+        },
+      );
+    for (const row of await database
+      .select()
+      .from(schema.themeStateProjections))
+      expect(row).toMatchObject({
+        unknown: 1,
+        unavailable: 0,
+        playableCount: 3,
+        operationalState: "suspended_pending_verification",
+      });
+  } finally {
+    vi.stubEnv("CATALOG_GLOBAL_HEALTH_WRITE_MODE", "enabled");
+    release();
+  }
+  const result = await global;
+  expect(result.applied).toBe(false);
+  expect(result.observation).toMatchObject({
+    revision: 1,
+    confirmedState: "unavailable",
+    observedAt: new Date(now.getTime() + 2),
+  });
+  expect(result.track?.sourceTitle).toBe("Metadado legado corrente");
+  for (const row of await database.select().from(schema.themeStateProjections))
+    expect(row).toMatchObject({
+      unknown: 0,
+      unavailable: 1,
+      playableCount: 3,
+      editorialState: "published",
+      operationalState: "suspended_insufficient_healthy_entries",
+    });
+  const outbox = (
+    await client.query<{
+      payload: SourceHealthInvalidation;
+      processed_at: Date;
+    }>(
+      "select payload,processed_at from catalog_invalidation_outbox order by theme_id",
+    )
+  ).rows;
+  expect(outbox).toHaveLength(2);
+  for (const row of outbox) {
+    expect(row.payload).toMatchObject({
+      cause: "health_change",
+      source: { revision: 1 },
+      transition: {
+        fromOperationalState: "suspended_pending_verification",
+        toOperationalState: "suspended_insufficient_healthy_entries",
+      },
+    });
+    expect(row.processed_at).not.toBeNull();
+  }
+  expect(observe).toHaveBeenCalledExactlyOnceWith(providerContentId, "BR");
+  expect(afterCommit).toHaveBeenCalledTimes(1);
+  const before = {
+    projections: await database.select().from(schema.themeStateProjections),
+    outbox,
+  };
+  await persistSourceAvailabilityObservation({
+    providerContentId,
+    track,
+    normalizedResult: { type: "available", reason: "available", track },
+    observation: applySourceAvailabilityResult({
+      current: null,
+      observedAt: new Date(now.getTime() + 1),
+      result: { type: "available", reason: "available", track },
+    }),
+  });
+  expect(await database.select().from(schema.themeStateProjections)).toEqual(
+    before.projections,
+  );
+  expect(
+    (
+      await client.query(
+        "select payload,processed_at from catalog_invalidation_outbox order by theme_id",
+      )
+    ).rows,
+  ).toEqual(before.outbox);
+  expect(
+    (await findSourceAvailabilityByProviderContentId(providerContentId, "BR"))
+      ?.observation?.revision,
+  ).toBe(1);
+});
+
+it("reconciliação sem mudança remove duplicata unbound sem revisar ou republicar saúde", async () => {
+  const original = await findSourceAvailabilityByProviderContentId(
+    "global-0",
+    "BR",
+  );
+  if (!original?.track) throw new Error("Fixture track missing");
+  await persistSourceAvailabilityObservation({
+    providerContentId: "global-0",
+    track: original.track,
+    observation: applySourceAvailabilityResult({
+      current: original.observation,
+      observedAt: new Date(now.getTime() + 1),
+      result: { type: "available", reason: "available", track: original.track },
+    }),
+  });
+  const source = await findSourceAvailabilityByProviderContentId(
+    "global-0",
+    "BR",
+  );
+  if (!source?.observation || !source.track)
+    throw new Error("Bound fixture missing");
+  const [event] = (
+    await client.query<{ source_key_hash: string }>(
+      "select source_key_hash from catalog_invalidation_outbox limit 1",
+    )
+  ).rows;
+  await database
+    .insert(schema.unboundSourceAvailabilityObservations)
+    .values({ ...source.observation, sourceKeyHash: event.source_key_hash });
+  const before = {
+    observations: await database
+      .select()
+      .from(schema.sourceAvailabilityObservations),
+    songs: await database.select().from(schema.songs),
+    projections: await database.select().from(schema.themeStateProjections),
+    outbox: (
+      await client.query(
+        "select * from catalog_invalidation_outbox order by id",
+      )
+    ).rows,
+  };
+  const afterCommit = vi.fn();
+  const service = createSourceAvailabilityService({
+    afterCommit,
+    assertWriteAllowed: () =>
+      assertCatalogHealthWriteAllowed(postgresRowsAdapter(database)),
+    clock: () => now,
+    findSource: findSourceAvailabilityByProviderContentId,
+    persistObservation: persistSourceAvailabilityObservation,
+    metrics: { record: vi.fn() },
+    provider: {
+      observe: async () => ({
+        type: "available",
+        reason: "available",
+        track: {
+          ...source.track!,
+          sourceTitle: "Older metadata must not overwrite",
+        },
+      }),
+    },
+  });
+  const result = await service.observeSource("global-0");
+  expect(result.applied).toBe(false);
+  expect(result.observation.revision).toBe(source.observation.revision);
+  expect(afterCommit).not.toHaveBeenCalled();
+  expect(
+    await database.select().from(schema.unboundSourceAvailabilityObservations),
+  ).toEqual([]);
+  expect({
+    observations: await database
+      .select()
+      .from(schema.sourceAvailabilityObservations),
+    songs: await database.select().from(schema.songs),
+    projections: await database.select().from(schema.themeStateProjections),
+    outbox: (
+      await client.query(
+        "select * from catalog_invalidation_outbox order by id",
+      )
+    ).rows,
+  }).toEqual(before);
+});
+
+it("falha ao projetar a reconciliação reverte transferência, marcador, outbox e derivados", async () => {
+  await client.exec(
+    "delete from theme_songs where song_id='20000000-0000-4000-8000-000000000000'",
+  );
+  const providerContentId = "reconcile-rollback",
+    track = {
+      providerContentId,
+      sourceTitle: "QA",
+      sourceChannel: "QA",
+      thumbnailUrl: "/qa.jpg",
+      durationSeconds: 180,
+      isEmbeddable: true,
+      isRegionAllowed: true,
+    };
+  vi.stubEnv("CATALOG_GLOBAL_HEALTH_WRITE_MODE", undefined);
+  try {
+    await persistSourceAvailabilityObservation({
+      providerContentId,
+      track: null,
+      observation: applySourceAvailabilityResult({
+        current: null,
+        observedAt: new Date(now.getTime() + 2),
+        result: { type: "unavailable", reason: "not_found", track: null },
+      }),
+    });
+    for (const themeId of themeIds)
+      await importPlaylistTracks(themeId, [track], {
+        providerContentIdsToAssociate: [providerContentId],
+        providerContentIdsToCountAsExisting: [],
+      });
+  } finally {
+    vi.stubEnv("CATALOG_GLOBAL_HEALTH_WRITE_MODE", "enabled");
+  }
+  const source = await findSourceAvailabilityByProviderContentId(
+    providerContentId,
+    "BR",
+  );
+  if (!source?.songId) throw new Error("Legacy source fixture missing");
+  const snapshot = async () => ({
+    observations: await database
+      .select()
+      .from(schema.sourceAvailabilityObservations),
+    unbound: await database
+      .select()
+      .from(schema.unboundSourceAvailabilityObservations),
+    projections: await database.select().from(schema.themeStateProjections),
+    outbox: (await client.query("select * from catalog_invalidation_outbox"))
+      .rows,
+    activation: (
+      await client.query("select * from catalog_global_health_activation")
+    ).rows,
+  });
+  const before = await snapshot();
+  await client.exec(
+    `alter table theme_state_projections add constraint reject_reconciled_second check (theme_id <> '${themeIds[1]}'::uuid or unavailable <> 1) not valid`,
+  );
+  try {
+    await expect(
+      persistSourceAvailabilityObservation({
+        providerContentId,
+        track,
+        normalizedResult: { type: "available", reason: "available", track },
+        observation: applySourceAvailabilityResult({
+          current: null,
+          observedAt: new Date(now.getTime() + 1),
+          result: { type: "available", reason: "available", track },
+        }),
+      }),
+    ).rejects.toThrow();
+    expect(await snapshot()).toEqual(before);
+    expect(
+      (
+        await client.query(
+          "select * from source_availability_observations where song_id=$1",
+          [source.songId],
+        )
+      ).rows,
+    ).toEqual([]);
+  } finally {
+    await client.exec(
+      "alter table theme_state_projections drop constraint reject_reconciled_second",
+    );
   }
 });

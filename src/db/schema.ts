@@ -374,6 +374,8 @@ export const catalogInvalidationOutbox = pgTable(
       "catalog_invalidation_shape_check",
       sql`(
       ${table.payload}->'schemaVersion' = '1'::jsonb
+      and ${table.payload}->'type' = '"source_health_changed"'::jsonb
+      and ${table.payload}->'cause' = '"health_change"'::jsonb
       and ${table.payload}->'ruleVersion' = to_jsonb(${table.ruleVersion})
       and ${table.payload}->'source'->'revision' = to_jsonb(${table.revision})
       and ${table.payload}->'source'->'policyVersion' = to_jsonb(${table.policyVersion})

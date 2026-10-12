@@ -2,6 +2,8 @@ CREATE INDEX "source_availability_revision_idx" ON "source_availability_observat
 CREATE INDEX "theme_songs_source_theme_idx" ON "theme_songs" USING btree ("song_id","theme_id");--> statement-breakpoint
 ALTER TABLE "catalog_invalidation_outbox" ADD CONSTRAINT "catalog_invalidation_shape_check" CHECK ((
       "catalog_invalidation_outbox"."payload"->'schemaVersion' = '1'::jsonb
+      and "catalog_invalidation_outbox"."payload"->'type' = '"source_health_changed"'::jsonb
+      and "catalog_invalidation_outbox"."payload"->'cause' = '"health_change"'::jsonb
       and "catalog_invalidation_outbox"."payload"->'ruleVersion' = to_jsonb("catalog_invalidation_outbox"."rule_version")
       and "catalog_invalidation_outbox"."payload"->'source'->'revision' = to_jsonb("catalog_invalidation_outbox"."revision")
       and "catalog_invalidation_outbox"."payload"->'source'->'policyVersion' = to_jsonb("catalog_invalidation_outbox"."policy_version")

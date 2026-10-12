@@ -549,7 +549,7 @@ export async function findSourceAvailabilityByProviderContentId(
 export type CatalogHealthMetric = {
   metric: "catalog_global_health_mutation";
   cause: "health_change";
-  result: "applied" | "ignored" | "retry";
+  result: "applied" | "reconciled" | "ignored" | "retry";
   affectedThemeCount: number;
   transitionCount: number;
   outboxCount: number;
@@ -588,6 +588,7 @@ export async function persistSourceAvailabilityObservation(
   previousObservation: SourceAvailabilityObservation | null;
   applied: boolean;
   propagatedGlobally?: boolean;
+  healthChanged?: boolean;
   track: ResolvedProviderTrack | null;
 }> {
   const context = captureProjectionContext();
@@ -643,6 +644,7 @@ export async function persistSourceAvailabilityObservationUsing(
   const { context, mode, coordination } = options;
   let metrics: ThemeProjectionMetric[] = [];
   const globalEnabled = mode === "enabled";
+  let reconciled = false;
   let transitionCount = 0;
   let outboxCount = 0;
   const authoritative = createAuthoritativePublicThemeRepository(transaction);
@@ -715,7 +717,9 @@ export async function persistSourceAvailabilityObservationUsing(
       input.observation.region,
     );
     if (unboundObservation) {
-      await upsertObservationUsing(transaction, songId, unboundObservation);
+      reconciled = Boolean(
+        await upsertObservationUsing(transaction, songId, unboundObservation),
+      );
     }
 
     // The candidate replaces this bound predecessor after unbound reconciliation,
@@ -783,6 +787,9 @@ export async function persistSourceAvailabilityObservationUsing(
     };
   };
   const result = await persist();
+  // An ignored provider candidate can still reconcile a newer durable unbound
+  // observation. Preserve that revision and propagate the actual bound change.
+  const healthChanged = result.applied || reconciled;
   if (globalEnabled) {
     await transaction
       .insert(catalogGlobalHealthActivation)
@@ -795,7 +802,7 @@ export async function persistSourceAvailabilityObservationUsing(
   }
   if (
     themeProjectionWritesEnabled() &&
-    result.applied &&
+    healthChanged &&
     result.songId &&
     coordination.themeIds.length > 0
   ) {
@@ -809,7 +816,7 @@ export async function persistSourceAvailabilityObservationUsing(
       )
     ).map(({ metric }) => metric);
   }
-  if (globalEnabled && result.applied && coordination.themeIds.length > 0) {
+  if (globalEnabled && healthChanged && coordination.themeIds.length > 0) {
     const after = await authoritative.queryThemes({
       ...context,
       themeIds: coordination.themeIds,
@@ -861,8 +868,12 @@ export async function persistSourceAvailabilityObservationUsing(
     ? {
         metric: "catalog_global_health_mutation",
         cause: "health_change",
-        result: result.applied ? "applied" : "ignored",
-        affectedThemeCount: result.applied ? coordination.themeIds.length : 0,
+        result: result.applied
+          ? "applied"
+          : reconciled
+            ? "reconciled"
+            : "ignored",
+        affectedThemeCount: healthChanged ? coordination.themeIds.length : 0,
         transitionCount,
         outboxCount,
         retryCount: 0,
@@ -871,7 +882,7 @@ export async function persistSourceAvailabilityObservationUsing(
       }
     : undefined;
   return {
-    result: { ...result, propagatedGlobally: globalEnabled },
+    result: { ...result, propagatedGlobally: globalEnabled, healthChanged },
     metrics,
     healthMetric,
   };
