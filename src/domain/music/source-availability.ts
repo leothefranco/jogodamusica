@@ -119,6 +119,30 @@ export function normalizeProviderAvailabilityResult(
 const UNRECOGNIZED_PROVIDER_ERROR_CODE: SourceAvailabilityErrorCode =
   "invalid_response";
 
+export type NormalizedSourceAvailabilityAttempt = {
+  providerContentId: string;
+  observedAt: Date;
+  result: NormalizedProviderAvailabilityResult;
+};
+
+export function normalizePlaylistAvailability(
+  providerContentIds: string[],
+  tracks: ResolvedProviderTrack[],
+  observedAt: Date,
+): NormalizedSourceAvailabilityAttempt[] {
+  const byId = new Map(tracks.map((track) => [track.providerContentId, track]));
+  return [...new Set(providerContentIds)].map((providerContentId) => {
+    const track = byId.get(providerContentId);
+    return {
+      providerContentId,
+      observedAt: new Date(observedAt.getTime()),
+      result: normalizeProviderAvailabilityResult(
+        track ? { type: "resolved", track } : { type: "not_found" },
+      ),
+    };
+  });
+}
+
 export function applySourceAvailabilityResult({
   current,
   observedAt,

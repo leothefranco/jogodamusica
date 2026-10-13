@@ -92,6 +92,20 @@
       "when": 1791418343019,
       "tag": "0012_theme_state_projection",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791769030680,
+      "tag": "0013_catalog_global_health_outbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1791772528975,
+      "tag": "0014_catalog_global_health_integrity",
+      "breakpoints": true
     }
   ]
 }

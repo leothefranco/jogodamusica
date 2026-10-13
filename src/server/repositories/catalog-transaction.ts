@@ -9,7 +9,7 @@ export class CatalogDependenciesChanged extends Error {}
 
 // Only definite transaction-abort SQLSTATEs are retried. Connection/commit
 // ambiguity is never retried: the caller may already have a committed session.
-function retryable(error: unknown, depth = 0): boolean {
+export function isCatalogTransactionAbort(error: unknown, depth = 0): boolean {
   if (error instanceof CatalogDependenciesChanged) return true;
   if (!error || typeof error !== "object" || depth > 3) return false;
   if (
@@ -17,7 +17,7 @@ function retryable(error: unknown, depth = 0): boolean {
     ["55P03", "40P01", "40001"].includes(String(error.code))
   )
     return true;
-  return "cause" in error && retryable(error.cause, depth + 1);
+  return "cause" in error && isCatalogTransactionAbort(error.cause, depth + 1);
 }
 export async function retryCatalogTransaction<T>(
   operation: () => Promise<T>,
@@ -27,7 +27,7 @@ export async function retryCatalogTransaction<T>(
     try {
       return await operation();
     } catch (error) {
-      if (!retryable(error)) throw error;
+      if (!isCatalogTransactionAbort(error)) throw error;
       if (attempt === 2)
         throw new AppError(
           "CATALOG_BUSY",
@@ -124,21 +124,56 @@ export async function coordinateSourceHealth(
   database: Executor,
   providerContentId: string,
   region: string,
+  contextThemeIds: string[] = [],
+) {
+  const batch = await coordinateSourceHealthBatch(
+    database,
+    [providerContentId],
+    region,
+    contextThemeIds,
+  );
+  return batch.forSource(providerContentId);
+}
+
+export async function coordinateSourceHealthBatch(
+  database: Executor,
+  providerContentIds: string[],
+  region: string,
+  contextThemeIds: string[] = [],
 ) {
   await configureCatalogTransaction(database);
-  const before = await sourceThemes(database, providerContentId);
-  await lockCatalogThemes(
-    database,
-    before.map(({ id }) => id),
-  );
-  await lockCatalogSources(database, [providerContentId], region);
+  const ids = [...new Set(providerContentIds)].sort();
+  const before = new Map<string, { id: string }[]>();
+  for (const id of ids) before.set(id, await sourceThemes(database, id));
+  const themeIds = [
+    ...new Set([
+      ...contextThemeIds,
+      ...[...before.values()].flat().map(({ id }) => id),
+    ]),
+  ].sort();
+  await lockCatalogThemes(database, themeIds);
+  await lockCatalogSources(database, ids, region);
   // A newly associated Tema requires restarting, never taking a Tema lock after
   // a Fonte lock. Deletions/reassociations are equally rechecked.
-  const recheck = async () =>
-    assertSameDependencies(
-      before,
-      await sourceThemes(database, providerContentId),
-    );
+  const recheck = async () => {
+    for (const id of ids)
+      assertSameDependencies(
+        before.get(id) ?? [],
+        await sourceThemes(database, id),
+      );
+  };
   await recheck();
-  return recheck;
+  return {
+    themeIds,
+    recheck,
+    forSource: (id: string) => ({
+      themeIds: [
+        ...new Set([
+          ...contextThemeIds,
+          ...(before.get(id) ?? []).map(({ id }) => id),
+        ]),
+      ].sort(),
+      recheck,
+    }),
+  };
 }

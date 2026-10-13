@@ -9,19 +9,32 @@ import {
 } from "@/server/repositories/catalog-transaction";
 import { getDatabase } from "@/db";
 import {
+  assertCatalogHealthWriteAllowed,
+  type CatalogHealthWriteMode,
+} from "@/server/repositories/catalog-health-mode";
+import {
+  catalogGlobalHealthActivation,
+  catalogInvalidationOutbox,
+} from "@/db/schema";
+import { createSourceHealthInvalidation } from "@/domain/music/catalog-invalidation";
+import { classifyThemeState } from "@/domain/music/theme-state";
+import { createAuthoritativePublicThemeRepository } from "@/server/repositories/authoritative-public-theme-repository";
+import {
   captureProjectionContext,
-  recalculateThemeProjectionUsing,
+  recalculateThemeProjectionsUsing,
   recordThemeProjectionMetric,
   themeProjectionWritesEnabled,
   type ThemeProjectionMetric,
 } from "@/server/repositories/theme-projection-repository";
 import type { ResolvedProviderTrack } from "@/domain/music/provider";
 import type {
+  NormalizedProviderAvailabilityResult,
   SourceAvailabilityConfirmationReason,
   SourceAvailabilityConfirmedState,
   SourceAvailabilityErrorCode,
   SourceAvailabilityObservation,
 } from "@/domain/music/source-availability";
+import { applySourceAvailabilityResult } from "@/domain/music/source-availability";
 import { AppError } from "@/lib/errors";
 
 type SourceAvailabilityDatabase = Pick<
@@ -66,6 +79,8 @@ export type SourceAvailabilitySource = {
 };
 
 export type PersistSourceAvailabilityInput = {
+  normalizedResult?: NormalizedProviderAvailabilityResult;
+  expectedWriteMode?: CatalogHealthWriteMode;
   contextThemeId?: string;
   providerContentId: string;
   track: ResolvedProviderTrack | null;
@@ -171,8 +186,7 @@ const observationConflictUpdate = sql`
     revision = current.revision + 1,
     policy_version = excluded.policy_version,
     updated_at = now()
-  where excluded.revision >= current.revision
-    and excluded.observed_at >= current.observed_at
+  where excluded.observed_at >= current.observed_at
     and excluded.last_attempt_at >= current.last_attempt_at
     and row(
       excluded.confirmed_state,
@@ -224,7 +238,6 @@ function shouldUseCandidateObservation(
   if (!current) return true;
 
   return (
-    candidate.revision >= current.revision &&
     candidate.observedAt >= current.observedAt &&
     candidate.lastAttemptAt >= current.lastAttemptAt
   );
@@ -533,6 +546,40 @@ export async function findSourceAvailabilityByProviderContentId(
   return findSourceUsing(getDatabase(), providerContentId, region);
 }
 
+export type CatalogHealthMetric = {
+  metric: "catalog_global_health_mutation";
+  cause: "health_change";
+  result: "applied" | "reconciled" | "ignored" | "retry";
+  affectedThemeCount: number;
+  transitionCount: number;
+  outboxCount: number;
+  retryCount: number;
+  policyVersion: number;
+  ruleVersion: 1;
+};
+export function recordCatalogHealthMetric(metric: CatalogHealthMetric) {
+  try {
+    console.info("[catalog-global-health]", metric);
+  } catch {
+    /* Telemetry cannot change committed health. */
+  }
+}
+export function recordCatalogHealthRetry(
+  retryCount: number,
+  policyVersion: number,
+) {
+  recordCatalogHealthMetric({
+    metric: "catalog_global_health_mutation",
+    cause: "health_change",
+    result: "retry",
+    affectedThemeCount: 0,
+    transitionCount: 0,
+    outboxCount: 0,
+    retryCount,
+    policyVersion,
+    ruleVersion: 1,
+  });
+}
 export async function persistSourceAvailabilityObservation(
   input: PersistSourceAvailabilityInput,
 ): Promise<{
@@ -540,160 +587,303 @@ export async function persistSourceAvailabilityObservation(
   observation: SourceAvailabilityObservation;
   previousObservation: SourceAvailabilityObservation | null;
   applied: boolean;
+  propagatedGlobally?: boolean;
+  healthChanged?: boolean;
   track: ResolvedProviderTrack | null;
 }> {
   const context = captureProjectionContext();
-  return retryCatalogTransaction(async () => {
-    let metric: ThemeProjectionMetric | undefined;
-    const persisted = await getDatabase().transaction(async (transaction) => {
-      const persist = async () => {
-        const recheckDependencies = await coordinateSourceHealth(
+  let retryCount = 0;
+  return retryCatalogTransaction(
+    async () => {
+      let metrics: ThemeProjectionMetric[] = [];
+      let healthMetric: CatalogHealthMetric | undefined;
+      const persisted = await getDatabase().transaction(async (transaction) => {
+        const mode = await assertCatalogHealthWriteAllowed(transaction, {
+          transaction: true,
+          expectedMode: input.expectedWriteMode,
+        });
+        const coordination = await coordinateSourceHealth(
           transaction,
           input.providerContentId,
           input.observation.region,
+          input.contextThemeId ? [input.contextThemeId] : [],
         );
-        const songId = input.track
-          ? await resolveSongId(transaction, input)
-          : await findSongIdForUpdate(transaction, input.providerContentId);
-        // A legacy writer may have materialized a previously missing Fonte while
-        // locks were being acquired. The resolved row now protects FK inserts.
-        await recheckDependencies();
-
-        if (!songId) {
-          const previousObservation = await findUnboundObservationUsing(
-            transaction,
-            input.providerContentId,
-            input.observation.region,
-          );
-          const appliedObservation = await upsertUnboundObservationUsing(
-            transaction,
-            input.providerContentId,
-            input.observation,
-          );
-          if (!appliedObservation) {
-            return {
-              songId: null,
-              previousObservation,
-              observation: await findUnboundObservationForWriteUsing(
-                transaction,
-                input.providerContentId,
-                input.observation.region,
-              ),
-              applied: false,
-              track: null,
-            };
-          }
-
-          return {
-            songId: null,
-            previousObservation,
-            observation: appliedObservation,
-            applied: true,
-            track: null,
-          };
-        }
-
-        const unboundObservation = await findUnboundObservationForUpdateUsing(
+        const applied = await persistSourceAvailabilityObservationUsing(
           transaction,
-          input.providerContentId,
-          input.observation.region,
+          input,
+          { context, mode, coordination },
         );
-        if (unboundObservation) {
-          await upsertObservationUsing(transaction, songId, unboundObservation);
-        }
+        metrics = applied.metrics;
+        healthMetric = applied.healthMetric;
+        return applied.result;
+      });
+      for (const metric of metrics) recordThemeProjectionMetric(metric);
+      if (healthMetric)
+        recordCatalogHealthMetric({ ...healthMetric, retryCount });
+      return persisted;
+    },
+    () => {
+      retryCount += 1;
+      recordCatalogHealthRetry(retryCount, context.policy.version);
+    },
+  );
+}
 
-        // The candidate replaces this bound predecessor after unbound reconciliation,
-        // under the same identity/song locks as its CAS (null on first observation).
-        const previousObservation = await findObservationUsing(
-          transaction,
-          songId,
-          input.observation.region,
-        );
-        const appliedObservation = await upsertObservationUsing(
-          transaction,
-          songId,
-          input.observation,
-        );
-
-        if (!appliedObservation) {
-          const persistedObservation = await findObservationUsing(
-            transaction,
-            songId,
-            input.observation.region,
-          );
-          if (!persistedObservation) {
-            throw new AppError(
-              "SOURCE_AVAILABILITY_WRITE_CONFLICT",
-              "A observação concorrente não pôde ser reconciliada.",
-              409,
-            );
-          }
-          await removeUnboundObservationUsing(
-            transaction,
-            input.providerContentId,
-            input.observation.region,
-          );
-          return {
-            songId,
-            previousObservation,
-            observation: persistedObservation,
-            applied: false,
-            track: await findTrackUsing(
-              transaction,
-              songId,
-              persistedObservation,
-            ),
-          };
-        }
-
-        await removeUnboundObservationUsing(
-          transaction,
-          input.providerContentId,
-          input.observation.region,
-        );
-
-        if (input.track) {
-          await updateSourceMetadata(transaction, songId, input.track);
-        }
-
-        return {
-          songId,
-          previousObservation,
-          observation: appliedObservation,
-          applied: true,
-          track: input.track
-            ? {
-                ...input.track,
-                isRegionAllowed:
-                  appliedObservation.confirmationReason !== "region_blocked",
-              }
-            : await findTrackUsing(transaction, songId, appliedObservation),
-        };
-      };
-      const result = await persist();
+export async function persistSourceAvailabilityObservationUsing(
+  transaction: Pick<
+    ReturnType<typeof getDatabase>,
+    "execute" | "select" | "insert"
+  >,
+  input: PersistSourceAvailabilityInput,
+  options: {
+    context: ReturnType<typeof captureProjectionContext>;
+    mode: CatalogHealthWriteMode;
+    coordination: Awaited<ReturnType<typeof coordinateSourceHealth>>;
+  },
+) {
+  const { context, mode, coordination } = options;
+  let metrics: ThemeProjectionMetric[] = [];
+  const globalEnabled = mode === "enabled";
+  let reconciled = false;
+  let transitionCount = 0;
+  let outboxCount = 0;
+  const authoritative = createAuthoritativePublicThemeRepository(transaction);
+  const before =
+    globalEnabled && coordination.themeIds.length > 0
+      ? await authoritative.queryThemes({
+          ...context,
+          themeIds: coordination.themeIds,
+        })
+      : [];
+  const persist = async () => {
+    const candidateFor = (current: SourceAvailabilityObservation | null) => {
+      if (!input.normalizedResult) return input.observation;
       if (
-        themeProjectionWritesEnabled() &&
-        input.contextThemeId &&
-        result.songId
-      ) {
-        // The coordinator already locked every dependent Tema before the Fonte.
-        // Recheck current membership rather than locking a new parent out of order.
-        const membership = await transaction.execute(sql`
-          select 1 from public.theme_songs
-          where theme_id = ${input.contextThemeId}::uuid and song_id = ${result.songId}::uuid
-        `);
-        if (membership.length > 0)
-          metric = (
-            await recalculateThemeProjectionUsing(
-              transaction,
-              input.contextThemeId,
-              context,
-            )
-          ).metric;
+        current &&
+        (input.observation.observedAt < current.observedAt ||
+          input.observation.observedAt < current.lastAttemptAt)
+      )
+        return current;
+      return applySourceAvailabilityResult({
+        current,
+        observedAt: input.observation.observedAt,
+        result: input.normalizedResult,
+      });
+    };
+    const songId = input.track
+      ? await resolveSongId(transaction, input)
+      : await findSongIdForUpdate(transaction, input.providerContentId);
+    // A legacy writer may have materialized a previously missing Fonte while
+    // locks were being acquired. The resolved row now protects FK inserts.
+    await coordination.recheck();
+
+    if (!songId) {
+      const previousObservation = await findUnboundObservationUsing(
+        transaction,
+        input.providerContentId,
+        input.observation.region,
+      );
+      const appliedObservation = await upsertUnboundObservationUsing(
+        transaction,
+        input.providerContentId,
+        candidateFor(previousObservation),
+      );
+      if (!appliedObservation) {
+        return {
+          songId: null,
+          previousObservation,
+          observation: await findUnboundObservationForWriteUsing(
+            transaction,
+            input.providerContentId,
+            input.observation.region,
+          ),
+          applied: false,
+          track: null,
+        };
       }
-      return result;
+
+      return {
+        songId: null,
+        previousObservation,
+        observation: appliedObservation,
+        applied: true,
+        track: null,
+      };
+    }
+
+    const unboundObservation = await findUnboundObservationForUpdateUsing(
+      transaction,
+      input.providerContentId,
+      input.observation.region,
+    );
+    if (unboundObservation) {
+      reconciled = Boolean(
+        await upsertObservationUsing(transaction, songId, unboundObservation),
+      );
+    }
+
+    // The candidate replaces this bound predecessor after unbound reconciliation,
+    // under the same identity/song locks as its CAS (null on first observation).
+    const previousObservation = await findObservationUsing(
+      transaction,
+      songId,
+      input.observation.region,
+    );
+    const appliedObservation = await upsertObservationUsing(
+      transaction,
+      songId,
+      candidateFor(previousObservation),
+    );
+
+    if (!appliedObservation) {
+      const persistedObservation = await findObservationUsing(
+        transaction,
+        songId,
+        input.observation.region,
+      );
+      if (!persistedObservation) {
+        throw new AppError(
+          "SOURCE_AVAILABILITY_WRITE_CONFLICT",
+          "A observação concorrente não pôde ser reconciliada.",
+          409,
+        );
+      }
+      await removeUnboundObservationUsing(
+        transaction,
+        input.providerContentId,
+        input.observation.region,
+      );
+      return {
+        songId,
+        previousObservation,
+        observation: persistedObservation,
+        applied: false,
+        track: await findTrackUsing(transaction, songId, persistedObservation),
+      };
+    }
+
+    await removeUnboundObservationUsing(
+      transaction,
+      input.providerContentId,
+      input.observation.region,
+    );
+
+    if (input.track) {
+      await updateSourceMetadata(transaction, songId, input.track);
+    }
+
+    return {
+      songId,
+      previousObservation,
+      observation: appliedObservation,
+      applied: true,
+      track: input.track
+        ? {
+            ...input.track,
+            isRegionAllowed:
+              appliedObservation.confirmationReason !== "region_blocked",
+          }
+        : await findTrackUsing(transaction, songId, appliedObservation),
+    };
+  };
+  const result = await persist();
+  // An ignored provider candidate can still reconcile a newer durable unbound
+  // observation. Preserve that revision and propagate the actual bound change.
+  const healthChanged = result.applied || reconciled;
+  if (globalEnabled) {
+    await transaction
+      .insert(catalogGlobalHealthActivation)
+      .values({
+        singleton: true,
+        policyVersion: context.policy.version,
+        ruleVersion: 1,
+      })
+      .onConflictDoNothing();
+  }
+  if (
+    themeProjectionWritesEnabled() &&
+    healthChanged &&
+    result.songId &&
+    coordination.themeIds.length > 0
+  ) {
+    // All dependent parents were locked before any source. One aggregate
+    // query and one bulk upsert use the same captured policy and instant.
+    metrics = (
+      await recalculateThemeProjectionsUsing(
+        transaction,
+        coordination.themeIds,
+        context,
+      )
+    ).map(({ metric }) => metric);
+  }
+  if (globalEnabled && healthChanged && coordination.themeIds.length > 0) {
+    const after = await authoritative.queryThemes({
+      ...context,
+      themeIds: coordination.themeIds,
     });
-    if (metric) recordThemeProjectionMetric(metric);
-    return persisted;
-  });
+    const predecessors = new Map(before.map((theme) => [theme.id, theme]));
+    const payloads = after.map((theme) => {
+      const predecessor = predecessors.get(theme.id);
+      if (!predecessor)
+        throw new AppError(
+          "CATALOG_BUSY",
+          "O catálogo está sendo atualizado. Tente novamente.",
+          409,
+        );
+      const from = classifyThemeState(predecessor),
+        to = classifyThemeState(theme);
+      return createSourceHealthInvalidation({
+        source: {
+          keyHash: sourceKeyHash(input.providerContentId),
+          revision: result.observation.revision,
+          policyVersion: result.observation.policyVersion,
+        },
+        theme: { id: theme.id, slug: theme.slug },
+        before: { ...from, primaryModes: from.modes.primary },
+        after: { ...to, primaryModes: to.modes.primary },
+      });
+    });
+    outboxCount = payloads.length;
+    transitionCount = payloads.filter(
+      ({ transition: t }) =>
+        t.fromVisibility !== t.toVisibility ||
+        t.fromOperationalState !== t.toOperationalState ||
+        t.lostPrimaryModes.length > 0 ||
+        t.recoveredPrimaryModes.length > 0,
+    ).length;
+    await transaction.insert(catalogInvalidationOutbox).values(
+      payloads.map((payload) => ({
+        themeId: payload.theme.id,
+        sourceKeyHash: payload.source.keyHash,
+        region: payload.source.region,
+        revision: payload.source.revision,
+        policyVersion: payload.source.policyVersion,
+        ruleVersion: payload.ruleVersion,
+        payload,
+      })),
+    );
+  }
+
+  const healthMetric: CatalogHealthMetric | undefined = globalEnabled
+    ? {
+        metric: "catalog_global_health_mutation",
+        cause: "health_change",
+        result: result.applied
+          ? "applied"
+          : reconciled
+            ? "reconciled"
+            : "ignored",
+        affectedThemeCount: healthChanged ? coordination.themeIds.length : 0,
+        transitionCount,
+        outboxCount,
+        retryCount: 0,
+        policyVersion: context.policy.version,
+        ruleVersion: 1,
+      }
+    : undefined;
+  return {
+    result: { ...result, propagatedGlobally: globalEnabled, healthChanged },
+    metrics,
+    healthMetric,
+  };
 }

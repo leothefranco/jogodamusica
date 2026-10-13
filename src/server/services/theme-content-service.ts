@@ -1,8 +1,12 @@
+import { catalogHealthWriteMode } from "@/server/repositories/catalog-health-mode";
 import "server-only";
 
 import type { z } from "zod";
 
-import { deriveEffectiveSourceAvailability } from "@/domain/music/source-availability";
+import {
+  deriveEffectiveSourceAvailability,
+  SOURCE_AVAILABILITY_POLICY,
+} from "@/domain/music/source-availability";
 import {
   classifyThemeState,
   deriveThemeStateEvents,
@@ -230,7 +234,39 @@ export function createThemeContentService(
 ) {
   const clock = dependencies.clock ?? (() => new Date());
   const emitEvents = (events: ThemeStateEvent[]) => {
-    for (const event of events) dependencies.recordThemeStateEvent?.(event);
+    if (events.length > 0) {
+      try {
+        console.info("[catalog-theme-transition]", {
+          metric: "catalog_theme_transition",
+          cause:
+            events[0].cause === "editorial"
+              ? "editorial_change"
+              : "health_change",
+          transitionCount: events.length,
+          lost32Count: events.filter(
+            (event) =>
+              event.type === "primary_modes_changed" &&
+              event.lostPrimaryModes.includes(32),
+          ).length,
+          lost64Count: events.filter(
+            (event) =>
+              event.type === "primary_modes_changed" &&
+              event.lostPrimaryModes.includes(64),
+          ).length,
+          policyVersion: SOURCE_AVAILABILITY_POLICY.version,
+          ruleVersion: 1,
+        });
+      } catch {
+        /* Telemetry cannot change a committed editorial mutation. */
+      }
+    }
+    for (const event of events) {
+      try {
+        dependencies.recordThemeStateEvent?.(event);
+      } catch {
+        /* The mutation is committed. */
+      }
+    }
   };
   return {
     async deleteTheme(themeId: string): Promise<void> {
@@ -318,6 +354,7 @@ export function createThemeContentService(
     ): Promise<void> {
       const observed = await dependencies.observeSourceAvailability(
         input.providerContentId,
+        ...(catalogHealthWriteMode() === "enabled" ? [{ themeId }] : []),
       );
       if (
         !observed.availability.playable ||
@@ -370,7 +407,7 @@ export function createThemeContentService(
         source.providerContentId,
         { themeId },
       );
-      if (observed.applied) {
+      if (observed.applied && !observed.propagatedGlobally) {
         const events = await dependencies.withThemeContentLock(
           themeId,
           async (repository) => {
